@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import type { SensorReading } from "../../types/iot"
 import { TrendingUp, TrendingDown, Minus } from "lucide-react"
 

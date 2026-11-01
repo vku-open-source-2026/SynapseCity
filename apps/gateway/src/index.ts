@@ -1,9 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import express, { Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
 
 const app = express();
 const PORT = Number(process.env.PORT || 8080);
 const upstream = (process.env.CITY_SERVICE_URL || 'http://city-service:8083').replace(/\/$/, '');
+const consoleUpstream = (process.env.CONSOLE_URL || 'http://console:80').replace(/\/$/, '');
 
 function assertUpstream(value: string): string {
   let url: URL;
@@ -12,11 +15,12 @@ function assertUpstream(value: string): string {
   return value.replace(/\/$/, '');
 }
 const UPSTREAM = assertUpstream(upstream);
+const CONSOLE = assertUpstream(consoleUpstream);
 
 app.disable('x-powered-by');
 app.use(express.json({ limit: '2mb' }));
 app.use((req, res, next) => {
-  res.setHeader('access-control-allow-origin', process.env.CORS_ORIGIN || '*');
+  res.setHeader('access-control-allow-origin', process.env.CORS_ORIGIN || 'https://synapsecity.sbs');
   res.setHeader('access-control-allow-headers', 'authorization,content-type,x-api-key,x-correlation-id');
   res.setHeader('access-control-allow-methods', 'GET,POST,PATCH,OPTIONS');
   if (req.method === 'OPTIONS') return res.status(204).end();
@@ -52,7 +56,17 @@ async function health(path: string, res: Response): Promise<void> {
 app.get('/health', (_req, res) => { health('/health', res).catch(() => undefined); });
 app.get('/ready', (_req, res) => { health('/ready', res).catch(() => undefined); });
 app.use('/v1', (req, res, next) => { proxy(req, res).catch(next); });
+app.use(async (req, res, next) => {
+  if (!['GET', 'HEAD'].includes(req.method.toUpperCase())) return next();
+  try {
+    const response = await fetch(`${CONSOLE}${req.originalUrl}`, { method: req.method, headers: { accept: req.header('accept') || 'text/html' } });
+    res.status(response.status);
+    const contentType = response.headers.get('content-type');
+    if (contentType) res.setHeader('content-type', contentType);
+    res.send(await response.text());
+  } catch (error) { next(error); }
+});
 app.use((error: Error, _req: Request, res: Response, _next: unknown) => res.status(502).json({ error: 'city_upstream_unavailable', message: error.message }));
 
-if (require.main === module) app.listen(PORT, () => console.log(`[synapsecity-gateway] listening on :${PORT}; upstream=${UPSTREAM}`));
+if (require.main === module) app.listen(PORT, () => console.log(`[synapsecity-gateway] listening on :${PORT}; upstream=${UPSTREAM}; console=${CONSOLE}`));
 export { app };

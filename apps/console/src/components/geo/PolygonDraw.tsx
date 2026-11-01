@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import React, { useState, useCallback, useEffect } from "react";
 import { Layers, X } from "lucide-react";
 import { Button } from "../ui/button";
@@ -19,7 +21,7 @@ export const PolygonDraw: React.FC<PolygonDrawProps> = ({
 }) => {
     const [isDrawing, setIsDrawing] = useState(false);
     const [drawnPolygon, setDrawnPolygon] = useState<L.Polygon | null>(null);
-    const [drawControl, setDrawControl] = useState<L.Control.Draw | null>(null);
+    const drawControlRef = React.useRef<L.Control.Draw | null>(null);
     const [isSearching, setIsSearching] = useState(false);
 
     useEffect(() => {
@@ -51,7 +53,7 @@ export const PolygonDraw: React.FC<PolygonDrawProps> = ({
         });
 
         drawControlInstance.addTo(map);
-        setDrawControl(drawControlInstance);
+        drawControlRef.current = drawControlInstance;
 
         const handleDrawStart = () => {
             // Clear previous polygon if exists
@@ -109,7 +111,7 @@ export const PolygonDraw: React.FC<PolygonDrawProps> = ({
 
                 // Remove draw control after drawing
                 map.removeControl(drawControlInstance);
-                setDrawControl(null);
+                drawControlRef.current = null;
                 setIsDrawing(false);
             })();
         };
@@ -123,6 +125,9 @@ export const PolygonDraw: React.FC<PolygonDrawProps> = ({
             if (drawControlInstance) {
                 map.removeControl(drawControlInstance);
             }
+            if (drawControlRef.current === drawControlInstance) {
+                drawControlRef.current = null;
+            }
         };
     }, [map, isDrawing, drawnPolygon, onResults]);
 
@@ -135,15 +140,15 @@ export const PolygonDraw: React.FC<PolygonDrawProps> = ({
             map.removeLayer(drawnPolygon);
             setDrawnPolygon(null);
         }
-        if (drawControl) {
-            map.removeControl(drawControl);
-            setDrawControl(null);
+        if (drawControlRef.current) {
+            map.removeControl(drawControlRef.current);
+            drawControlRef.current = null;
         }
         setIsDrawing(false);
         if (onClear) {
             onClear();
         }
-    }, [map, drawnPolygon, drawControl, onClear]);
+    }, [map, drawnPolygon, onClear]);
 
     return (
         <div className="relative bg-white rounded-lg shadow-lg border border-slate-200">

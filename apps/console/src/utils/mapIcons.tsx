@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import L from 'leaflet';
 import ReactDOMServer from 'react-dom/server';
 import { Zap, BatteryCharging, UtilityPole, TrafficCone, Lightbulb, Droplet, Waves, Activity } from 'lucide-react';

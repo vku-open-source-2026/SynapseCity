@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import AIChatWidget from "../components/AIChatWidget";

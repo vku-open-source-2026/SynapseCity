@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { Asset } from '../api';
 import { api } from '../api';
@@ -236,12 +238,17 @@ export const useSensorData = (assetId: string | null, refreshInterval: number = 
     }, [assetId]);
 
     useEffect(() => {
-        fetchData();
+        const initialFetch = window.setTimeout(() => void fetchData(), 0);
 
         if (refreshInterval > 0 && assetId) {
             const interval = setInterval(fetchData, refreshInterval);
-            return () => clearInterval(interval);
+            return () => {
+                window.clearTimeout(initialFetch);
+                clearInterval(interval);
+            };
         }
+
+        return () => window.clearTimeout(initialFetch);
     }, [assetId, refreshInterval, fetchData]);
 
     return { data, loading, error, refetch: fetchData };
@@ -274,12 +281,17 @@ export const useIoTAlerts = (refreshInterval: number = 30000) => {
     }, []);
 
     useEffect(() => {
-        fetchAlerts();
+        const initialFetch = window.setTimeout(() => void fetchAlerts(), 0);
 
         if (refreshInterval > 0) {
             const interval = setInterval(fetchAlerts, refreshInterval);
-            return () => clearInterval(interval);
+            return () => {
+                window.clearTimeout(initialFetch);
+                clearInterval(interval);
+            };
         }
+
+        return () => window.clearTimeout(initialFetch);
     }, [refreshInterval, fetchAlerts]);
 
     return { alerts, loading, acknowledgeAlert, refetch: fetchAlerts };

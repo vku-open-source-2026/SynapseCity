@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import { describe, test, expect, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -18,7 +20,7 @@ describe('Admin Dashboard', () => {
     if (currentPath.includes('/login')) {
       // User needs to login first - this is expected
       // Use queryAllByText to handle multiple matches
-      const loginTexts = screen.queryAllByText(/login|sign in/i);
+      const loginTexts = screen.queryAllByText(/login|sign in|đăng nhập/i);
       expect(loginTexts.length).toBeGreaterThan(0);
     } else {
       // User is authenticated, check for dashboard elements

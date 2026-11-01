@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import type { Hazard } from '../types/hazard';
 
 const HOUR_IN_MS = 60 * 60 * 1000;

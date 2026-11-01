@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import { Link } from "@tanstack/react-router";
 import { useState, useCallback } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -64,9 +66,10 @@ const Header: React.FC = () => {
                 {/* Logo */}
                 <div className="flex items-center">
                     <Link to="/" onClick={closeMobileMenu}>
-                        <h1 className="ml-2 text-xl font-bold font-montserrat bg-gradient-to-b from-[#4FACFE] from-21% to-[#00F2FE] bg-clip-text text-transparent">
-                            SynapseCity
-                        </h1>
+                        <div className="ml-2">
+                            <h1 className="text-xl font-bold font-montserrat text-[#087f83]">SynapseCity</h1>
+                            <span className="text-[10px] font-semibold tracking-[0.18em] text-slate-500">INFRASTRUCTURE OPERATIONS</span>
+                        </div>
                     </Link>
                 </div>
 

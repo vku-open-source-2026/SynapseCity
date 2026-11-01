@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import { Link, createFileRoute } from '@tanstack/react-router';
 import { useState, useEffect } from 'react';
 import { publicApi } from '../../api/public';

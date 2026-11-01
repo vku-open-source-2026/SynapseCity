@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import { defineConfig } from 'vitest/config'
 import { playwright } from '@vitest/browser-playwright'
 import react from '@vitejs/plugin-react'
@@ -13,12 +15,16 @@ export default defineConfig({
       '@': resolve(__dirname, './src'),
     },
   },
+  optimizeDeps: {
+    include: ['leaflet-draw'],
+  },
   test: {
     setupFiles: ['./e2e/setup.ts'],
     include: ['e2e/**/*.spec.ts'],
     browser: {
       enabled: true,
       provider: playwright(),
+      headless: true,
       // https://vitest.dev/config/browser/playwright
       instances: [
         { browser: 'chromium' },

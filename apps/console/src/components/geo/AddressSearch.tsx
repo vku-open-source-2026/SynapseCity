@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { Search, MapPin, X, Loader2 } from "lucide-react";
 import { Input } from "../ui/input";
@@ -29,7 +31,7 @@ export const AddressSearch: React.FC<AddressSearchProps> = ({
 
     useEffect(() => {
         if (debouncedQuery.length < 3) {
-            setSuggestions([]);
+            queueMicrotask(() => setSuggestions([]));
             return;
         }
 

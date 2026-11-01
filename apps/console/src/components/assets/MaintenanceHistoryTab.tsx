@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { maintenanceApi } from "../../api/maintenance";

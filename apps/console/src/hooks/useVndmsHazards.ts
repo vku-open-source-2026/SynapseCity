@@ -1,5 +1,7 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import { useQuery } from '@tanstack/react-query';
-import { httpClient } from '../lib/httpClient';
+import { asList, httpClient } from '../lib/httpClient';
 
 export interface VndmsHazard {
   id: string;
@@ -24,7 +26,7 @@ export function useVndmsHazards(enabled = true) {
     queryKey: ['hazards', 'vndms-live'],
     queryFn: async () => {
       const resp = await httpClient.get<VndmsHazard[]>('/hazards/vndms-live');
-      return resp.data ?? [];
+      return asList<VndmsHazard>(resp.data);
     },
     enabled,
     refetchInterval: 60_000,

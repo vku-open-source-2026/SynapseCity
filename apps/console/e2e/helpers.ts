@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 /**
  * Helper utilities for e2e browser tests
  * These functions work with Vitest browser mode and TanStack Router

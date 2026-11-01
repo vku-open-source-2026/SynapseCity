@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import { describe, test, expect, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -11,22 +13,22 @@ describe('Geospatial Features', () => {
 
   test('should display all geospatial search components', async () => {
     // Address search
-    const addressSearch = screen.queryByPlaceholderText(/search address/i);
+    const addressSearch = screen.queryByPlaceholderText(/search address|tìm kiếm địa chỉ/i);
     await waitFor(() => {
       expect(addressSearch).toBeTruthy();
     });
 
     // Nearby search button
-    const nearbyButton = screen.queryByRole('button', { name: /nearby search/i });
+    const nearbyButton = screen.queryByRole('button', { name: /nearby search|tìm kiếm xung quanh/i });
     expect(nearbyButton).toBeTruthy();
 
     // Polygon draw button
-    const polygonButton = screen.queryByRole('button', { name: /draw area/i });
+    const polygonButton = screen.queryByRole('button', { name: /draw area|vẽ khu vực/i });
     expect(polygonButton).toBeTruthy();
   });
 
   test('should open and close nearby search panel', async () => {
-    const nearbyButton = screen.queryByRole('button', { name: /nearby search/i });
+    const nearbyButton = screen.queryByRole('button', { name: /nearby search|tìm kiếm xung quanh/i });
     expect(nearbyButton).toBeTruthy();
 
     if (nearbyButton) {
@@ -55,8 +57,8 @@ describe('Geospatial Features', () => {
     }, { timeout: 3000 });
 
     // Try to find the nearby search button
-    const nearbyButton = screen.queryByRole('button', { name: /nearby search/i }) ||
-                        screen.queryByText(/nearby search/i)?.closest('button') as HTMLButtonElement ||
+    const nearbyButton = screen.queryByRole('button', { name: /nearby search|tìm kiếm xung quanh/i }) ||
+                        screen.queryByText(/nearby search|tìm kiếm xung quanh/i)?.closest('button') as HTMLButtonElement ||
                         Array.from(document.querySelectorAll('button')).find(btn =>
                           btn.textContent?.toLowerCase().includes('nearby')
                         ) as HTMLButtonElement;
@@ -84,7 +86,7 @@ describe('Geospatial Features', () => {
   });
 
   test('should perform address autocomplete search', async () => {
-    const addressInput = screen.queryByPlaceholderText(/search address/i);
+    const addressInput = screen.queryByPlaceholderText(/search address|tìm kiếm địa chỉ/i);
     expect(addressInput).toBeTruthy();
 
     if (addressInput) {
@@ -98,7 +100,7 @@ describe('Geospatial Features', () => {
   });
 
   test('should activate polygon drawing mode', async () => {
-    const drawButton = screen.queryByRole('button', { name: /draw area/i });
+    const drawButton = screen.queryByRole('button', { name: /draw area|vẽ khu vực/i });
     expect(drawButton).toBeTruthy();
 
     if (drawButton) {
@@ -106,7 +108,7 @@ describe('Geospatial Features', () => {
 
       await waitFor(() => {
         // Check for drawing instructions
-        const drawingText = screen.queryByText(/click on map|draw polygon/i);
+        const drawingText = screen.queryByText(/click on map|draw polygon|nhấn vào bản đồ|vẽ đa giác/i);
         expect(drawingText).toBeTruthy();
       });
     }
@@ -120,8 +122,8 @@ describe('Geospatial Features', () => {
     }, { timeout: 3000 });
 
     // Try to find the nearby search button
-    const nearbyButton = screen.queryByRole('button', { name: /nearby search/i }) ||
-                        screen.queryByText(/nearby search/i)?.closest('button') as HTMLButtonElement ||
+    const nearbyButton = screen.queryByRole('button', { name: /nearby search|tìm kiếm xung quanh/i }) ||
+                        screen.queryByText(/nearby search|tìm kiếm xung quanh/i)?.closest('button') as HTMLButtonElement ||
                         Array.from(document.querySelectorAll('button')).find(btn =>
                           btn.textContent?.toLowerCase().includes('nearby')
                         ) as HTMLButtonElement;

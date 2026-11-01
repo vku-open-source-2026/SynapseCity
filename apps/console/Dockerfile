@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 VKU.VIC
 FROM node:22-alpine AS build
 
 WORKDIR /app

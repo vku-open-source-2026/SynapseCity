@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import './index.css'
@@ -8,6 +10,9 @@ import { queryClient } from './lib/queryClient';
 
 // Import the generated route tree
 import { routeTree } from './routeTree.gen';
+
+document.documentElement.dataset.product = 'city';
+document.title = 'SynapseCity · Infrastructure Operations';
 
 function getRootElement() {
   const existingRoot = document.getElementById('root');

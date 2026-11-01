@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import React, { useState, useMemo, useEffect } from 'react';
 import { Zap, BatteryCharging, UtilityPole, TrafficCone, Lightbulb, Droplet, Waves, Activity, Filter, X } from 'lucide-react';
 import type { Asset } from '../api';

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import { ReportStatusBadge } from "./ReportStatusBadge"
 import type { Report } from "../../types/report"
 import { FileText, Download } from "lucide-react"

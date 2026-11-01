@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import { describe, expect, it } from 'vitest';
 
 import type { Hazard } from '../types/hazard';

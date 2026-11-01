@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 export type BudgetStatus = 'draft' | 'submitted' | 'approved' | 'rejected';
 export type TransactionType = 'expense' | 'allocation';
 

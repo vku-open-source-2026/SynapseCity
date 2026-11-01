@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import React, {
     useState,
     useEffect,
@@ -9,6 +11,9 @@ import { type Asset, getAssetId } from "../api";
 import { getIconForAsset, getColorForFeatureCode } from "../utils/mapIcons";
 import HeatmapLayer from "./HeatmapLayer";
 import AssetLayerFilter from "./AssetLayerFilter";
+import { AddressSearch } from "./geo/AddressSearch";
+import { NearbySearch } from "./geo/NearbySearch";
+import { PolygonDraw } from "./geo/PolygonDraw";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { fetchTileConfig } from "../lib/tileConfig";
@@ -201,7 +206,8 @@ const MapComponent: React.FC<MapProps> = ({
     selectedAsset,
     className,
     onMapReady,
-    // Not using onFilterByShape/enableGeoSearches yet - keep props for future features
+    onFilterByShape,
+    enableGeoSearches,
 }) => {
     const [mapMode, setMapMode] = useState<"markers" | "heatmap">("markers");
     const mapRef = useRef<L.Map | null>(null);
@@ -214,6 +220,18 @@ const MapComponent: React.FC<MapProps> = ({
     const [mapZoom, setMapZoom] = useState<number>(16);
     const [filteredAssets, setFilteredAssets] = useState<Asset[]>(assets);
     const [heatmapMap, setHeatmapMap] = useState<L.Map | null>(null);
+    const filterCallbackRef = useRef(onFilterByShape);
+    useEffect(() => {
+        filterCallbackRef.current = onFilterByShape;
+    }, [onFilterByShape]);
+
+    const handleGeoFilterResults = useCallback(
+        (nextAssets: Asset[]) => {
+            setFilteredAssets(nextAssets);
+            filterCallbackRef.current?.(nextAssets);
+        },
+        []
+    );
 
     // Prepare heatmap data
     const heatmapPoints = assets
@@ -243,9 +261,12 @@ const MapComponent: React.FC<MapProps> = ({
         []
     );
 
-    // Update filtered assets when assets prop changes
+    // Reset a shape filter when the source asset collection changes. Defer the
+    // state update so this synchronization does not run during the effect's
+    // commit phase.
     useEffect(() => {
-        setFilteredAssets(assets);
+        const resetFilter = window.setTimeout(() => setFilteredAssets(assets), 0);
+        return () => window.clearTimeout(resetFilter);
     }, [assets]);
 
     const visibleAssets = useMemo(() => {
@@ -546,6 +567,22 @@ const MapComponent: React.FC<MapProps> = ({
                 onFilterChange={setFilteredAssets}
             />
 
+            {enableGeoSearches && heatmapMap && (
+                <div className="absolute top-20 left-4 z-[1000] flex max-w-[calc(100%-2rem)] flex-wrap items-start gap-2">
+                    <AddressSearch map={heatmapMap} />
+                    <NearbySearch
+                        map={heatmapMap}
+                        onResults={handleGeoFilterResults}
+                        onClear={() => handleGeoFilterResults(assets)}
+                    />
+                    <PolygonDraw
+                        map={heatmapMap}
+                        onResults={handleGeoFilterResults}
+                        onClear={() => handleGeoFilterResults(assets)}
+                    />
+                </div>
+            )}
+
             {/* Map Controls Overlay */}
             <div className="absolute top-4 right-4 z-51 bg-white rounded-lg shadow-md border border-slate-200 p-1 flex flex-col gap-1">
                 <button
@@ -555,7 +592,8 @@ const MapComponent: React.FC<MapProps> = ({
                             ? "bg-blue-50 text-blue-600"
                             : "text-slate-600"
                     }`}
-                    title="Chế độ điểm"
+                    title="View markers / Chế độ điểm"
+                    aria-label="View markers / Chế độ điểm"
                 >
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -579,7 +617,8 @@ const MapComponent: React.FC<MapProps> = ({
                             ? "bg-blue-50 text-blue-600"
                             : "text-slate-600"
                     }`}
-                    title="Bản đồ nhiệt"
+                    title="View heatmap / Bản đồ nhiệt"
+                    aria-label="View heatmap / Bản đồ nhiệt"
                 >
                     <svg
                         xmlns="http://www.w3.org/2000/svg"

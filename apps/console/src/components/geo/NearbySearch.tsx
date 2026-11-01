@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import React, { useState, useCallback } from "react";
 import { Search, MapPin, X } from "lucide-react";
 import { Button } from "../ui/button";

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import { describe, test, expect, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -23,8 +25,8 @@ describe('Navigation Flow', () => {
   });
 
   test('should navigate from homepage to login', async () => {
-    const loginLink = screen.queryByRole('link', { name: /login/i }) ||
-                     screen.queryByRole('button', { name: /login/i });
+  const loginLink = screen.queryByRole('link', { name: /login|đăng nhập/i }) ||
+                     screen.queryByRole('button', { name: /login|đăng nhập/i });
 
     if (loginLink) {
       await userEvent.click(loginLink);

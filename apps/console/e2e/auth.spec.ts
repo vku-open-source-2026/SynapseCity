@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import { describe, test, expect, beforeEach } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -33,13 +35,13 @@ describe("Authentication Flow", () => {
 
         // Check for login form elements
         const emailInput =
-            screen.queryByLabelText(/email|username/i) ||
-            screen.queryByPlaceholderText(/email|username/i);
+            screen.queryByLabelText(/email|username|tên đăng nhập/i) ||
+            screen.queryByPlaceholderText(/email|username|tên đăng nhập/i);
         const passwordInput =
-            screen.queryByLabelText(/password/i) ||
-            screen.queryByPlaceholderText(/password/i);
+            screen.queryByLabelText(/password|mật khẩu/i) ||
+            screen.queryByPlaceholderText(/password|mật khẩu/i);
         const submitButton = screen.queryByRole("button", {
-            name: /login|sign in/i,
+            name: /login|sign in|đăng nhập/i,
         });
 
         expect(emailInput || passwordInput).toBeTruthy();
@@ -55,10 +57,10 @@ describe("Authentication Flow", () => {
             screen.queryByLabelText(/email/i) ||
             screen.queryByPlaceholderText(/email/i);
         const passwordInput =
-            screen.queryByLabelText(/password/i) ||
-            screen.queryByPlaceholderText(/password/i);
+            screen.queryByLabelText(/password|mật khẩu/i) ||
+            screen.queryByPlaceholderText(/password|mật khẩu/i);
         const submitButton = screen.queryByRole("button", {
-            name: /register|sign up/i,
+            name: /register|sign up|đăng ký/i,
         });
 
         expect(emailInput).toBeTruthy();
@@ -71,7 +73,7 @@ describe("Authentication Flow", () => {
         await waitFor(() => document.body, { timeout: 5000 });
 
         const submitButton = screen.queryByRole("button", {
-            name: /login|sign in/i,
+            name: /login|sign in|đăng nhập/i,
         });
         if (submitButton) {
             await userEvent.click(submitButton);
@@ -86,7 +88,7 @@ describe("Authentication Flow", () => {
 
         // Look for link to register page
         const registerLink = screen.queryByRole("link", {
-            name: /register|sign up|create account/i,
+            name: /register|sign up|create account|đăng ký/i,
         });
         if (registerLink) {
             await userEvent.click(registerLink);

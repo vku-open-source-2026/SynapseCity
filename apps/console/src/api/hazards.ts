@@ -1,4 +1,6 @@
-import { httpClient } from '../lib/httpClient';
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
+import { asList, httpClient } from '../lib/httpClient';
 import { filterHazardsInLastHours } from '../lib/recentHazards';
 import type { Hazard, HazardListParams, RecentHazardItem } from '../types/hazard';
 
@@ -26,7 +28,7 @@ async function listHazards(params?: HazardListParams): Promise<Hazard[]> {
   };
 
   const response = await httpClient.get<Hazard[]>('/hazards', { params: queryParams });
-  return response.data;
+  return asList<Hazard>(response.data);
 }
 
 export const hazardsApi = {
@@ -40,7 +42,7 @@ export const hazardsApi = {
     const response = await httpClient.get<RecentHazardItem[]>('/hazards/recent', {
       params: { hours: params?.hours ?? 24, limit: params?.limit ?? 200 },
     });
-    return response.data;
+    return asList<RecentHazardItem>(response.data);
   },
 
   /** Legacy client-side recent filter — returns Hazard[] (kept for PublicMap backward compat) */
@@ -61,7 +63,7 @@ export const hazardsApi = {
     limit?: number;
   }): Promise<Hazard[]> => {
     const response = await httpClient.get<Hazard[]>('/hazards/geo/near', { params });
-    return response.data;
+    return asList<Hazard>(response.data);
   },
 
   expireStale: async (): Promise<{ updated: number }> => {

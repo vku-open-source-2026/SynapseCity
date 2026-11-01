@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import { useState } from "react"
 import { Form, FormField, FormLabel, FormError } from "../ui/form"
 import { Input } from "../ui/input"

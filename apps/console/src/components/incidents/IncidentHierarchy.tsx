@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import { useQuery } from "@tanstack/react-query"
 import { incidentsApi } from "../../api/incidents"
 import { Badge } from "../ui/badge"

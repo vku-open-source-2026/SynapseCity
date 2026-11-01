@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import { AlertSeverityBadge } from "./AlertSeverityBadge";
 import type { Alert } from "../../types/alert";
 import { Clock, MapPin } from "lucide-react";

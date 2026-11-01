@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import React from 'react';
 import { Link } from '@tanstack/react-router';
 
@@ -165,7 +167,8 @@ const EmergencyCenter: React.FC = () => {
   );
 
   React.useEffect(() => {
-    void loadData();
+    const initialLoad = window.setTimeout(() => void loadData(), 0);
+    return () => window.clearTimeout(initialLoad);
   }, [loadData]);
 
   React.useEffect(() => {

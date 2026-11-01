@@ -48,5 +48,18 @@ For a registry release, replace the `file:` dependency with the published
 The API intentionally does not expose generic platform primitives. Those stay
 behind SynapseDX and SynapseOne.
 
+Map tiles, autocomplete, forward geocoding and reverse geocoding are proxied
+through the City backend. Set `VIETMAP_API_KEY` and optionally
+`VIETMAP_TILE_STYLE=tm|lm|dm|hm|st` in the server `.env`; the key is never sent
+to the browser.
+
 The public edge must route `synapsecity.sbs` to the gateway and an optional
 `cloud.synapsecity.sbs` to the console. See `infra/nginx/synapsecity.conf`.
+
+## PoF project checklist
+
+- License: Apache-2.0 (`LICENSE`) with per-source SPDX headers and attribution in `NOTICE`.
+- Build from source: `npm ci && npm run build` using Node.js 20+; Docker builds are reproducible with `docker compose build`.
+- Issue tracker: [GitHub Issues](https://github.com/vku-open-source-2026/SynapseCity/issues).
+- Change history: [`CHANGELOG.md`](CHANGELOG.md). Versioned release tags are published on GitHub.
+- Dependency inventory: [`THIRD-PARTY.md`](THIRD-PARTY.md); dependencies are not modified or bundled into the repository.

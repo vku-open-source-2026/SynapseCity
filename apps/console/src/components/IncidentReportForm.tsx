@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import { useEffect, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Crosshair } from "lucide-react";

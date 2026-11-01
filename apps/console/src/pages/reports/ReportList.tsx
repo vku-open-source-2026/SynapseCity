@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import { useState, useEffect } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { reportsApi } from "../../api/reports"

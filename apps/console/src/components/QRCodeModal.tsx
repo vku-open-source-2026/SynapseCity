@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import React, { useRef } from 'react';
 import QRCode from 'react-qr-code';
 import jsPDF from 'jspdf';

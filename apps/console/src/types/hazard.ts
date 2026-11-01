@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 export type HazardSeverity = 'low' | 'medium' | 'high' | 'critical';
 
 export type HazardEventType =

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import React, { useState, useCallback } from 'react';
 import { useParams, Link } from '@tanstack/react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';

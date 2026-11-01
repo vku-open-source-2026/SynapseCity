@@ -1,4 +1,6 @@
-import { httpClient, leaderboardApi } from "./lib/httpClient";
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
+import { asList, httpClient, leaderboardApi } from "./lib/httpClient";
 import axios from "axios";
 
 // Force HTTPS in production
@@ -48,7 +50,7 @@ export interface MaintenanceLog {
 
 export const getAssets = async () => {
     const response = await httpClient.get<Asset[]>("/assets/");
-    return response.data;
+    return asList<Asset>(response.data);
 };
 
 export const loginAdmin = async (username: string, password: string) => {
@@ -73,7 +75,7 @@ export const getLeaderboard = async () => {
     const response = await leaderboardApi.get<LeaderboardEntry[]>(
         "/leaderboard"
     );
-    return response.data;
+    return asList<LeaderboardEntry>(response.data);
 };
 
 export const getMaintenanceLogs = async (assetId: string) => {

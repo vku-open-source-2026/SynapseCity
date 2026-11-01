@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 const CACHE_NAME = 'openinfra-v1';
 const STATIC_ASSETS = [
     '/',

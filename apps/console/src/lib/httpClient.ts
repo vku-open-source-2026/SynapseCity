@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import axios, {
     type AxiosInstance,
     type AxiosError,
@@ -5,6 +7,22 @@ import axios, {
 } from "axios";
 import { useAuthStore } from "../stores";
 import type { AxiosResponse } from "axios";
+
+/** Normalize list endpoints that may return a bare array or an envelope. */
+export function asList<T>(value: unknown): T[] {
+    if (Array.isArray(value)) {
+        return value as T[];
+    }
+    if (value && typeof value === "object") {
+        const record = value as Record<string, unknown>;
+        for (const key of ["data", "items", "results"]) {
+            if (Array.isArray(record[key])) {
+                return record[key] as T[];
+            }
+        }
+    }
+    return [];
+}
 
 // Create main API instance
 // Force HTTPS in production

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 /**
  * Shared tile configuration helper.
  * Fetches tile URL from the backend (which hides the API key server-side).
@@ -22,7 +24,7 @@ export async function fetchTileConfig(): Promise<TileConfig> {
     const res = await fetch(`${BASE_API}/map/config`);
     const cfg: TileConfig = await res.json();
     // If tileUrl is relative, prepend the API origin so Leaflet resolves correctly
-    if (cfg.tileUrl && !cfg.tileUrl.startsWith("http")) {
+    if (cfg.tileUrl && !cfg.tileUrl.startsWith("http") && !cfg.tileUrl.startsWith("/")) {
       const apiOrigin = BASE_API.replace(/\/api\/v1$/, "");
       cfg.tileUrl = `${apiOrigin}${cfg.tileUrl}`;
     }

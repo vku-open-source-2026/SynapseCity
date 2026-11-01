@@ -1,14 +1,17 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import express, { NextFunction, Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { CapabilitiesError } from '@synapsedx/capabilities';
 import { DATASETS, TIER2_URL, capabilitiesFromRequest, ensureDataset, objectBody, requiredString } from './domain';
+import { proxyVietMapTile, vietMapAutocomplete, vietMapConfigured, vietMapGeocode, vietMapPlace, vietMapReverse, vietMapTileStyle } from './vietmap';
 
 const app = express();
 const PORT = Number(process.env.PORT || 8083);
 app.disable('x-powered-by');
 app.use(express.json({ limit: '2mb' }));
 app.use((req, res, next) => {
-  const origin = process.env.CORS_ORIGIN || '*';
+  const origin = process.env.CORS_ORIGIN || 'https://synapsecity.sbs';
   res.setHeader('access-control-allow-origin', origin);
   res.setHeader('access-control-allow-headers', 'authorization,content-type,x-api-key,x-correlation-id');
   res.setHeader('access-control-allow-methods', 'GET,POST,PATCH,OPTIONS');
@@ -263,12 +266,45 @@ app.post('/v1/geofences/:id/test', async (req, res, next) => { try { const fence
 app.get('/v1/geo/assets/nearby', async (req, res, next) => { try { res.json(await genericList(req, 'assets')); } catch (error) { next(error); } });
 app.get('/v1/geo/assets/within-bounds', async (req, res, next) => { try { res.json(await genericList(req, 'assets')); } catch (error) { next(error); } });
 app.post('/v1/geo/assets/within-polygon', async (req, res, next) => { try { res.json(await genericList(req, 'assets')); } catch (error) { next(error); } });
-app.get('/v1/geo/search-address', (_req, res) => res.json([]));
-app.post('/v1/geo/geocode', (_req, res) => res.json({ latitude: 0, longitude: 0, display_name: 'SynapseCity geocoding provider' }));
-app.post('/v1/geo/reverse-geocode', (_req, res) => res.json({ address: 'SynapseCity', city: 'Unknown' }));
+app.get('/v1/geo/search-address', async (req, res, next) => {
+  try {
+    const query = String(req.query.q || '').trim();
+    if (query.length < 2) return res.json([]);
+    const suggestions = await vietMapAutocomplete(query);
+    const enriched = await Promise.all(suggestions.slice(0, 5).map(async (item) => {
+      const place = item.ref_id ? await vietMapPlace(item.ref_id).catch(() => null) : null;
+      return { address: item.display || item.address || item.name || query, coordinates: { latitude: Number(place?.lat || 0), longitude: Number(place?.lng || 0) }, city: place?.city || '', country: 'Vietnam', ref_id: item.ref_id };
+    }));
+    res.json(enriched.filter((item) => item.coordinates.latitude !== 0 || item.coordinates.longitude !== 0));
+  } catch (error) { next(error); }
+});
+app.post('/v1/geo/geocode', async (req, res, next) => {
+  try {
+    const text = String(privateInput(req).address || '').trim();
+    if (!text) return res.status(400).json({ error: 'address_required' });
+    const [match] = await vietMapGeocode(text);
+    if (!match?.ref_id) return res.status(404).json({ error: 'address_not_found' });
+    const place = await vietMapPlace(match.ref_id);
+    if (!Number.isFinite(place.lat) || !Number.isFinite(place.lng)) return res.status(404).json({ error: 'coordinates_not_found' });
+    res.json({ coordinates: { latitude: place.lat, longitude: place.lng }, geojson: { type: 'Point', coordinates: [place.lng, place.lat] }, display_name: place.display || match.display || text });
+  } catch (error) { next(error); }
+});
+app.post('/v1/geo/reverse-geocode', async (req, res, next) => {
+  try {
+    const input = privateInput(req);
+    const latitude = Number(input.latitude);
+    const longitude = Number(input.longitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return res.status(400).json({ error: 'coordinates_required' });
+    const [place] = await vietMapReverse(latitude, longitude);
+    if (!place) return res.status(404).json({ error: 'address_not_found' });
+    res.json({ address: place.display || place.address || '', city: place.city || '', country: 'Vietnam' });
+  } catch (error) { next(error); }
+});
 app.get('/v1/geo/assets/:id/distance-to', (_req, res) => res.json({ distance_meters: 0, duration_seconds: 0 }));
 app.post('/v1/ingest/csv', async (req, res, next) => { try { res.status(202).json(await genericWrite(req, 'ingest', { ...genericBody(req), status: 'accepted', accepted_at: new Date().toISOString() })); } catch (error) { next(error); } });
-app.get('/v1/map/config', (_req, res) => res.json({ provider: 'openstreetmap', tiles: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png' }));
+app.get('/v1/map/config', (_req, res) => res.json(vietMapConfigured() ? { provider: 'vietmap', tileUrl: '/v1/map/tiles/{z}/{x}/{y}.png', attribution: '&copy; VIETMAP', maxZoom: 20, maxNativeZoom: 20, style: vietMapTileStyle() } : { provider: 'openstreetmap', tileUrl: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attribution: '&copy; OpenStreetMap contributors', maxZoom: 20, maxNativeZoom: 19 }));
+app.get('/v1/map/tiles/:z/:x/:y.png', async (req, res, next) => { try { await proxyVietMapTile(Number(req.params.z), Number(req.params.x), Number(req.params.y), res); } catch (error) { next(error); } });
+app.get('/v1/map/status', (_req, res) => res.json({ provider: vietMapConfigured() ? 'vietmap' : 'openstreetmap', configured: vietMapConfigured(), service: 'synapsecity' }));
 app.get('/v1/ai/status', (_req, res) => res.json({ status: 'ready', service: 'synapsecity-ai', dependency: 'synapseone' }));
 app.post('/v1/ai/chat', (_req, res) => res.json({ message: 'SynapseCity AI capability is available through the platform.', citations: [] }));
 

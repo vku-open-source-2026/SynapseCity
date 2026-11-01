@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Select } from "../ui/select";

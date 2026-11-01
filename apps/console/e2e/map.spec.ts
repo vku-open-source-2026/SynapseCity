@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import { describe, test, expect, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -7,21 +9,23 @@ describe('Public Map Page', () => {
   beforeEach(async () => {
     await navigateTo('/map');
     // Wait for map to load
-    await waitFor(() => document.body, { timeout: 5000 });
+    await waitFor(() => {
+      expect(document.querySelector('.leaflet-container')).toBeTruthy();
+    }, { timeout: 10000 });
   });
 
   test('should display map component', async () => {
     // Check if map container exists
-    const mapContainer = document.querySelector('.leaflet-container') ||
-                         document.querySelector('[class*="map"]');
     await waitFor(() => {
+      const mapContainer = document.querySelector('.leaflet-container') ||
+                           document.querySelector('[class*="map"]');
       expect(mapContainer).toBeTruthy();
     });
   });
 
   test('should display asset table', async () => {
     // Look for asset table or list
-    const assetTable = screen.queryByText(/system assets|assets/i) ||
+    const assetTable = screen.queryByText(/system assets|assets|lớp dữ liệu|chưa có lớp tài sản/i) ||
                        document.querySelector('table');
     await waitFor(() => {
       expect(assetTable).toBeTruthy();
@@ -30,22 +34,22 @@ describe('Public Map Page', () => {
 
   test('should display geospatial search controls when enabled', async () => {
     // Check for address search
-    const addressSearch = screen.queryByPlaceholderText(/search address/i);
     await waitFor(() => {
+      const addressSearch = screen.queryByPlaceholderText(/search address|tìm kiếm địa chỉ/i);
       expect(addressSearch).toBeTruthy();
     });
 
     // Check for nearby search button
-    const nearbySearch = screen.queryByRole('button', { name: /nearby search/i });
+    const nearbySearch = screen.queryByRole('button', { name: /nearby search|tìm kiếm xung quanh/i });
     expect(nearbySearch).toBeTruthy();
 
     // Check for polygon draw button
-    const polygonDraw = screen.queryByRole('button', { name: /draw area/i });
+    const polygonDraw = screen.queryByRole('button', { name: /draw area|vẽ khu vực/i });
     expect(polygonDraw).toBeTruthy();
   });
 
   test('should open nearby search panel', async () => {
-    const nearbyButton = screen.queryByRole('button', { name: /nearby search/i });
+    const nearbyButton = screen.queryByRole('button', { name: /nearby search|tìm kiếm xung quanh/i });
     expect(nearbyButton).toBeTruthy();
 
     if (nearbyButton) {
@@ -61,7 +65,7 @@ describe('Public Map Page', () => {
   });
 
   test('should perform address search', async () => {
-    const addressInput = screen.queryByPlaceholderText(/search address/i);
+    const addressInput = screen.queryByPlaceholderText(/search address|tìm kiếm địa chỉ/i);
     expect(addressInput).toBeTruthy();
 
     if (addressInput) {
@@ -77,7 +81,7 @@ describe('Public Map Page', () => {
 
   test('should display map controls', async () => {
     // Check for map mode toggle buttons (markers/heatmap)
-    const mapControls = document.querySelectorAll('button[title*="View"]');
+    const mapControls = document.querySelectorAll('button[title*="View"], button[title*="Chế độ"], button[title*="Bản đồ"]');
     // At least one control should be visible
     expect(mapControls.length).toBeGreaterThan(0);
   });
@@ -101,7 +105,7 @@ describe('Public Map Page', () => {
 
   test('should filter assets by polygon', async () => {
     const drawButton = await waitFor(() => {
-      const btn = screen.queryByRole('button', { name: /draw area|draw polygon/i });
+      const btn = screen.queryByRole('button', { name: /draw area|draw polygon|vẽ khu vực/i });
       expect(btn).toBeTruthy();
       return btn;
     }, { timeout: 2000 });

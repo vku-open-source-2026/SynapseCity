@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import React from 'react';
 
 import { emergencyApi } from '@/api/emergency';
@@ -67,7 +69,8 @@ const EmergencyCommandCenter: React.FC = () => {
   }, []);
 
   React.useEffect(() => {
-    void loadEvents();
+    const initialLoad = window.setTimeout(() => void loadEvents(), 0);
+    return () => window.clearTimeout(initialLoad);
   }, [loadEvents]);
 
   const summary = React.useMemo(() => {

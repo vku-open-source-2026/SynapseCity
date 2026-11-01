@@ -1,4 +1,6 @@
-import { httpClient } from '../lib/httpClient';
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
+import { asList, httpClient } from '../lib/httpClient';
 import type {
   Asset,
   GeocodeResponse,
@@ -43,19 +45,19 @@ export interface ReverseGeocodeRequest {
 export const geoApi = {
   findNearbyAssets: async (params: NearbyAssetsParams): Promise<Asset[]> => {
     const response = await httpClient.get<Asset[]>('/geo/assets/nearby', { params });
-    return response.data;
+    return asList<Asset>(response.data);
   },
 
   findAssetsInBounds: async (params: WithinBoundsParams): Promise<Asset[]> => {
     const response = await httpClient.get<Asset[]>('/geo/assets/within-bounds', { params });
-    return response.data;
+    return asList<Asset>(response.data);
   },
 
   findAssetsInPolygon: async (data: WithinPolygonRequest, limit?: number): Promise<Asset[]> => {
     const response = await httpClient.post<Asset[]>('/geo/assets/within-polygon', data, {
       params: limit ? { limit } : undefined,
     });
-    return response.data;
+    return asList<Asset>(response.data);
   },
 
   geocode: async (data: GeocodeRequest): Promise<GeocodeResponse> => {
@@ -72,7 +74,7 @@ export const geoApi = {
     const response = await httpClient.get<AddressSuggestion[]>('/geo/search-address', {
       params: { q, limit },
     });
-    return response.data;
+    return asList<AddressSuggestion>(response.data);
   },
 
   calculateDistance: async (assetId: string, coordinates: Coordinates): Promise<DistanceResponse> => {

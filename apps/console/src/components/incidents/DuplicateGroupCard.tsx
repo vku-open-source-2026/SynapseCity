@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import { useState } from "react";
 import type { Incident } from "../../types/incident";
 import { ChevronDown, ChevronRight, Copy } from "lucide-react";

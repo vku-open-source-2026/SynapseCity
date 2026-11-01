@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import { IncidentStatusBadge } from "./IncidentStatusBadge"
 import type { Incident, IncidentLocation } from "../../types/incident"
 import { MapPin, Clock, User, Box, CheckCircle, AlertTriangle, Clock as ClockIcon, XCircle } from "lucide-react"

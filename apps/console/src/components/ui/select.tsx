@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import * as React from "react"
 import { cn } from "../../lib/utils"
 import { ChevronDown } from "lucide-react"

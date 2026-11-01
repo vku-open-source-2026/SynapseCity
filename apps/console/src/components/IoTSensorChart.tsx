@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import { useState } from 'react';
 import { useSensorData } from '../hooks/useIoT';
 import type { IoTAlert } from '../hooks/useIoT';

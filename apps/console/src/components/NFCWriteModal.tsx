@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import { AlertCircle, CheckCircle, Loader2, Smartphone, X } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { type Asset, getAssetId } from "../api";

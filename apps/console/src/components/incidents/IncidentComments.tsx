@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import { useState } from "react"
 import { Textarea } from "../ui/textarea"
 import { Button } from "../ui/button"

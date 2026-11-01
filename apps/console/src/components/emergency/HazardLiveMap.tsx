@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import React from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -103,9 +105,12 @@ const HazardLiveMap: React.FC<{ hazards?: any[] }> = () => {
 
   // Initial fetch + interval
   React.useEffect(() => {
-    fetchHazards();
+    const initialFetch = window.setTimeout(() => void fetchHazards(), 0);
     const timer = setInterval(fetchHazards, REFRESH_INTERVAL_MS);
-    return () => clearInterval(timer);
+    return () => {
+      window.clearTimeout(initialFetch);
+      clearInterval(timer);
+    };
   }, [fetchHazards]);
 
   // ---- Init map once ---

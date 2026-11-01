@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import { SensorStatusBadge } from "./SensorStatusBadge"
 import type { IoTSensor } from "../../types/iot"
 import { Activity, MapPin } from "lucide-react"

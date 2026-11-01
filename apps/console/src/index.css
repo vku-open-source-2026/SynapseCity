@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* SPDX-FileCopyrightText: 2026 VKU.VIC */
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
@@ -59,4 +61,21 @@ body,
 .leaflet-top,
 .leaflet-bottom {
   z-index: 10 !important;
+}
+
+html[data-product="city"] body {
+  background: #f4fbfb;
+}
+
+html[data-product="city"] .bg-slate-900 {
+  background-color: #123c4a !important;
+}
+
+html[data-product="city"] .bg-blue-500 {
+  background-color: #0f9f9a !important;
+}
+
+html[data-product="city"] .text-blue-500,
+html[data-product="city"] .text-blue-600 {
+  color: #087f83 !important;
 }

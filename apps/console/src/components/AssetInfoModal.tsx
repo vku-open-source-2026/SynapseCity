@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import React, { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Button } from "./ui/button";

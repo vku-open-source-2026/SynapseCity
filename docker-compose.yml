@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 VKU.VIC
 services:
   city-service:
     build:
@@ -21,7 +23,8 @@ services:
       NODE_ENV: production
       PORT: "8080"
       CITY_SERVICE_URL: http://city-service:8083
-      CORS_ORIGIN: "*"
+      CONSOLE_URL: http://console:80
+      CORS_ORIGIN: https://synapsecity.sbs
     ports:
       - "8083:8080"
     networks:

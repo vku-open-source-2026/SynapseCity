@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import React, { useState, useCallback } from 'react';
 import { X, Loader2, Save, Send } from 'lucide-react';
 import { eopApi } from '@/api/eop';

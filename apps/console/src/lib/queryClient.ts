@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 VKU.VIC
 import { QueryClient } from '@tanstack/react-query';
 
 export const queryClient = new QueryClient({
