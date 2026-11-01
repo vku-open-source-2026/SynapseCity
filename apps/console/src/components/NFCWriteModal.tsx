@@ -1,0 +1,194 @@
+import { AlertCircle, CheckCircle, Loader2, Smartphone, X } from "lucide-react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { type Asset, getAssetId } from "../api";
+
+interface NDEFReaderLike {
+    scan: (options?: { signal?: AbortSignal }) => Promise<void>;
+    write: (message: {
+        records: Array<{ recordType: string; data: string }>;
+    }) => Promise<void>;
+    onreading: ((event: Event) => void) | null;
+    onreadingerror: (() => void) | null;
+}
+
+interface NDEFReaderConstructor {
+    new (): NDEFReaderLike;
+}
+
+declare global {
+    interface Window {
+        NDEFReader?: NDEFReaderConstructor;
+    }
+}
+
+interface NFCWriteModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    asset: Asset | null;
+}
+
+const NFCWriteModal: React.FC<NFCWriteModalProps> = ({
+    isOpen,
+    onClose,
+    asset,
+}) => {
+    const [status, setStatus] = useState<
+        "idle" | "scanning" | "writing" | "success" | "error"
+    >("idle");
+    const [message, setMessage] = useState<string>("");
+    const abortControllerRef = useRef<AbortController | null>(null);
+
+    const stopScanning = useCallback(() => {
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
+        setStatus("idle");
+    }, []);
+
+    const startScanning = useCallback(async () => {
+        if (!window.NDEFReader) {
+            setStatus("error");
+            setMessage("Thiết bị/trình duyệt này không hỗ trợ Web NFC.");
+            return;
+        }
+
+        setStatus("scanning");
+        setMessage("Sẵn sàng quét. Chạm thiết bị của bạn vào thẻ NFC.");
+
+        abortControllerRef.current = new AbortController();
+
+        try {
+            const ndef = new window.NDEFReader();
+            await ndef.scan({ signal: abortControllerRef.current.signal });
+
+            ndef.onreading = async () => {
+                setStatus("writing");
+                setMessage("Phát hiện thẻ. Đang ghi dữ liệu...");
+
+                try {
+                    const assetId = asset ? getAssetId(asset) : "";
+                    const baseUrl = window.location.origin;
+                    const url = `${baseUrl}/asset/${assetId}`;
+
+                    // Write URL record
+                    await ndef.write({
+                        records: [{ recordType: "url", data: url }],
+                    });
+
+                    setStatus("success");
+                    setMessage("Đã ghi thành công URL tài sản vào thẻ NFC!");
+
+                    // Auto close after success
+                    setTimeout(() => {
+                        onClose();
+                    }, 2000);
+                } catch (writeError) {
+                    console.error(writeError);
+                    setStatus("error");
+                    setMessage("Ghi vào thẻ thất bại. Vui lòng thử lại.");
+                }
+            };
+
+            ndef.onreadingerror = () => {
+                setStatus("error");
+                setMessage("Lỗi khi đọc thẻ. Vui lòng thử lại.");
+            };
+        } catch (error) {
+            console.error(error);
+            setStatus("error");
+            setMessage("Không thể bắt đầu quét NFC. Vui lòng đảm bảo NFC đã được bật.");
+        }
+    }, [asset, onClose]);
+
+    useEffect(() => {
+        let timeoutId: number | undefined;
+
+        if (isOpen && asset) {
+            timeoutId = window.setTimeout(() => {
+                void startScanning();
+            }, 0);
+        } else {
+            timeoutId = window.setTimeout(() => {
+                stopScanning();
+            }, 0);
+        }
+
+        return () => {
+            if (timeoutId !== undefined) {
+                window.clearTimeout(timeoutId);
+            }
+            stopScanning();
+        };
+    }, [isOpen, asset, startScanning, stopScanning]);
+
+    if (!isOpen || !asset) return null;
+
+    return (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200">
+                <div className="flex justify-between items-center p-4 border-b border-slate-100">
+                    <h3 className="font-bold text-lg text-slate-800">
+                        Ghi vào NFC
+                    </h3>
+                    <button
+                        onClick={onClose}
+                        className="text-slate-400 hover:text-slate-600 transition-colors"
+                    >
+                        <X size={20} />
+                    </button>
+                </div>
+
+                <div className="p-8 flex flex-col items-center gap-6 text-center">
+                    <div
+                        className={`w-24 h-24 rounded-full flex items-center justify-center transition-colors duration-300 ${
+                            status === "scanning"
+                                ? "bg-blue-100 text-blue-600 animate-pulse"
+                                : status === "writing"
+                                ? "bg-amber-100 text-amber-600 animate-pulse"
+                                : status === "success"
+                                ? "bg-green-100 text-green-600"
+                                : status === "error"
+                                ? "bg-red-100 text-red-600"
+                                : "bg-slate-100 text-slate-400"
+                        }`}
+                    >
+                        {status === "scanning" && <Smartphone size={48} />}
+                        {status === "writing" && (
+                            <Loader2 size={48} className="animate-spin" />
+                        )}
+                        {status === "success" && <CheckCircle size={48} />}
+                        {status === "error" && <AlertCircle size={48} />}
+                        {status === "idle" && <Smartphone size={48} />}
+                    </div>
+
+                    <div>
+                            <h4 className="font-bold text-slate-800 text-lg mb-2">
+                                {status === "scanning"
+                                ? "Sẵn sàng quét"
+                                : status === "writing"
+                                ? "Đang ghi dữ liệu..."
+                                : status === "success"
+                                ? "Thành công!"
+                                : status === "error"
+                                ? "Lỗi"
+                                : "Chuẩn bị"}
+                            </h4>
+                        <p className="text-slate-500 text-sm">{message}</p>
+                    </div>
+
+                    {status === "error" && (
+                            <button
+                            onClick={startScanning}
+                            className="px-6 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium transition-colors"
+                        >
+                            Thử lại
+                        </button>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default NFCWriteModal;

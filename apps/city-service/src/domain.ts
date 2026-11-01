@@ -10,6 +10,17 @@ export const DATASETS = {
     id: 'city-incidents', name: 'SynapseCity infrastructure incidents', entityType: 'CityIncident',
     license: 'CC-BY-4.0', description: 'Public projection of generalized infrastructure incidents',
   },
+  maintenance: { id: 'city-maintenance', name: 'SynapseCity maintenance work orders', entityType: 'MaintenanceWorkOrder', license: 'CC-BY-4.0', description: 'Infrastructure maintenance lifecycle records' },
+  sensors: { id: 'city-iot-sensors', name: 'SynapseCity IoT sensors', entityType: 'IoTSensor', license: 'CC-BY-4.0', description: 'Infrastructure sensor metadata and readings' },
+  sensorData: { id: 'city-iot-readings', name: 'SynapseCity IoT readings', entityType: 'SensorReading', license: 'CC-BY-4.0', description: 'Infrastructure sensor observations' },
+  alerts: { id: 'city-alerts', name: 'SynapseCity alerts', entityType: 'InfrastructureAlert', license: 'CC-BY-4.0', description: 'Operational alerts associated with city infrastructure' },
+  budgets: { id: 'city-budgets', name: 'SynapseCity budgets', entityType: 'InfrastructureBudget', license: 'CC-BY-4.0', description: 'Infrastructure budget records' },
+  transactions: { id: 'city-budget-transactions', name: 'SynapseCity budget transactions', entityType: 'BudgetTransaction', license: 'CC-BY-4.0', description: 'Infrastructure budget transactions' },
+  reports: { id: 'city-reports', name: 'SynapseCity reports', entityType: 'InfrastructureReport', license: 'CC-BY-4.0', description: 'Infrastructure operational reports' },
+  notifications: { id: 'city-notifications', name: 'SynapseCity notifications', entityType: 'InfrastructureNotification', license: 'CC-BY-4.0', description: 'Infrastructure notification records' },
+  users: { id: 'city-users', name: 'SynapseCity users', entityType: 'CityUser', license: 'CC-BY-4.0', description: 'Domain operator profiles' },
+  geofences: { id: 'city-geofences', name: 'SynapseCity geofences', entityType: 'CityGeofence', license: 'CC-BY-4.0', description: 'Infrastructure geofence records' },
+  ingest: { id: 'city-ingest-jobs', name: 'SynapseCity ingest jobs', entityType: 'IngestJob', license: 'CC-BY-4.0', description: 'Infrastructure data ingestion records' },
 } as const;
 
 export interface DatasetSpec {

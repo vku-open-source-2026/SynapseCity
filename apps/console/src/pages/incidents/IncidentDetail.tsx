@@ -1,0 +1,571 @@
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useParams, useNavigate } from "@tanstack/react-router"
+import { incidentsApi } from "../../api/incidents"
+import { usersApi } from "../../api/users"
+import { IncidentStatusBadge } from "../../components/incidents/IncidentStatusBadge"
+import { IncidentComments } from "../../components/incidents/IncidentComments"
+import { IncidentWorkflowInfo } from "../../components/incidents/IncidentWorkflowInfo"
+import { IncidentHierarchy } from "../../components/incidents/IncidentHierarchy"
+import { IncidentVerificationPanel } from "../../components/incidents/IncidentVerificationPanel"
+import { Button } from "../../components/ui/button"
+import { Skeleton } from "../../components/ui/skeleton"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../../components/ui/dialog"
+import { Select } from "../../components/ui/select"
+import { ArrowLeft, MapPin, Clock, User, Wrench, CheckCircle, Loader2, Image, XCircle } from "lucide-react"
+import { format } from "date-fns"
+import { useAuthStore } from "../../stores/authStore"
+import React, { useState } from "react"
+
+const IncidentDetail: React.FC = () => {
+    const { id } = useParams({ from: "/admin/incidents/$id" });
+    const navigate = useNavigate();
+    const queryClient = useQueryClient();
+    const { user } = useAuthStore();
+    const [showMaintenanceDialog, setShowMaintenanceDialog] = useState(false);
+    const [showRejectDialog, setShowRejectDialog] = useState(false);
+    const [selectedTechnician, setSelectedTechnician] = useState("");
+    const [rejectReason, setRejectReason] = useState("");
+
+    const { data: incident, isLoading } = useQuery({
+        queryKey: ["incident", id],
+        queryFn: () => incidentsApi.getById(id),
+    });
+
+    const { data: users } = useQuery({
+        queryKey: ["users", "technicians", "active"],
+        queryFn: () => usersApi.listTechnicians("active"),
+        enabled: true, // Always fetch for technician selection
+    });
+
+    const commentMutation = useMutation({
+        mutationFn: ({
+            comment,
+            isInternal,
+        }: {
+            comment: string;
+            isInternal: boolean;
+        }) => incidentsApi.addComment(id, { comment, is_internal: isInternal }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["incident", id] });
+        },
+    });
+    const createMaintenanceMutation = useMutation({
+        mutationFn: (technicianId?: string) => incidentsApi.createMaintenance(id, technicianId),
+        onSuccess: (data) => {
+            setShowMaintenanceDialog(false);
+            setSelectedTechnician("");
+            queryClient.invalidateQueries({ queryKey: ["incident", id] });
+            queryClient.invalidateQueries({ queryKey: ["incidents"] });
+            navigate({ to: `/technician/maintenance/${data.maintenance_id}` });
+        },
+    });
+
+    const approveCostMutation = useMutation({
+        mutationFn: () => incidentsApi.approveCost(id),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["incident", id] });
+            queryClient.invalidateQueries({ queryKey: ["incidents"] });
+        },
+    });
+
+    const rejectMutation = useMutation({
+        mutationFn: (reason: string) => incidentsApi.reject(id, reason),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["incident", id] });
+            queryClient.invalidateQueries({ queryKey: ["incidents"] });
+        },
+    });
+
+    if (isLoading) {
+        return (
+            <div className="p-6 space-y-4">
+                <Skeleton className="h-8 w-64" />
+                <Skeleton className="h-64 w-full" />
+            </div>
+        );
+    }
+
+    if (!incident) {
+        return (
+            <div className="p-6 text-center text-red-500">
+                Không tìm thấy sự cố.
+            </div>
+        );
+    }
+
+    // Permission checks based on API documentation workflow
+    const canAddInternal =
+        user?.role === "admin" ||
+        user?.role === "manager" ||
+        user?.role === "technician";
+    const canReject =
+        (user?.role === "admin" || user?.role === "manager") &&
+        (incident.status === "reported" || incident.status === "acknowledged");
+    const canApproveCost =
+        (user?.role === "admin" || user?.role === "manager") &&
+        (incident.status === "resolved" ||
+            incident.status === "waiting_approval");
+
+    return (
+        <div className="p-6 space-y-6">
+            <Button
+                variant="ghost"
+                onClick={() => navigate({ to: "/admin/incidents" })}
+            >
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Quay lại danh sách sự cố
+            </Button>
+
+            {/* Header Section */}
+            <div className="bg-white rounded-lg border border-slate-200 p-6">
+                <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1">
+                        <h1 className="text-2xl font-bold text-slate-900 mb-2">
+                            {incident.title}
+                        </h1>
+                        <div className="flex items-center gap-3">
+                            <IncidentStatusBadge
+                                status={incident.status}
+                                severity={incident.severity}
+                            />
+                            <IncidentWorkflowInfo
+                                currentStatus={incident.status}
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Location and Metadata */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div className="flex items-center gap-2 text-sm text-slate-600">
+                        <MapPin className="h-4 w-4" />
+                        {incident.location?.geometry?.coordinates ? (
+                            (() => {
+                                const coords = incident.location.geometry.coordinates;
+                                // Handle GeoJSON Point format: [longitude, latitude]
+                                if (Array.isArray(coords) && coords.length >= 2 && typeof coords[0] === 'number' && typeof coords[1] === 'number') {
+                                    const lng = coords[0];
+                                    const lat = coords[1];
+                                    return (
+                                        <a
+                                            href={`/map?lat=${lat}&lng=${lng}&zoom=18${
+                                                incident.asset_id
+                                                    ? `&assetId=${incident.asset_id}`
+                                                    : ""
+                                            }`}
+                                            className="text-blue-600 hover:text-blue-800 hover:underline"
+                                            title="Xem trên bản đồ"
+                                        >
+                                            {lat.toFixed(6)}, {lng.toFixed(6)}
+                                        </a>
+                                    );
+                                }
+                                return <span>Chưa xác định vị trí</span>;
+                            })()
+                        ) : (
+                            <span>Location not specified</span>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-slate-600">
+                        <Clock className="h-4 w-4" />
+                        <span>
+                            Reported{" "}
+                            {format(
+                                new Date(incident.created_at),
+                                "MMM d, yyyy HH:mm"
+                            )}
+                        </span>
+                    </div>
+                    {incident.assigned_to && (
+                        <div className="flex items-center gap-2 text-sm text-slate-600">
+                            <User className="h-4 w-4" />
+                            <span>Assigned to technician</span>
+                        </div>
+                    )}
+                    {incident.resolved_at && (
+                        <div className="flex items-center gap-2 text-sm text-slate-600">
+                            <CheckCircle className="h-4 w-4" />
+                            <span>
+                                Resolved{" "}
+                                {format(
+                                    new Date(incident.resolved_at),
+                                    "MMM d, yyyy HH:mm"
+                                )}
+                            </span>
+                        </div>
+                    )}
+                    {incident.reporter_type && (
+                        <div className="flex items-center gap-2 text-sm text-slate-600">
+                            <User className="h-4 w-4" />
+                            <span>Reported by: {incident.reporter_type}</span>
+                        </div>
+                    )}
+                </div>
+
+                {/* Description */}
+                <div className="mb-6">
+                    <h2 className="font-semibold mb-2">Mô tả</h2>
+                    <p className="text-slate-700 whitespace-pre-wrap">
+                        {incident.description}
+                    </p>
+                </div>
+
+                {/* Photos Section */}
+                {incident.photos && incident.photos.length > 0 && (
+                    <div className="mb-6">
+                        <h2 className="font-semibold mb-3 flex items-center gap-2">
+                            <Image className="h-4 w-4" />
+                            Ảnh ({incident.photos.length})
+                        </h2>
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                            {incident.photos.map((photo, index) => (
+                                <a
+                                    key={index}
+                                    href={photo}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="block aspect-square rounded-lg overflow-hidden border border-slate-200 hover:border-blue-400 hover:shadow-md transition-all"
+                                >
+                                    <img
+                                        src={photo}
+                                        alt={`Incident photo ${index + 1}`}
+                                        className="w-full h-full object-cover"
+                                    />
+                                </a>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Related Asset Section */}
+                {incident.asset_id && (
+                    <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                            <h2 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                            <Wrench className="h-4 w-4" />
+                            Tài sản liên quan
+                        </h2>
+                        {incident.asset ? (
+                            <div className="space-y-1">
+                                <p className="text-blue-800 font-medium">
+                                    {incident.asset.name ||
+                                        incident.asset.asset_code ||
+                                        incident.asset.feature_type}
+                                </p>
+                                <div className="flex flex-wrap gap-2 text-sm text-blue-700">
+                                    {incident.asset.asset_code && (
+                                        <span className="bg-blue-100 px-2 py-0.5 rounded">
+                                            Code:{" "}
+                                            {incident.asset.asset_code}
+                                        </span>
+                                    )}
+                                    {incident.asset.category && (
+                                        <span className="bg-blue-100 px-2 py-0.5 rounded">
+                                            {incident.asset.category}
+                                        </span>
+                                    )}
+                                    {incident.asset.status && (
+                                        <span className="bg-blue-100 px-2 py-0.5 rounded capitalize">
+                                            {incident.asset.status}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        ) : (
+                            <p className="text-blue-700 text-sm">
+                                Asset ID: {incident.asset_id}
+                            </p>
+                        )}
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="mt-3"
+                            onClick={() =>
+                                navigate({
+                                    to: `/admin/assets/${incident.asset_id}`,
+                                })
+                            }
+                        >
+                            View Asset Details
+                        </Button>
+                    </div>
+                )}
+
+                {/* Resolution Details */}
+                {incident.resolution_notes && (
+                    <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                        <h2 className="font-semibold text-green-900 mb-2 flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4" />
+                            Chi tiết xử lý
+                        </h2>
+                        <div className="space-y-2">
+                            <p className="text-green-800 whitespace-pre-wrap">
+                                {incident.resolution_notes}
+                            </p>
+                            {incident.resolution_type && (
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm text-green-700">
+                                        Type:
+                                    </span>
+                                    <span className="text-sm font-medium text-green-800 capitalize">
+                                        {incident.resolution_type}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Related Reports - Show main report with sub-reports */}
+            <IncidentHierarchy incidentId={id} incident={incident} />
+
+            {/* Unified Verification & Duplicate Detection Panel */}
+            {(user?.role === "admin" || user?.role === "technician") && (
+                <IncidentVerificationPanel
+                    incidentId={id}
+                    incident={incident}
+                    canManage={user?.role === "admin" || user?.role === "technician"}
+                />
+            )}
+
+            {/* Actions Section */}
+            <div className="bg-white rounded-lg border border-slate-200 p-6">
+                <h2 className="font-semibold mb-4">Hành động</h2>
+                <div className="space-y-3">
+                    {/* Create Maintenance Button */}
+                    {incident.status !== "closed" && !incident.maintenance_record_id && (
+                        <Button
+                            onClick={() => setShowMaintenanceDialog(true)}
+                            disabled={createMaintenanceMutation.isPending || !incident.asset_id}
+                            className="w-full"
+                            title={!incident.asset_id ? "Sự cố cần liên kết tài sản trước khi tạo phiếu bảo trì" : undefined}
+                        >
+                            {createMaintenanceMutation.isPending ? (
+                                <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Đang tạo...
+                                </>
+                            ) : (
+                                <>
+                                    <Wrench className="h-4 w-4 mr-2" />
+                                    Tạo phiếu bảo trì
+                                </>
+                            )}
+                        </Button>
+                    )}
+
+                    {/* Reject Button */}
+                    {canReject && (
+                        <Button
+                            variant="outline"
+                            onClick={() => setShowRejectDialog(true)}
+                            disabled={rejectMutation.isPending}
+                            className="w-full text-red-600 border-red-200 hover:bg-red-50"
+                        >
+                            {rejectMutation.isPending ? (
+                                <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Đang xử lý...
+                                </>
+                            ) : (
+                                <>
+                                    <XCircle className="h-4 w-4 mr-2" />
+                                    Từ chối
+                                </>
+                            )}
+                        </Button>
+                    )}
+                </div>
+
+                {/* Create Maintenance Dialog */}
+                <Dialog open={showMaintenanceDialog} onOpenChange={setShowMaintenanceDialog}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Tạo phiếu bảo trì</DialogTitle>
+                            <DialogDescription>
+                                Chọn kỹ thuật viên để thực hiện công việc bảo trì này.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-2">
+                                    Kỹ thuật viên
+                                </label>
+                                <Select
+                                    value={selectedTechnician}
+                                    onChange={(e) => setSelectedTechnician(e.target.value)}
+                                    placeholder="Chọn kỹ thuật viên..."
+                                >
+                                    <option value="">Chọn kỹ thuật viên...</option>
+                                    {users?.map((user) => (
+                                        <option key={user.id} value={user.id}>
+                                            {user.full_name || user.username}
+                                        </option>
+                                    ))}
+                                </Select>
+                            </div>
+                            <div className="flex gap-2 justify-end">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => {
+                                        setShowMaintenanceDialog(false);
+                                        setSelectedTechnician("");
+                                    }}
+                                >
+                                    Hủy
+                                </Button>
+                                <Button
+                                    onClick={() => {
+                                        createMaintenanceMutation.mutate(
+                                            selectedTechnician || undefined
+                                        );
+                                    }}
+                                    disabled={createMaintenanceMutation.isPending}
+                                >
+                                    {createMaintenanceMutation.isPending ? (
+                                        <>
+                                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                            Đang tạo...
+                                        </>
+                                    ) : (
+                                        "Tạo phiếu bảo trì"
+                                    )}
+                                </Button>
+                            </div>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Reject Dialog */}
+                <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Từ chối sự cố</DialogTitle>
+                            <DialogDescription>
+                                Vui lòng nhập lý do từ chối sự cố này.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-2">
+                                    Lý do từ chối
+                                </label>
+                                <textarea
+                                    value={rejectReason}
+                                    onChange={(e) => setRejectReason(e.target.value)}
+                                    placeholder="Nhập lý do từ chối..."
+                                    rows={4}
+                                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                                />
+                            </div>
+                            <div className="flex gap-2 justify-end">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => {
+                                        setShowRejectDialog(false);
+                                        setRejectReason("");
+                                    }}
+                                >
+                                    Hủy
+                                </Button>
+                                <Button
+                                    onClick={async () => {
+                                        if (rejectReason.trim()) {
+                                            await rejectMutation.mutateAsync(rejectReason);
+                                            setShowRejectDialog(false);
+                                            setRejectReason("");
+                                        }
+                                    }}
+                                    disabled={!rejectReason.trim() || rejectMutation.isPending}
+                                    className="bg-red-600 hover:bg-red-700"
+                                >
+                                    {rejectMutation.isPending ? (
+                                        <>
+                                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                            Đang xử lý...
+                                        </>
+                                    ) : (
+                                        "Xác nhận từ chối"
+                                    )}
+                                </Button>
+                            </div>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+                    {/* Show linked maintenance record if exists */}
+                    {incident.maintenance_record_id && (
+                        <div className="mt-4 pt-4 border-t">
+                            <div className="bg-green-50 border border-green-200 p-4 rounded">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h3 className="font-semibold text-green-800 mb-1">
+                                            Maintenance Work Order
+                                        </h3>
+                                        <p className="text-sm text-green-700">
+                                            Linked maintenance record:{" "}
+                                            {incident.maintenance_record_id}
+                                        </p>
+                                    </div>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() =>
+                                            navigate({
+                                                to: `/technician/maintenance/${incident.maintenance_record_id}`,
+                                            })
+                                        }
+                                    >
+                                        View Maintenance
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Approve Cost - shown when incident is resolved and has maintenance record */}
+                    {canApproveCost && incident.maintenance_record_id && (
+                        <div className="mt-4 pt-4 border-t">
+                            <div className="bg-yellow-50 border border-yellow-200 p-4 rounded mb-4">
+                                <h3 className="font-semibold text-yellow-800">
+                                    Cần phê duyệt chi phí
+                                </h3>
+                                <p className="text-sm text-yellow-700">
+                                    This incident has pending maintenance costs
+                                    that require approval. Approving will
+                                    automatically resolve the incident.
+                                </p>
+                            </div>
+                            <Button
+                                className="w-full sm:w-auto bg-green-600 hover:bg-green-700"
+                                onClick={() => approveCostMutation.mutate()}
+                                disabled={approveCostMutation.isPending}
+                            >
+                                {approveCostMutation.isPending ? (
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                ) : (
+                                    <CheckCircle className="mr-2 h-4 w-4" />
+                                )}
+                                Phê duyệt chi phí & Kết thúc
+                            </Button>
+                        </div>
+                    )}
+
+                {/* Phần bình luận */}
+                <div className="border-t pt-6 mt-6">
+                    <IncidentComments
+                        comments={incident.comments}
+                        onAddComment={async (comment, isInternal) => {
+                            await commentMutation.mutateAsync({
+                                comment,
+                                isInternal,
+                            });
+                        }}
+                        canAddInternal={canAddInternal}
+                    />
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default IncidentDetail;

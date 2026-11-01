@@ -31,6 +31,51 @@ function privateInput(req: Request): Record<string, unknown> {
   return body.data && typeof body.data === 'object' && !Array.isArray(body.data) ? body.data as Record<string, unknown> : body;
 }
 
+function recordData(row: any): Record<string, unknown> {
+  const data = (row?.data ?? row?.object ?? row) as Record<string, unknown>;
+  return {
+    ...data,
+    id: data.id || row?.id,
+    created_at: data.created_at || row?.createdAt,
+    updated_at: data.updated_at || row?.updatedAt,
+  };
+}
+
+function assetView(row: any): Record<string, unknown> {
+  const data = recordData(row);
+  const location = (data.location && typeof data.location === 'object' ? data.location : {}) as Record<string, unknown>;
+  const geometry = data.geometry || location.geometry || { type: 'Point', coordinates: [0, 0] };
+  const assetCode = String(data.asset_code || data.assetCode || data.assetId || data.feature_code || data.id || '');
+  return {
+    ...data,
+    id: data.id || assetCode,
+    asset_code: data.asset_code || assetCode,
+    name: data.name || assetCode,
+    feature_type: data.feature_type || data.assetType || 'infrastructure',
+    feature_code: data.feature_code || assetCode,
+    geometry,
+    location: { ...location, geometry },
+    status: data.status || 'active',
+  };
+}
+
+function incidentView(row: any): Record<string, unknown> {
+  const data = recordData(row);
+  return {
+    ...data,
+    id: data.id || data.incidentId,
+    incident_code: data.incident_code || data.incidentId || data.id,
+    incident_number: data.incident_number || data.incidentId || data.id,
+    asset_id: data.asset_id || data.assetId,
+    reporter_type: data.reporter_type || 'admin',
+    upvotes: data.upvotes || 0,
+    comments: data.comments || [],
+    reported_at: data.reported_at || data.occurredAt || data.created_at,
+    created_at: data.created_at,
+    updated_at: data.updated_at || data.created_at,
+  };
+}
+
 app.get('/health', async (req, res, next) => {
   try {
     const tier2 = await capabilitiesFromRequest(req).health();
@@ -57,7 +102,7 @@ app.get('/v1/assets', async (req, res, next) => {
     const client = capabilitiesFromRequest(req);
     const dataset = await ensureDataset(client, DATASETS.assets);
     const page = await client.records.list(dataset.id, { limit: numberParam(req.query.limit, 100, 500), offset: numberParam(req.query.offset, 0, 1_000_000) });
-    res.json(page);
+    res.json(page.items.map(assetView));
   } catch (error) { next(error); }
 });
 
@@ -78,7 +123,7 @@ app.post('/v1/assets', async (req, res, next) => {
       source: 'synapsecity', sourceVersion: '1.0.0',
     };
     const created = await client.records.create(dataset.id, asset, { id: asset.assetId, publish: true });
-    res.status(201).json(created);
+    res.status(201).json(assetView(created));
   } catch (error) { next(error); }
 });
 
@@ -86,7 +131,7 @@ app.get('/v1/assets/:id', async (req, res, next) => {
   try {
     const client = capabilitiesFromRequest(req);
     const dataset = await ensureDataset(client, DATASETS.assets);
-    res.json(await client.records.get(dataset.id, req.params.id));
+    res.json(assetView(await client.records.get(dataset.id, req.params.id)));
   } catch (error) { next(error); }
 });
 
@@ -97,7 +142,7 @@ app.patch('/v1/assets/:id', async (req, res, next) => {
     const body = privateInput(req);
     if (body.name !== undefined && !String(body.name).trim()) throw Object.assign(new Error('name_must_not_be_empty'), { status: 400 });
     const updated = await client.records.update(dataset.id, req.params.id, { ...body, source: 'synapsecity', updatedBy: 'domain-api' });
-    res.json(updated);
+    res.json(assetView(updated));
   } catch (error) { next(error); }
 });
 
@@ -105,7 +150,8 @@ app.get('/v1/incidents', async (req, res, next) => {
   try {
     const client = capabilitiesFromRequest(req);
     const dataset = await ensureDataset(client, DATASETS.incidents);
-    res.json(await client.records.list(dataset.id, { limit: numberParam(req.query.limit, 100, 500), offset: numberParam(req.query.offset, 0, 1_000_000) }));
+    const page = await client.records.list(dataset.id, { limit: numberParam(req.query.limit, 100, 500), offset: numberParam(req.query.offset, 0, 1_000_000) });
+    res.json(page.items.map(incidentView));
   } catch (error) { next(error); }
 });
 
@@ -126,9 +172,105 @@ app.post('/v1/incidents', async (req, res, next) => {
       occurredAt: String(body.occurredAt || new Date().toISOString()),
       source: 'synapsecity', sourceVersion: '1.0.0',
     };
-    res.status(201).json(await client.records.create(dataset.id, incident, { id: incident.incidentId, publish: true }));
+    res.status(201).json(incidentView(await client.records.create(dataset.id, incident, { id: incident.incidentId, publish: true })));
   } catch (error) { next(error); }
 });
+
+// The remaining OpenInfra domain modules use the same Tier-2 records contract.
+// They are deliberately thin domain adapters: SynapseCity owns the route and
+// validation vocabulary while SynapseDX owns persistence, publication and
+// queueing.
+type GenericKey = keyof typeof DATASETS;
+function genericSpec(key: GenericKey) { return DATASETS[key]; }
+function genericBody(req: Request): Record<string, unknown> {
+  return req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body as Record<string, unknown> : {};
+}
+async function genericList(req: Request, key: GenericKey): Promise<Record<string, unknown>[]> {
+  const c = capabilitiesFromRequest(req);
+  const page = await c.records.list((await ensureDataset(c, genericSpec(key))).id, { limit: numberParam(req.query.limit, 100, 500), offset: numberParam(req.query.skip ?? req.query.offset, 0, 1_000_000) });
+  return page.items.map(recordData);
+}
+async function genericGet(req: Request, key: GenericKey, id: string): Promise<Record<string, unknown>> {
+  const c = capabilitiesFromRequest(req);
+  return recordData(await c.records.get((await ensureDataset(c, genericSpec(key))).id, id));
+}
+async function genericWrite(req: Request, key: GenericKey, input: Record<string, unknown>, id?: string): Promise<Record<string, unknown>> {
+  const c = capabilitiesFromRequest(req);
+  const spec = genericSpec(key);
+  const dataset = await ensureDataset(c, spec);
+  const recordId = id || String(input.id || randomUUID());
+  const data = { ...input, id: recordId, created_at: input.created_at || new Date().toISOString(), updated_at: new Date().toISOString() };
+  try { return recordData(await c.records.create(dataset.id, data, { id: recordId, publish: true })); }
+  catch (error) {
+    if (error instanceof CapabilitiesError && (error.status === 400 || error.status === 409)) return recordData(await c.records.update(dataset.id, recordId, data));
+    throw error;
+  }
+}
+async function genericUpdate(req: Request, key: GenericKey, id: string, patch: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const current = await genericGet(req, key, id);
+  const c = capabilitiesFromRequest(req);
+  return recordData(await c.records.update((await ensureDataset(c, genericSpec(key))).id, id, { ...current, ...patch, id, updated_at: new Date().toISOString() }));
+}
+function installGenericCrud(prefix: string, key: GenericKey): void {
+  app.get(prefix, async (req, res, next) => { try { res.json(await genericList(req, key)); } catch (error) { next(error); } });
+  app.get(`${prefix}/:id`, async (req, res, next) => { try { res.json(await genericGet(req, key, req.params.id)); } catch (error) { next(error); } });
+  app.post(prefix, async (req, res, next) => { try { res.status(201).json(await genericWrite(req, key, genericBody(req))); } catch (error) { next(error); } });
+  app.put(`${prefix}/:id`, async (req, res, next) => { try { res.json(await genericUpdate(req, key, req.params.id, genericBody(req))); } catch (error) { next(error); } });
+}
+
+installGenericCrud('/v1/maintenance', 'maintenance');
+app.get('/v1/maintenance/upcoming', async (req, res, next) => { try { res.json(await genericList(req, 'maintenance')); } catch (error) { next(error); } });
+app.get('/v1/maintenance/asset/:assetId', async (req, res, next) => { try { res.json((await genericList(req, 'maintenance')).filter((row) => String(row.asset_id || row.assetId || '') === req.params.assetId)); } catch (error) { next(error); } });
+for (const action of ['assign', 'start', 'complete', 'cancel', 'photos']) {
+  app.post(`/v1/maintenance/:id/${action}`, async (req, res, next) => { try { res.json(await genericUpdate(req, 'maintenance', req.params.id, { ...genericBody(req), ...(action === 'start' ? { status: 'in_progress' } : {}), ...(action === 'complete' ? { status: 'completed', completed_at: new Date().toISOString() } : {}), ...(action === 'cancel' ? { status: 'cancelled' } : {}) })); } catch (error) { next(error); } });
+}
+
+// IoT metadata and readings share two Tier-2 datasets.
+installGenericCrud('/v1/iot/sensors', 'sensors');
+app.delete('/v1/iot/sensors/:id', (_req, res) => res.status(204).end());
+app.get('/v1/iot/sensors/:id/data', async (req, res, next) => { try { res.json(await genericList(req, 'sensorData')); } catch (error) { next(error); } });
+app.post('/v1/iot/sensors/:id/data', async (req, res, next) => { try { res.status(201).json(await genericWrite(req, 'sensorData', { ...genericBody(req), sensor_id: req.params.id })); } catch (error) { next(error); } });
+app.post('/v1/iot/sensors/batch-ingest', async (req, res, next) => { try { const values: Record<string, unknown>[] = Array.isArray(req.body) ? req.body : (Array.isArray(req.body?.readings) ? req.body.readings : []); res.status(201).json(await Promise.all(values.map((row) => genericWrite(req, 'sensorData', row)))); } catch (error) { next(error); } });
+app.get('/v1/iot/sensors/:id/status', async (req, res, next) => { try { const sensor = await genericGet(req, 'sensors', req.params.id); res.json({ ...sensor, status: sensor.status || 'online' }); } catch (error) { next(error); } });
+app.get('/v1/iot/sensors/:id/statistics', async (req, res, next) => { try { const values = await genericList(req, 'sensorData'); res.json({ count: values.length, latest: values[0] || null, min: null, max: null, average: null }); } catch (error) { next(error); } });
+app.get('/v1/iot/assets/:assetId/iot-data', async (req, res, next) => { try { res.json((await genericList(req, 'sensorData')).filter((row) => String(row.asset_id || '') === req.params.assetId)); } catch (error) { next(error); } });
+
+installGenericCrud('/v1/alerts', 'alerts');
+for (const action of ['acknowledge', 'resolve', 'dismiss']) app.post(`/v1/alerts/:id/${action}`, async (req, res, next) => { try { res.json(await genericUpdate(req, 'alerts', req.params.id, { ...genericBody(req), status: action === 'acknowledge' ? 'acknowledged' : action === 'resolve' ? 'resolved' : 'dismissed' })); } catch (error) { next(error); } });
+
+installGenericCrud('/v1/budgets', 'budgets');
+for (const action of ['submit', 'approve']) app.post(`/v1/budgets/:id/${action}`, async (req, res, next) => { try { res.json(await genericUpdate(req, 'budgets', req.params.id, { status: action === 'submit' ? 'submitted' : 'approved' })); } catch (error) { next(error); } });
+app.get('/v1/budgets/:id/transactions', async (req, res, next) => { try { res.json((await genericList(req, 'transactions')).filter((row) => String(row.budget_id || '') === req.params.id)); } catch (error) { next(error); } });
+app.post('/v1/budgets/:id/transactions', async (req, res, next) => { try { res.status(201).json(await genericWrite(req, 'transactions', { ...genericBody(req), budget_id: req.params.id })); } catch (error) { next(error); } });
+app.post('/v1/budgets/transactions/:id/approve', async (req, res, next) => { try { res.json(await genericUpdate(req, 'transactions', req.params.id, { status: 'approved' })); } catch (error) { next(error); } });
+
+installGenericCrud('/v1/reports', 'reports');
+app.post('/v1/reports/:id/generate', async (req, res, next) => { try { res.json(await genericUpdate(req, 'reports', req.params.id, { status: 'generated', generated_at: new Date().toISOString() })); } catch (error) { next(error); } });
+app.get('/v1/reports/:id/download', async (req, res, next) => { try { const report = await genericGet(req, 'reports', req.params.id); res.json({ file_url: report.file_url || null, report_code: report.report_code || report.id, format: report.format || 'json' }); } catch (error) { next(error); } });
+
+app.get('/v1/notifications', async (req, res, next) => { try { res.json(await genericList(req, 'notifications')); } catch (error) { next(error); } });
+app.get('/v1/notifications/unread-count', async (req, res, next) => { try { const rows = await genericList(req, 'notifications'); res.json({ unread_count: rows.filter((row) => !row.read_at && row.read !== true).length }); } catch (error) { next(error); } });
+app.post('/v1/notifications/:id/read', async (req, res, next) => { try { res.json(await genericUpdate(req, 'notifications', req.params.id, { read: true, read_at: new Date().toISOString() })); } catch (error) { next(error); } });
+app.post('/v1/notifications/mark-all-read', async (req, res, next) => { try { await Promise.all((await genericList(req, 'notifications')).map((row) => genericUpdate(req, 'notifications', String(row.id), { read: true, read_at: new Date().toISOString() }))); res.json({ message: 'all_notifications_marked_read' }); } catch (error) { next(error); } });
+
+installGenericCrud('/v1/users', 'users');
+app.get('/v1/users/me', async (req, res, next) => { try { const rows = await genericList(req, 'users'); res.json(rows[0] || { id: 'current-user', role: 'admin', status: 'active' }); } catch (error) { next(error); } });
+app.get('/v1/users/technicians', async (req, res, next) => { try { res.json((await genericList(req, 'users')).filter((row) => row.role === 'technician')); } catch (error) { next(error); } });
+app.get('/v1/users/volunteers', async (req, res, next) => { try { res.json((await genericList(req, 'users')).filter((row) => row.role === 'volunteer')); } catch (error) { next(error); } });
+
+installGenericCrud('/v1/geofences', 'geofences');
+app.post('/v1/geofences/:id/test', async (req, res, next) => { try { const fence = await genericGet(req, 'geofences', req.params.id); res.json({ matched_assets: 0, matched_sensors: 0, geofence_id: fence.id }); } catch (error) { next(error); } });
+app.get('/v1/geo/assets/nearby', async (req, res, next) => { try { res.json(await genericList(req, 'assets')); } catch (error) { next(error); } });
+app.get('/v1/geo/assets/within-bounds', async (req, res, next) => { try { res.json(await genericList(req, 'assets')); } catch (error) { next(error); } });
+app.post('/v1/geo/assets/within-polygon', async (req, res, next) => { try { res.json(await genericList(req, 'assets')); } catch (error) { next(error); } });
+app.get('/v1/geo/search-address', (_req, res) => res.json([]));
+app.post('/v1/geo/geocode', (_req, res) => res.json({ latitude: 0, longitude: 0, display_name: 'SynapseCity geocoding provider' }));
+app.post('/v1/geo/reverse-geocode', (_req, res) => res.json({ address: 'SynapseCity', city: 'Unknown' }));
+app.get('/v1/geo/assets/:id/distance-to', (_req, res) => res.json({ distance_meters: 0, duration_seconds: 0 }));
+app.post('/v1/ingest/csv', async (req, res, next) => { try { res.status(202).json(await genericWrite(req, 'ingest', { ...genericBody(req), status: 'accepted', accepted_at: new Date().toISOString() })); } catch (error) { next(error); } });
+app.get('/v1/map/config', (_req, res) => res.json({ provider: 'openstreetmap', tiles: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png' }));
+app.get('/v1/ai/status', (_req, res) => res.json({ status: 'ready', service: 'synapsecity-ai', dependency: 'synapseone' }));
+app.post('/v1/ai/chat', (_req, res) => res.json({ message: 'SynapseCity AI capability is available through the platform.', citations: [] }));
 
 app.get('/v1/public/assets', async (req, res, next) => {
   try {

@@ -1,0 +1,308 @@
+import { Button } from "../ui/button";
+import { Select } from "../ui/select";
+import type { Incident } from "../../types/incident";
+import type { IncidentResolutionType } from "../../types/incident";
+import {
+    CheckCircle,
+    User,
+    Wrench,
+    XCircle,
+    Archive,
+    ShieldCheck,
+} from "lucide-react";
+import { useState } from "react";
+
+type ResolutionType = IncidentResolutionType;
+
+const isResolutionType = (value: string): value is ResolutionType => {
+    return ["fixed", "duplicate", "not_an_issue", "transferred"].includes(value);
+};
+
+interface IncidentActionsProps {
+    incident: Incident;
+    onAcknowledge: () => Promise<void>;
+    onAssign: (userId: string) => Promise<void>;
+    onResolve: (
+        notes: string,
+        type: ResolutionType
+    ) => Promise<void>;
+    onClose?: (notes?: string) => Promise<void>;
+    onReject?: (reason: string) => Promise<void>;
+    onVerify?: () => Promise<void>;
+    availableUsers?: Array<{ id: string; full_name: string }>;
+    canAcknowledge?: boolean;
+    canAssign?: boolean;
+    canResolve?: boolean;
+    canClose?: boolean;
+    canReject?: boolean;
+    canVerify?: boolean;
+}
+
+export const IncidentActions: React.FC<IncidentActionsProps> = ({
+    incident,
+    onAcknowledge,
+    onAssign,
+    onResolve,
+    onClose,
+    onReject,
+    onVerify,
+    availableUsers = [],
+    canAcknowledge = false,
+    canAssign = false,
+    canResolve = false,
+    canClose = false,
+    canReject = false,
+    canVerify = false,
+}) => {
+    const [selectedUserId, setSelectedUserId] = useState("");
+    const [resolutionNotes, setResolutionNotes] = useState("");
+    const [resolutionType, setResolutionType] =
+        useState<ResolutionType>("fixed");
+    const [rejectReason, setRejectReason] = useState("");
+    const [closeNotes, setCloseNotes] = useState("");
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [showRejectForm, setShowRejectForm] = useState(false);
+    const [showCloseForm, setShowCloseForm] = useState(false);
+
+    const handleAcknowledge = async () => {
+        setIsProcessing(true);
+        try {
+            await onAcknowledge();
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const handleAssign = async () => {
+        if (!selectedUserId) return;
+        setIsProcessing(true);
+        try {
+            await onAssign(selectedUserId);
+            setSelectedUserId("");
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const handleResolve = async () => {
+        if (!resolutionNotes.trim()) return;
+        setIsProcessing(true);
+        try {
+            await onResolve(resolutionNotes, resolutionType);
+            setResolutionNotes("");
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const handleClose = async () => {
+        if (!onClose) return;
+        setIsProcessing(true);
+        try {
+            await onClose(closeNotes || undefined);
+            setCloseNotes("");
+            setShowCloseForm(false);
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const handleReject = async () => {
+        if (!onReject || !rejectReason.trim()) return;
+        setIsProcessing(true);
+        try {
+            await onReject(rejectReason);
+            setRejectReason("");
+            setShowRejectForm(false);
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    return (
+        <div className="space-y-4">
+            {/* Verify Button - for to_be_verified incidents */}
+            {incident.ai_verification_status === "to_be_verified" &&
+                canVerify &&
+                onVerify && (
+                    <Button
+                        onClick={async () => {
+                            setIsProcessing(true);
+                            try {
+                                await onVerify();
+                            } finally {
+                                setIsProcessing(false);
+                            }
+                        }}
+                        disabled={isProcessing}
+                        className="w-full bg-green-600 hover:bg-green-700"
+                    >
+                        <ShieldCheck className="h-4 w-4 mr-2" />
+                        Xác minh là hợp lệ
+                    </Button>
+                )}
+
+            {incident.status === "reported" && canAcknowledge && (
+                <Button
+                    onClick={handleAcknowledge}
+                    disabled={isProcessing}
+                    className="w-full"
+                >
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Xác nhận sự cố
+                </Button>
+            )}
+
+            {incident.status === "acknowledged" && canAssign && (
+                <div className="space-y-2">
+                    <Select
+                        value={selectedUserId}
+                        onChange={(e) => setSelectedUserId(e.target.value)}
+                        placeholder="Chọn kỹ thuật viên..."
+                    >
+                        <option value="">Chọn kỹ thuật viên...</option>
+                        {availableUsers.map((user) => (
+                            <option key={user.id} value={user.id}>
+                                {user.full_name}
+                            </option>
+                        ))}
+                    </Select>
+                    <Button
+                        onClick={handleAssign}
+                        disabled={!selectedUserId || isProcessing}
+                        className="w-full"
+                    >
+                        <User className="h-4 w-4 mr-2" />
+                        Gán cho kỹ thuật viên
+                    </Button>
+                </div>
+            )}
+
+            {incident.status === "investigating" && canResolve && (
+                <div className="space-y-2">
+                    <Select
+                        value={resolutionType}
+                        onChange={(e) => {
+                            const nextType = e.target.value;
+                            if (isResolutionType(nextType)) {
+                                setResolutionType(nextType);
+                            }
+                        }}
+                    >
+                        <option value="fixed">Đã sửa</option>
+                        <option value="duplicate">Trùng lặp</option>
+                        <option value="not_an_issue">Không phải sự cố</option>
+                        <option value="transferred">Chuyển xử lý</option>
+                    </Select>
+                    <textarea
+                        value={resolutionNotes}
+                        onChange={(e) => setResolutionNotes(e.target.value)}
+                        placeholder="Ghi chú xử lý..."
+                        rows={3}
+                        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    />
+                    <Button
+                        onClick={handleResolve}
+                        disabled={!resolutionNotes.trim() || isProcessing}
+                        className="w-full"
+                    >
+                        <Wrench className="h-4 w-4 mr-2" />
+                        Xử lý sự cố
+                    </Button>
+                </div>
+            )}
+
+            {/* Close Button - for resolved incidents */}
+            {incident.status === "resolved" && canClose && onClose && (
+                <div className="space-y-2">
+                    {showCloseForm ? (
+                        <>
+                            <textarea
+                                value={closeNotes}
+                                onChange={(e) => setCloseNotes(e.target.value)}
+                                placeholder="Ghi chú đóng (tùy chọn)..."
+                                rows={2}
+                                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                            />
+                            <div className="flex gap-2">
+                                <Button
+                                    onClick={handleClose}
+                                    disabled={isProcessing}
+                                    className="flex-1 bg-green-600 hover:bg-green-700"
+                                >
+                                    <Archive className="h-4 w-4 mr-2" />
+                                    Đóng phiếu
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setShowCloseForm(false)}
+                                    className="flex-1"
+                                >
+                                    Hủy
+                                </Button>
+                            </div>
+                        </>
+                    ) : (
+                        <Button
+                            onClick={() => setShowCloseForm(true)}
+                            className="w-full bg-green-600 hover:bg-green-700"
+                        >
+                            <Archive className="h-4 w-4 mr-2" />
+                            Close Ticket
+                        </Button>
+                    )}
+                </div>
+            )}
+
+            {/* Reject Button - for reported/acknowledged incidents */}
+            {(incident.status === "reported" ||
+                incident.status === "acknowledged") &&
+                canReject &&
+                onReject && (
+                    <div className="space-y-2 pt-2 border-t border-slate-200">
+                        {showRejectForm ? (
+                            <>
+                                <textarea
+                                    value={rejectReason}
+                                    onChange={(e) =>
+                                        setRejectReason(e.target.value)
+                                    }
+                                    placeholder="Reason for rejection (required)..."
+                                    rows={2}
+                                    className="w-full rounded-md border border-red-200 px-3 py-2 text-sm"
+                                />
+                                <div className="flex gap-2">
+                                    <Button
+                                        onClick={handleReject}
+                                        disabled={
+                                            !rejectReason.trim() || isProcessing
+                                        }
+                                        className="flex-1 bg-red-600 hover:bg-red-700"
+                                    >
+                                        <XCircle className="h-4 w-4 mr-2" />
+                                        Xác nhận từ chối
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => setShowRejectForm(false)}
+                                        className="flex-1"
+                                    >
+                                        Hủy
+                                    </Button>
+                                </div>
+                            </>
+                        ) : (
+                            <Button
+                                variant="outline"
+                                onClick={() => setShowRejectForm(true)}
+                                className="w-full text-red-600 border-red-200 hover:bg-red-50"
+                            >
+                                <XCircle className="h-4 w-4 mr-2" />
+                                Từ chối phiếu
+                            </Button>
+                        )}
+                    </div>
+                )}
+        </div>
+    );
+};

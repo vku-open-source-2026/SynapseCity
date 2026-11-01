@@ -29,8 +29,11 @@ services:
         aliases: [synapsecity-gateway]
   console:
     build:
-      context: ..
-      dockerfile: SynapseCity/apps/console/Dockerfile
+      context: ./apps/console
+      dockerfile: Dockerfile
+      args:
+        VITE_BASE_API_URL: /v1
+        VITE_LEADERBOARD_URL: /v1
     restart: unless-stopped
     expose: ["80"]
     networks:
