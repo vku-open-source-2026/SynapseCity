@@ -1,0 +1,23 @@
+{
+  "name": "synapsecity",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "description": "SynapseCity Tier-3 infrastructure product migrated from OpenInfra",
+  "type": "commonjs",
+  "scripts": {
+    "prebuild": "npm --prefix ../SynapseDX/sdk-js install && npm --prefix ../SynapseDX/sdk-js run build",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/src/server.js",
+    "test": "npm run build && node --test dist/src/*.test.js"
+  },
+  "dependencies": {
+    "@synapsedx/capabilities": "file:../SynapseDX/sdk-js",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}

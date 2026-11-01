@@ -1,0 +1,14 @@
+services:
+  synapsecity:
+    build:
+      context: ..
+      dockerfile: SynapseCity/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: "8083"
+      SYNAPSEDX_BASE_URL: https://synapsedx.sbs
+      ALLOW_LOCAL_DEPENDENCIES: "false"
+    ports:
+      - "8083:8083"
