@@ -1,0 +1,23 @@
+{
+  "name": "@synapsecity/city-service",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "description": "SynapseCity Tier-3 domain backend",
+  "type": "commonjs",
+  "scripts": {
+    "prebuild": "npm --prefix ../../../SynapseDX/sdks/capabilities-js install && npm --prefix ../../../SynapseDX/sdks/capabilities-js run build",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/src/server.js",
+    "test": "npm run build && node --test dist/src/*.test.js"
+  },
+  "dependencies": {
+    "@synapsedx/capabilities": "file:../../../SynapseDX/sdks/capabilities-js",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}

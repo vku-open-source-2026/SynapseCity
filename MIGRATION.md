@@ -22,3 +22,7 @@ queue in this repository.
 All public records are explicitly projected and marked public before they reach
 SynapseLDS. The original domain records remain behind authenticated Tier-2
 routes.
+
+The runtime split is `apps/gateway` (public edge), `apps/city-service` (domain
+backend), and `apps/console` (frontend). The domain backend only imports the
+Tier-2 SDK; the gateway and console have no platform credentials.

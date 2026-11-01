@@ -1,8 +1,8 @@
 services:
-  synapsecity:
+  city-service:
     build:
       context: ..
-      dockerfile: SynapseCity/Dockerfile
+      dockerfile: SynapseCity/apps/city-service/Dockerfile
     restart: unless-stopped
     env_file: .env
     environment:
@@ -10,5 +10,31 @@ services:
       PORT: "8083"
       SYNAPSEDX_BASE_URL: https://synapsedx.sbs
       ALLOW_LOCAL_DEPENDENCIES: "false"
+    expose: ["8083"]
+    networks: [synapsecity]
+  gateway:
+    build:
+      context: ..
+      dockerfile: SynapseCity/apps/gateway/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "8080"
+      CITY_SERVICE_URL: http://city-service:8083
+      CORS_ORIGIN: "*"
     ports:
-      - "8083:8083"
+      - "8083:8080"
+    networks:
+      synapsecity:
+        aliases: [synapsecity-gateway]
+  console:
+    build:
+      context: ..
+      dockerfile: SynapseCity/apps/console/Dockerfile
+    restart: unless-stopped
+    expose: ["80"]
+    networks: [synapsecity]
+
+networks:
+  synapsecity:
+    name: synapsecity-public-stack

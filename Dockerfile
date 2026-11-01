@@ -1,19 +1,22 @@
 FROM node:20-bookworm-slim AS build
 WORKDIR /workspace
-COPY SynapseDX/sdk-js/package*.json ./SynapseDX/sdk-js/
-COPY SynapseDX/sdk-js/tsconfig.json ./SynapseDX/sdk-js/
-COPY SynapseDX/sdk-js/src ./SynapseDX/sdk-js/src
-RUN cd SynapseDX/sdk-js && npm ci && npm run build
+COPY SynapseDX/sdks/capabilities-js/package*.json ./SynapseDX/sdks/capabilities-js/
+COPY SynapseDX/sdks/capabilities-js/tsconfig.json ./SynapseDX/sdks/capabilities-js/
+COPY SynapseDX/sdks/capabilities-js/src ./SynapseDX/sdks/capabilities-js/src
+RUN cd SynapseDX/sdks/capabilities-js && npm ci && npm run build
 COPY SynapseCity/package*.json ./SynapseCity/
-COPY SynapseCity/tsconfig.json ./SynapseCity/
-COPY SynapseCity/src ./SynapseCity/src
-RUN cd SynapseCity && npm ci && npm run build
+COPY SynapseCity/apps/city-service/package*.json SynapseCity/apps/city-service/tsconfig.json ./SynapseCity/apps/city-service/
+COPY SynapseCity/apps/city-service/src ./SynapseCity/apps/city-service/src
+RUN cd SynapseCity && npm ci && npm run build --workspace=@synapsecity/city-service
 
 FROM node:20-bookworm-slim
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /workspace/SynapseCity/package*.json ./
 COPY --from=build /workspace/SynapseCity/node_modules ./node_modules
-COPY --from=build /workspace/SynapseCity/dist ./dist
+RUN rm -f /app/node_modules/@synapsedx/capabilities
+COPY --from=build /workspace/SynapseDX/sdks/capabilities-js ./node_modules/@synapsedx/capabilities
+COPY --from=build /workspace/SynapseCity/apps/city-service/dist ./apps/city-service/dist
+COPY --from=build /workspace/SynapseCity/apps/city-service/package.json ./apps/city-service/
 EXPOSE 8083
-CMD ["node", "dist/src/server.js"]
+CMD ["node", "apps/city-service/dist/src/server.js"]
