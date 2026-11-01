@@ -33,7 +33,9 @@ services:
       dockerfile: SynapseCity/apps/console/Dockerfile
     restart: unless-stopped
     expose: ["80"]
-    networks: [synapsecity]
+    networks:
+      synapsecity:
+        aliases: [synapsecity-console]
 
 networks:
   synapsecity:
