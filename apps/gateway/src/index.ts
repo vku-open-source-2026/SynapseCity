@@ -94,6 +94,16 @@ export function isOwnedV1Path(raw: string): boolean {
   return OWNED_V1_PREFIXES.some((prefix) => within(path, prefix));
 }
 
+/**
+ * Read an upstream response as raw bytes. `response.text()` must never be used
+ * for proxying: it decodes binary payloads (PNG/PDF/octet-stream) as UTF-8 and
+ * corrupts them.
+ */
+export async function proxyResponseBody(response: Awaited<ReturnType<typeof fetch>>): Promise<Buffer> {
+  if (response.status === 204 || response.status === 304) return Buffer.alloc(0);
+  return Buffer.from(await response.arrayBuffer());
+}
+
 app.disable('x-powered-by');
 app.use(express.json({ limit: '10mb' }));
 app.use((req, res, next) => {
@@ -115,11 +125,21 @@ async function proxy(req: Request, res: Response): Promise<void> {
   const response = await fetch(`${UPSTREAM}${req.originalUrl}`, {
     method, headers, body: method === 'GET' || method === 'HEAD' ? undefined : JSON.stringify(req.body ?? {}),
   });
-  const text = await response.text();
-  res.status(response.status);
   const type = response.headers.get('content-type');
+  const cacheControl = response.headers.get('cache-control');
+  res.status(response.status);
   if (type) res.setHeader('content-type', type);
-  res.send(text);
+  if (cacheControl) res.setHeader('cache-control', cacheControl);
+  if (response.status === 204 || response.status === 304) {
+    res.end();
+    return;
+  }
+  // Read the upstream body as bytes. Using response.text() corrupts binary
+  // payloads such as VietMap PNG tiles (0x89 becomes the UTF-8 replacement
+  // character and the image no longer decodes).
+  const body = await proxyResponseBody(response);
+  res.setHeader('content-length', String(body.length));
+  res.end(body);
 }
 
 async function health(path: string, res: Response): Promise<void> {

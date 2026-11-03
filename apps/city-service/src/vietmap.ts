@@ -97,7 +97,8 @@ export async function proxyVietMapTile(z: number, x: number, y: number, res: Res
     return;
   }
   res.status(200);
-  res.setHeader('content-type', response.headers.get('content-type') || 'image/png');
+  // Keep the binary content type exact; charset must not be attached to PNG.
+  res.type('png');
   res.setHeader('cache-control', 'public, max-age=86400, stale-while-revalidate=604800');
-  res.send(Buffer.from(await response.arrayBuffer()));
+  res.end(Buffer.from(await response.arrayBuffer()));
 }

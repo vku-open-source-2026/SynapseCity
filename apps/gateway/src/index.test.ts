@@ -151,6 +151,14 @@ test('path normalization and ownership checks are shared by the middleware', () 
   }
 });
 
+test('binary upstream payloads are proxied byte-for-byte', async () => {
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d]);
+  const response = new Response(png, { headers: { 'content-type': 'image/png' } });
+  const body = await exported.proxyResponseBody(response);
+  assert.equal(body[0], 0x89, 'PNG signature must not become a UTF-8 replacement character');
+  assert.deepEqual([...body], [...png]);
+});
+
 test('CORS advertises PUT and DELETE for the City API', async () => {
   const response = await fetch(`${baseUrl}/v1/assets`, { method: 'OPTIONS' });
   assert.equal(response.status, 204);

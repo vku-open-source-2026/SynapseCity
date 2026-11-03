@@ -82,7 +82,23 @@ registry release, replace the `file:` dependency with the published
 
 ## API
 
-The gateway owns these namespaces:
+### Public open API (documented at `/docs`)
+
+Only the read-only NGSI-LD projection is public:
+
+```text
+GET /v1/public/assets
+GET /v1/public/incidents
+```
+
+These are GET-only, require no API key and expose only published/`public_visible`
+records. The public documentation intentionally omits every operator,
+auth/session, CRUD and administrative endpoint.
+
+### Internal console API (not public, not documented at `/docs`)
+
+The gateway also owns the console/operator namespaces below. They are internal
+product APIs, not part of the open-data contract:
 
 ```text
 GET  /health, /ready
@@ -95,9 +111,7 @@ GET  /v1/city
 *    /v1/geofences       *    /v1/geo
 *    /v1/ingest          *    /v1/map
 *    /v1/ai              *    /v1/auth
-GET  /v1/public/assets
-GET  /v1/public/incidents
-POST /v1/public/incidents
+POST /v1/public/incidents   (citizen report UI only)
 ```
 
 `GET /v1/city` advertises the owned feature list and the not-owned SOS feature

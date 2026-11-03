@@ -13,16 +13,14 @@ interface TeamMember {
 
 const teamMembers: TeamMember[] = [
     {
-        name: "Le Kim Hoang Trung",
-        avatar: "/avatars/trung.jpg",
-    },
-    {
-        name: "Dao Khanh Duy",
-        avatar: "/avatars/duy.jpg",
-    },
-    {
-        name: "Ho Sy Bao Nhan",
+        name: "Hồ Sỹ Bảo Nhân",
         avatar: "/avatars/nhan.jpg",
+    },
+    {
+        name: "Võ Thành Nam",
+    },
+    {
+        name: "Trần Thị Thùy Dương",
     },
 ];
 
