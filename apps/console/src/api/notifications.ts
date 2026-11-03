@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
-import { httpClient } from '../lib/httpClient';
+import { asList, httpClient } from '../lib/httpClient';
 import type { Notification } from '../types/notification';
 
 export interface NotificationListParams {
@@ -12,7 +12,7 @@ export interface NotificationListParams {
 export const notificationsApi = {
   list: async (params?: NotificationListParams): Promise<Notification[]> => {
     const response = await httpClient.get<Notification[]>('/notifications', { params });
-    return response.data;
+    return asList<Notification>(response.data);
   },
 
   getUnreadCount: async (): Promise<{ unread_count: number }> => {

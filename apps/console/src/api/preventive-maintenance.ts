@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
-import { httpClient } from "../lib/httpClient";
+import { asList, httpClient } from "../lib/httpClient";
 import type {
     PreventiveMaintenancePlan,
     PreventiveMaintenancePlanCreateRequest,
@@ -62,7 +62,7 @@ export const preventiveMaintenanceApi = {
         const response = await httpClient.get<PreventiveMaintenanceTask[]>(
             `/assets/${assetId}/preventive-maintenance/tasks`
         );
-        return response.data;
+        return asList<PreventiveMaintenanceTask>(response.data);
     },
 
     getOverdueTasks: async (
@@ -75,6 +75,6 @@ export const preventiveMaintenanceApi = {
         const response = await httpClient.get<PreventiveMaintenanceTask[]>(
             `/assets/${assetId}/preventive-maintenance/overdue`
         );
-        return response.data;
+        return asList<PreventiveMaintenanceTask>(response.data);
     },
 };

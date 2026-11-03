@@ -42,17 +42,6 @@ export const httpClient: AxiosInstance = axios.create({
     },
 });
 
-// Create leaderboard API instance
-export const leaderboardApi: AxiosInstance = axios.create({
-    baseURL:
-        import.meta.env.VITE_LEADERBOARD_URL ||
-        "/v1",
-    timeout: 30000,
-    headers: {
-        "Content-Type": "application/json",
-    },
-});
-
 // Request interceptor for adding auth token
 const requestInterceptor = (config: InternalAxiosRequestConfig) => {
     const token = useAuthStore.getState().accessToken;
@@ -123,16 +112,6 @@ httpClient.interceptors.request.use(
     requestErrorInterceptor
 );
 httpClient.interceptors.response.use(
-    responseInterceptor,
-    responseErrorInterceptor
-);
-
-// Apply interceptors to leaderboard API (if needed)
-leaderboardApi.interceptors.request.use(
-    requestInterceptor,
-    requestErrorInterceptor
-);
-leaderboardApi.interceptors.response.use(
     responseInterceptor,
     responseErrorInterceptor
 );

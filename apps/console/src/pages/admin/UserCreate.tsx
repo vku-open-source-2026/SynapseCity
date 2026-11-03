@@ -15,6 +15,7 @@ import type { UserCreateRequest, UserRole } from "../../types/user"
 
 type UserCreateErrorResponse = {
   detail?: string
+  error?: string
 }
 
 const UserCreate: React.FC = () => {
@@ -24,7 +25,6 @@ const UserCreate: React.FC = () => {
   const [formData, setFormData] = useState<Partial<UserCreateRequest>>({
     username: "",
     email: "",
-    password: "",
     full_name: "",
     phone: "",
     role: "citizen",
@@ -38,8 +38,11 @@ const UserCreate: React.FC = () => {
       navigate({ to: `/admin/users/${user.id}` })
     },
     onError: (error: unknown) => {
-      if (isAxiosError<UserCreateErrorResponse>(error) && error.response?.data?.detail) {
-        setErrors({ submit: error.response.data.detail })
+      if (isAxiosError<UserCreateErrorResponse>(error)) {
+        const data = error.response?.data
+        if (data?.detail || data?.error) {
+          setErrors({ submit: data.detail || data.error || "Tạo người dùng thất bại" })
+        }
       }
     },
   })
@@ -54,10 +57,6 @@ const UserCreate: React.FC = () => {
     }
     if (!formData.email?.trim()) {
       setErrors({ email: "Email là bắt buộc" })
-      return
-    }
-    if (!formData.password || formData.password.length < 6) {
-      setErrors({ password: "Mật khẩu tối thiểu 6 ký tự" })
       return
     }
     if (!formData.full_name?.trim()) {
@@ -86,6 +85,11 @@ const UserCreate: React.FC = () => {
       <div className="bg-white rounded-lg border border-slate-200 p-6">
         <h1 className="text-2xl font-bold text-slate-900 mb-6">Tạo người dùng mới</h1>
 
+        <p className="text-sm text-slate-600 mb-4">
+          Mật khẩu không được tạo ở đây. Tài khoản đăng nhập do dịch vụ định danh
+          (Tier-1 IAM) quản lý; City không lưu hoặc trả về mật khẩu.
+        </p>
+
         <Form onSubmit={handleSubmit}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField>
@@ -107,17 +111,6 @@ const UserCreate: React.FC = () => {
                 placeholder="john@example.com"
               />
               {errors.email && <FormError>{errors.email}</FormError>}
-            </FormField>
-
-            <FormField>
-              <FormLabel required>Mật khẩu</FormLabel>
-              <Input
-                type="password"
-                value={formData.password || ""}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                placeholder="••••••••"
-              />
-              {errors.password && <FormError>{errors.password}</FormError>}
             </FormField>
 
             <FormField>

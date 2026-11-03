@@ -19,6 +19,15 @@ export default defineConfig({
   server: {
     host: true,
     allowedHosts: true,
+    // Local development talks to the City service, not to the Vite SPA
+    // fallback. A missing service now yields a proxy error instead of a 200
+    // index.html, so list/map screens can show their explicit error state.
+    proxy: {
+      '/v1': {
+        target: process.env.VITE_DEV_API_PROXY || 'http://localhost:8083',
+        changeOrigin: true,
+      },
+    },
   },
   preview: {
     allowedHosts: true,

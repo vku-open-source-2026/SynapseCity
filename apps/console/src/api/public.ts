@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 import { httpClient } from '../lib/httpClient';
+import { readFileAsDataUrl } from '../lib/files';
 import type { Incident, IncidentCreateRequest } from '../types/incident';
 
 export interface PublicAssetInfo {
@@ -79,19 +80,13 @@ export const publicApi = {
    * POST /public/incidents/{incident_id}/photos
    */
   uploadPhotos: async (incidentId: string, files: File[]): Promise<Incident> => {
-    const formData = new FormData();
-    files.forEach((file) => {
-      formData.append('files', file);
-    });
+    // The City service accepts JSON photo metadata (data URLs or public URLs)
+    // rather than multipart form data.
+    const photos = await Promise.all(files.map((file) => readFileAsDataUrl(file)));
 
     const response = await httpClient.post<Incident>(
       `/public/incidents/${incidentId}/photos`,
-      formData,
-      {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      }
+      { photos }
     );
     return response.data;
   },

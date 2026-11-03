@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
-import { httpClient } from '../lib/httpClient';
+import { asList, httpClient } from '../lib/httpClient';
 import type { Report, ReportCreateRequest } from '../types/report';
 
 export interface ReportListParams {
@@ -13,7 +13,7 @@ export interface ReportListParams {
 export const reportsApi = {
   list: async (params?: ReportListParams): Promise<Report[]> => {
     const response = await httpClient.get<Report[]>('/reports', { params });
-    return response.data;
+    return asList<Report>(response.data);
   },
 
   getById: async (id: string): Promise<Report> => {

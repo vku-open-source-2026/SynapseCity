@@ -1,5 +1,11 @@
 # Tech Stack Migration Guide
 
+> **Scope.** This guide covers the SynapseCity infrastructure console only. It
+> does not describe SOS features. Hazard, emergency event, EOP, dispatch,
+> resource-unit, SITREP, AAR and command-centre pages belong to SynapseCitySOS
+> and must not be added here. See
+> [`../../PRODUCT_BOUNDARY.md`](../../PRODUCT_BOUNDARY.md).
+
 ## Overview
 
 This document outlines the successful migration from React Router DOM to TanStack Router, along with the integration of modern React state management and HTTP client solutions.

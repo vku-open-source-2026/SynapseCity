@@ -10,6 +10,8 @@ import { Upload, FileText, CheckCircle, AlertCircle, Loader2 } from "lucide-reac
 
 type IngestErrorResponse = {
   detail?: string;
+  error?: string;
+  missing?: string[];
 };
 
 const DataIngest: React.FC = () => {
@@ -25,11 +27,15 @@ const DataIngest: React.FC = () => {
       alert(data.message || "Tải lên CSV thành công!");
     },
     onError: (error: unknown) => {
-      if (isAxiosError<IngestErrorResponse>(error) && error.response?.data?.detail) {
-        setErrors({ submit: error.response.data.detail });
-      } else {
-        setErrors({ submit: "Tải CSV thất bại. Vui lòng thử lại." });
+      if (isAxiosError<IngestErrorResponse>(error)) {
+        const data = error.response?.data;
+        const missing = data?.missing?.length ? ` (${data.missing.join(", ")})` : "";
+        if (data?.detail || data?.error) {
+          setErrors({ submit: `${data.detail || data.error}${missing}` });
+          return;
+        }
       }
+      setErrors({ submit: "Tải CSV thất bại. Vui lòng thử lại." });
     },
   });
 
@@ -158,6 +164,14 @@ const DataIngest: React.FC = () => {
                 <p className="text-sm font-medium text-green-800">Tải lên thành công</p>
                 <p className="text-sm text-green-600">
                   {uploadMutation.data?.message || "Đã xử lý tệp CSV thành công"}
+                  {typeof uploadMutation.data?.created === "number" && (
+                    <span className="block mt-1">
+                      Đã tạo {uploadMutation.data.created}/{uploadMutation.data.accepted} bản ghi.
+                      {uploadMutation.data.errors.length > 0
+                        ? ` ${uploadMutation.data.errors.length} dòng lỗi.`
+                        : ""}
+                    </span>
+                  )}
                 </p>
               </div>
             </div>
@@ -201,7 +215,7 @@ const DataIngest: React.FC = () => {
           <li>Kích thước tối đa: 10MB</li>
           <li>Các cột bắt buộc: asset_code, name, feature_type, feature_code, latitude, longitude</li>
           <li>Các cột tùy chọn: category, status, address, properties</li>
-          <li>Hệ thống sẽ xử lý tệp bất đồng bộ</li>
+          <li>Hệ thống nhập tệp và trả về số bản ghi đã tạo cùng danh sách dòng lỗi</li>
         </ul>
       </div>
     </div>

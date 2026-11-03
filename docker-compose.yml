@@ -9,9 +9,13 @@ services:
     env_file: .env
     environment:
       NODE_ENV: production
+      # Internal container port. It is never published on the host.
       PORT: "8083"
       SYNAPSEDX_BASE_URL: https://synapsedx.sbs
       ALLOW_LOCAL_DEPENDENCIES: "false"
+      # Optional HMAC session secret. When unset the service generates an
+      # ephemeral secret at startup and logs a warning.
+      AUTH_SECRET: ${AUTH_SECRET:-}
     expose: ["8083"]
     networks: [synapsecity]
   gateway:
@@ -21,12 +25,17 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
+      # Gateway always listens on 8080 inside the stack; the TLS edge and the
+      # console proxy target this container port.
       PORT: "8080"
       CITY_SERVICE_URL: http://city-service:8083
       CONSOLE_URL: http://console:80
       CORS_ORIGIN: https://synapsecity.sbs
+    depends_on: [city-service, console]
     ports:
-      - "8083:8080"
+      # Host 8085 is the local/public-stack gateway entry; 8083 stays the
+      # private city-service port so the two can never be confused.
+      - "${GATEWAY_HOST_PORT:-8085}:8080"
     networks:
       synapsecity:
         aliases: [synapsecity-gateway]
@@ -36,7 +45,6 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_BASE_API_URL: /v1
-        VITE_LEADERBOARD_URL: /v1
     restart: unless-stopped
     expose: ["80"]
     networks:

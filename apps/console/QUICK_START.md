@@ -276,8 +276,9 @@ src/
 
 ```env
 # .env
-VITE_BASE_API_URL=http://localhost:8000/api
-VITE_LEADERBOARD_URL=https://contribapi.openinfra.space/api
+VITE_BASE_API_URL=/v1
+# Local dev only: Vite proxies /v1 to the City service.
+VITE_DEV_API_PROXY=http://localhost:8083
 ```
 
 Access in code:

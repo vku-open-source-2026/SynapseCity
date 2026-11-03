@@ -17,12 +17,89 @@ function assertUpstream(value: string): string {
 const UPSTREAM = assertUpstream(upstream);
 const CONSOLE = assertUpstream(consoleUpstream);
 
+// SynapseCity owns city/infrastructure namespaces only. Every other /v1 path
+// belongs to another product (SynapseCitySOS owns emergency/hazards/sos) or is
+// not part of the public contract. The gateway rejects them locally so a
+// misrouted request can never reach the City service or its Tier-2 datasets.
+const BOUNDARY_PRODUCT = 'synapsecity';
+const OWNED_V1_PREFIXES: readonly string[] = [
+  '/v1/city',
+  '/v1/auth',
+  '/v1/assets',
+  '/v1/incidents',
+  '/v1/maintenance',
+  '/v1/preventive-maintenance',
+  '/v1/iot',
+  '/v1/alerts',
+  '/v1/budgets',
+  '/v1/reports',
+  '/v1/notifications',
+  '/v1/users',
+  '/v1/geofences',
+  '/v1/geo',
+  '/v1/ingest',
+  '/v1/map',
+  '/v1/ai',
+  '/v1/public/assets',
+  '/v1/public/incidents',
+];
+const NOT_FOUND_BODY = { error: 'not_found', product: BOUNDARY_PRODUCT } as const;
+
+function decodedPath(value: string): string | null {
+  let current = value;
+  for (let round = 0; round < 3; round += 1) {
+    try {
+      const decoded = decodeURIComponent(current);
+      if (decoded === current) return current;
+      current = decoded;
+    } catch { return null; }
+  }
+  return current;
+}
+
+/**
+ * Decode and canonicalize a request path while preserving the case of record
+ * identifiers. `/v1` is lowercased only for ownership checks, never for the
+ * upstream resource path.
+ */
+export function canonicalV1Path(raw: string): string | null {
+  const withoutQuery = (raw.split('?')[0] || '/').split('#')[0];
+  const decoded = decodedPath(withoutQuery);
+  if (decoded === null) return null;
+  const segments: string[] = [];
+  for (const segment of decoded.replace(/\\/g, '/').split('/')) {
+    if (!segment || segment === '.') continue;
+    if (segment === '..') { segments.pop(); continue; }
+    segments.push(segment);
+  }
+  return `/${segments.join('/')}`;
+}
+
+// Canonicalize before the ownership check: decode percent escapes, resolve dot
+// segments, collapse duplicate separators, lowercase and strip trailing
+// slashes. This closes /v1/%65mergency, /v1/EMERGENCY, /v1/emergency/ and
+// /v1/assets/../emergency style bypasses.
+export function normalizeV1Path(raw: string): string {
+  const canonical = canonicalV1Path(raw);
+  if (canonical === null) return '/__invalid_path__';
+  return `/${canonical.split('/').filter(Boolean).map((segment) => segment.toLowerCase()).join('/')}`;
+}
+
+function within(path: string, prefix: string): boolean {
+  return path === prefix || path.startsWith(`${prefix}/`);
+}
+
+export function isOwnedV1Path(raw: string): boolean {
+  const path = normalizeV1Path(raw);
+  return OWNED_V1_PREFIXES.some((prefix) => within(path, prefix));
+}
+
 app.disable('x-powered-by');
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '10mb' }));
 app.use((req, res, next) => {
   res.setHeader('access-control-allow-origin', process.env.CORS_ORIGIN || 'https://synapsecity.sbs');
   res.setHeader('access-control-allow-headers', 'authorization,content-type,x-api-key,x-correlation-id');
-  res.setHeader('access-control-allow-methods', 'GET,POST,PATCH,OPTIONS');
+  res.setHeader('access-control-allow-methods', 'GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS');
   if (req.method === 'OPTIONS') return res.status(204).end();
   res.setHeader('x-correlation-id', req.header('x-correlation-id') || randomUUID());
   next();
@@ -55,9 +132,45 @@ async function health(path: string, res: Response): Promise<void> {
 }
 app.get('/health', (_req, res) => { health('/health', res).catch(() => undefined); });
 app.get('/ready', (_req, res) => { health('/ready', res).catch(() => undefined); });
+app.use((req, res, next) => {
+  const path = normalizeV1Path(req.originalUrl);
+  if (path === '/__invalid_path__') {
+    // A malformed percent escape must never fall through to the SPA either.
+    return res.status(404).json(NOT_FOUND_BODY);
+  }
+  if (path !== '/v1' && !path.startsWith('/v1/')) return next();
+  if (!isOwnedV1Path(req.originalUrl)) {
+    // Foreign or unknown namespace: answer at the edge, never call the upstream.
+    return res.status(404).json(NOT_FOUND_BODY);
+  }
+  // An encoded /v1 prefix (for example /%76%31/assets) is an API path written
+  // in an ambiguous spelling. Reject it with JSON instead of proxying or, worse,
+  // letting the SPA fallback answer with index.html.
+  const rawPath = (req.originalUrl.split('?')[0] || '/');
+  if (!/^\/v1(\/|$)/i.test(rawPath) && /^\/v1(\/|$)/i.test(path)) {
+    return res.status(404).json(NOT_FOUND_BODY);
+  }
+  // Canonicalize duplicated separators and non-prefix escapes before the /v1
+  // mount so owned paths cannot miss the proxy and reach the console.
+  const canonical = canonicalV1Path(req.originalUrl);
+  if (canonical) {
+    const queryIndex = req.originalUrl.indexOf('?');
+    const query = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : '';
+    const rewritten = `${canonical}${query}`;
+    if (rewritten !== req.originalUrl) {
+      req.url = rewritten;
+      req.originalUrl = rewritten;
+    }
+  }
+  next();
+});
 app.use('/v1', (req, res, next) => { proxy(req, res).catch(next); });
 app.use(async (req, res, next) => {
   if (!['GET', 'HEAD'].includes(req.method.toUpperCase())) return next();
+  // Defence in depth: no decoded /v1 spelling may ever receive the console
+  // index.html, even if a future middleware ordering change misses the guard.
+  const decoded = canonicalV1Path(req.originalUrl);
+  if (decoded && /^\/v1(\/|$)/i.test(decoded)) return res.status(404).json(NOT_FOUND_BODY);
   try {
     const response = await fetch(`${CONSOLE}${req.originalUrl}`, { method: req.method, headers: { accept: req.header('accept') || 'text/html' } });
     res.status(response.status);

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
-import { httpClient } from '../lib/httpClient';
+import { asList, httpClient } from '../lib/httpClient';
 import type {
   IoTSensor,
   SensorReading,
@@ -33,7 +33,7 @@ export interface SensorStatisticsParams {
 export const iotApi = {
   listSensors: async (params?: SensorListParams): Promise<IoTSensor[]> => {
     const response = await httpClient.get<IoTSensor[]>('/iot/sensors', { params });
-    return response.data;
+    return asList<IoTSensor>(response.data);
   },
 
   getSensorById: async (id: string): Promise<IoTSensor> => {
@@ -57,7 +57,7 @@ export const iotApi = {
 
   getSensorData: async (id: string, params: SensorDataParams): Promise<SensorReading[]> => {
     const response = await httpClient.get<SensorReading[]>(`/iot/sensors/${id}/data`, { params });
-    return response.data;
+    return asList<SensorReading>(response.data);
   },
 
   ingestReading: async (id: string, data: SensorReadingIngestRequest): Promise<SensorReading> => {

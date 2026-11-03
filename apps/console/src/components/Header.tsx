@@ -27,12 +27,12 @@ const navigationItems: NavigationItem[] = [
         to: "/docs",
     },
     {
-        label: "Bản đồ thiên tai",
-        to: "/disaster",
+        label: "Báo sự cố",
+        to: "/public/report",
         isCitizen: true,
     },
     {
-        label: "Điều hành khẩn cấp",
+        label: "Điều hành khẩn cấp (SOS)",
         to: "https://sos.synapsecity.sbs/",
         isEmergency: true,
         external: true,

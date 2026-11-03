@@ -50,6 +50,21 @@ describe('Navigation Flow', () => {
     }, { timeout: 5000 });
   });
 
+  test('should expose city public routes in the header', async () => {
+    await navigateTo('/');
+    await waitFor(() => {
+      expect(document.querySelector('header')).toBeTruthy();
+    }, { timeout: 5000 });
+
+    const hrefs = Array.from(
+      document.querySelectorAll<HTMLAnchorElement>('header a')
+    ).map((anchor) => anchor.getAttribute('href') ?? '');
+
+    expect(hrefs).toContain('/public/report');
+    expect(hrefs).toContain('/map');
+    expect(hrefs).toContain('/docs');
+  });
+
   test('should handle protected routes', async () => {
     // Try to access admin route without auth
     await navigateTo('/admin');

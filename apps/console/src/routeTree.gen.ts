@@ -14,14 +14,12 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as AdminRouteImport } from './routes/admin'
-import { Route as DisasterRouteImport } from './routes/disaster'
 import { Route as DocsRouteImport } from './routes/docs'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MapRouteImport } from './routes/map'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as TechnicianRouteImport } from './routes/technician'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
-import { Route as AdminEmergencyCenterRouteImport } from './routes/admin/emergency-center'
 import { Route as AdminIngestRouteImport } from './routes/admin/ingest'
 import { Route as AdminMapRouteImport } from './routes/admin/map'
 import { Route as AssetIdRouteImport } from './routes/asset.$id'
@@ -34,9 +32,6 @@ import { Route as AdminAssetsIdRouteImport } from './routes/admin/assets/$id'
 import { Route as AdminBudgetsIndexRouteImport } from './routes/admin/budgets/index'
 import { Route as AdminBudgetsIdRouteImport } from './routes/admin/budgets/$id'
 import { Route as AdminBudgetsCreateRouteImport } from './routes/admin/budgets/create'
-import { Route as AdminEmergencyCenterAfterRouteImport } from './routes/admin/emergency-center/after'
-import { Route as AdminEmergencyCenterBeforeRouteImport } from './routes/admin/emergency-center/before'
-import { Route as AdminEmergencyCenterDuringRouteImport } from './routes/admin/emergency-center/during'
 import { Route as AdminIncidentsIndexRouteImport } from './routes/admin/incidents/index'
 import { Route as AdminIncidentsIdRouteImport } from './routes/admin/incidents/$id'
 import { Route as AdminIncidentsCreateRouteImport } from './routes/admin/incidents/create'
@@ -54,7 +49,6 @@ import { Route as PublicReportAssetIdRouteImport } from './routes/public/report.
 import { Route as TechnicianMaintenanceIdRouteImport } from './routes/technician/maintenance.$id'
 import { Route as TechnicianSettingsIndexRouteImport } from './routes/technician/settings/index'
 import { Route as TechnicianTasksTaskIdRouteImport } from './routes/technician/tasks.$taskId'
-import { Route as AdminEmergencyCenterOperationsEventIdRouteImport } from './routes/admin/emergency-center/operations.$eventId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -69,11 +63,6 @@ const AboutRoute = AboutRouteImport.update({
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DisasterRoute = DisasterRouteImport.update({
-  id: '/disaster',
-  path: '/disaster',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DocsRoute = DocsRouteImport.update({
@@ -104,11 +93,6 @@ const TechnicianRoute = TechnicianRouteImport.update({
 const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminEmergencyCenterRoute = AdminEmergencyCenterRouteImport.update({
-  id: '/emergency-center',
-  path: '/emergency-center',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminIngestRoute = AdminIngestRouteImport.update({
@@ -171,24 +155,6 @@ const AdminBudgetsCreateRoute = AdminBudgetsCreateRouteImport.update({
   path: '/budgets/create',
   getParentRoute: () => AdminRoute,
 } as any)
-const AdminEmergencyCenterAfterRoute =
-  AdminEmergencyCenterAfterRouteImport.update({
-    id: '/after',
-    path: '/after',
-    getParentRoute: () => AdminEmergencyCenterRoute,
-  } as any)
-const AdminEmergencyCenterBeforeRoute =
-  AdminEmergencyCenterBeforeRouteImport.update({
-    id: '/before',
-    path: '/before',
-    getParentRoute: () => AdminEmergencyCenterRoute,
-  } as any)
-const AdminEmergencyCenterDuringRoute =
-  AdminEmergencyCenterDuringRouteImport.update({
-    id: '/during',
-    path: '/during',
-    getParentRoute: () => AdminEmergencyCenterRoute,
-  } as any)
 const AdminIncidentsIndexRoute = AdminIncidentsIndexRouteImport.update({
   id: '/incidents/',
   path: '/incidents/',
@@ -275,24 +241,16 @@ const TechnicianTasksTaskIdRoute = TechnicianTasksTaskIdRouteImport.update({
   path: '/tasks/$taskId',
   getParentRoute: () => TechnicianRoute,
 } as any)
-const AdminEmergencyCenterOperationsEventIdRoute =
-  AdminEmergencyCenterOperationsEventIdRouteImport.update({
-    id: '/operations/$eventId',
-    path: '/operations/$eventId',
-    getParentRoute: () => AdminEmergencyCenterRoute,
-  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/admin': typeof AdminRouteWithChildren
-  '/disaster': typeof DisasterRoute
   '/docs': typeof DocsRoute
   '/login': typeof LoginRoute
   '/map': typeof MapRoute
   '/register': typeof RegisterRoute
   '/technician': typeof TechnicianRouteWithChildren
-  '/admin/emergency-center': typeof AdminEmergencyCenterRouteWithChildren
   '/admin/ingest': typeof AdminIngestRoute
   '/admin/map': typeof AdminMapRoute
   '/asset/$id': typeof AssetIdRoute
@@ -303,9 +261,6 @@ export interface FileRoutesByFullPath {
   '/admin/assets/$id': typeof AdminAssetsIdRoute
   '/admin/budgets/$id': typeof AdminBudgetsIdRoute
   '/admin/budgets/create': typeof AdminBudgetsCreateRoute
-  '/admin/emergency-center/after': typeof AdminEmergencyCenterAfterRoute
-  '/admin/emergency-center/before': typeof AdminEmergencyCenterBeforeRoute
-  '/admin/emergency-center/during': typeof AdminEmergencyCenterDuringRoute
   '/admin/incidents/$id': typeof AdminIncidentsIdRoute
   '/admin/incidents/create': typeof AdminIncidentsCreateRoute
   '/admin/iot/$id': typeof AdminIotIdRoute
@@ -326,17 +281,14 @@ export interface FileRoutesByFullPath {
   '/admin/settings/': typeof AdminSettingsIndexRoute
   '/admin/users/': typeof AdminUsersIndexRoute
   '/technician/settings/': typeof TechnicianSettingsIndexRoute
-  '/admin/emergency-center/operations/$eventId': typeof AdminEmergencyCenterOperationsEventIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
-  '/disaster': typeof DisasterRoute
   '/docs': typeof DocsRoute
   '/login': typeof LoginRoute
   '/map': typeof MapRoute
   '/register': typeof RegisterRoute
-  '/admin/emergency-center': typeof AdminEmergencyCenterRouteWithChildren
   '/admin/ingest': typeof AdminIngestRoute
   '/admin/map': typeof AdminMapRoute
   '/asset/$id': typeof AssetIdRoute
@@ -347,9 +299,6 @@ export interface FileRoutesByTo {
   '/admin/assets/$id': typeof AdminAssetsIdRoute
   '/admin/budgets/$id': typeof AdminBudgetsIdRoute
   '/admin/budgets/create': typeof AdminBudgetsCreateRoute
-  '/admin/emergency-center/after': typeof AdminEmergencyCenterAfterRoute
-  '/admin/emergency-center/before': typeof AdminEmergencyCenterBeforeRoute
-  '/admin/emergency-center/during': typeof AdminEmergencyCenterDuringRoute
   '/admin/incidents/$id': typeof AdminIncidentsIdRoute
   '/admin/incidents/create': typeof AdminIncidentsCreateRoute
   '/admin/iot/$id': typeof AdminIotIdRoute
@@ -370,20 +319,17 @@ export interface FileRoutesByTo {
   '/admin/settings': typeof AdminSettingsIndexRoute
   '/admin/users': typeof AdminUsersIndexRoute
   '/technician/settings': typeof TechnicianSettingsIndexRoute
-  '/admin/emergency-center/operations/$eventId': typeof AdminEmergencyCenterOperationsEventIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/admin': typeof AdminRouteWithChildren
-  '/disaster': typeof DisasterRoute
   '/docs': typeof DocsRoute
   '/login': typeof LoginRoute
   '/map': typeof MapRoute
   '/register': typeof RegisterRoute
   '/technician': typeof TechnicianRouteWithChildren
-  '/admin/emergency-center': typeof AdminEmergencyCenterRouteWithChildren
   '/admin/ingest': typeof AdminIngestRoute
   '/admin/map': typeof AdminMapRoute
   '/asset/$id': typeof AssetIdRoute
@@ -394,9 +340,6 @@ export interface FileRoutesById {
   '/admin/assets/$id': typeof AdminAssetsIdRoute
   '/admin/budgets/$id': typeof AdminBudgetsIdRoute
   '/admin/budgets/create': typeof AdminBudgetsCreateRoute
-  '/admin/emergency-center/after': typeof AdminEmergencyCenterAfterRoute
-  '/admin/emergency-center/before': typeof AdminEmergencyCenterBeforeRoute
-  '/admin/emergency-center/during': typeof AdminEmergencyCenterDuringRoute
   '/admin/incidents/$id': typeof AdminIncidentsIdRoute
   '/admin/incidents/create': typeof AdminIncidentsCreateRoute
   '/admin/iot/$id': typeof AdminIotIdRoute
@@ -417,7 +360,6 @@ export interface FileRoutesById {
   '/admin/settings/': typeof AdminSettingsIndexRoute
   '/admin/users/': typeof AdminUsersIndexRoute
   '/technician/settings/': typeof TechnicianSettingsIndexRoute
-  '/admin/emergency-center/operations/$eventId': typeof AdminEmergencyCenterOperationsEventIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -425,13 +367,11 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/admin'
-    | '/disaster'
     | '/docs'
     | '/login'
     | '/map'
     | '/register'
     | '/technician'
-    | '/admin/emergency-center'
     | '/admin/ingest'
     | '/admin/map'
     | '/asset/$id'
@@ -442,9 +382,6 @@ export interface FileRouteTypes {
     | '/admin/assets/$id'
     | '/admin/budgets/$id'
     | '/admin/budgets/create'
-    | '/admin/emergency-center/after'
-    | '/admin/emergency-center/before'
-    | '/admin/emergency-center/during'
     | '/admin/incidents/$id'
     | '/admin/incidents/create'
     | '/admin/iot/$id'
@@ -465,17 +402,14 @@ export interface FileRouteTypes {
     | '/admin/settings/'
     | '/admin/users/'
     | '/technician/settings/'
-    | '/admin/emergency-center/operations/$eventId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/about'
-    | '/disaster'
     | '/docs'
     | '/login'
     | '/map'
     | '/register'
-    | '/admin/emergency-center'
     | '/admin/ingest'
     | '/admin/map'
     | '/asset/$id'
@@ -486,9 +420,6 @@ export interface FileRouteTypes {
     | '/admin/assets/$id'
     | '/admin/budgets/$id'
     | '/admin/budgets/create'
-    | '/admin/emergency-center/after'
-    | '/admin/emergency-center/before'
-    | '/admin/emergency-center/during'
     | '/admin/incidents/$id'
     | '/admin/incidents/create'
     | '/admin/iot/$id'
@@ -509,19 +440,16 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/users'
     | '/technician/settings'
-    | '/admin/emergency-center/operations/$eventId'
   id:
     | '__root__'
     | '/'
     | '/about'
     | '/admin'
-    | '/disaster'
     | '/docs'
     | '/login'
     | '/map'
     | '/register'
     | '/technician'
-    | '/admin/emergency-center'
     | '/admin/ingest'
     | '/admin/map'
     | '/asset/$id'
@@ -532,9 +460,6 @@ export interface FileRouteTypes {
     | '/admin/assets/$id'
     | '/admin/budgets/$id'
     | '/admin/budgets/create'
-    | '/admin/emergency-center/after'
-    | '/admin/emergency-center/before'
-    | '/admin/emergency-center/during'
     | '/admin/incidents/$id'
     | '/admin/incidents/create'
     | '/admin/iot/$id'
@@ -555,14 +480,12 @@ export interface FileRouteTypes {
     | '/admin/settings/'
     | '/admin/users/'
     | '/technician/settings/'
-    | '/admin/emergency-center/operations/$eventId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
   AdminRoute: typeof AdminRouteWithChildren
-  DisasterRoute: typeof DisasterRoute
   DocsRoute: typeof DocsRoute
   LoginRoute: typeof LoginRoute
   MapRoute: typeof MapRoute
@@ -594,13 +517,6 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AdminRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/disaster': {
-      id: '/disaster'
-      path: '/disaster'
-      fullPath: '/disaster'
-      preLoaderRoute: typeof DisasterRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/docs': {
@@ -643,13 +559,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/admin/'
       preLoaderRoute: typeof AdminIndexRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/emergency-center': {
-      id: '/admin/emergency-center'
-      path: '/emergency-center'
-      fullPath: '/admin/emergency-center'
-      preLoaderRoute: typeof AdminEmergencyCenterRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/ingest': {
@@ -735,27 +644,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/budgets/create'
       preLoaderRoute: typeof AdminBudgetsCreateRouteImport
       parentRoute: typeof AdminRoute
-    }
-    '/admin/emergency-center/after': {
-      id: '/admin/emergency-center/after'
-      path: '/after'
-      fullPath: '/admin/emergency-center/after'
-      preLoaderRoute: typeof AdminEmergencyCenterAfterRouteImport
-      parentRoute: typeof AdminEmergencyCenterRoute
-    }
-    '/admin/emergency-center/before': {
-      id: '/admin/emergency-center/before'
-      path: '/before'
-      fullPath: '/admin/emergency-center/before'
-      preLoaderRoute: typeof AdminEmergencyCenterBeforeRouteImport
-      parentRoute: typeof AdminEmergencyCenterRoute
-    }
-    '/admin/emergency-center/during': {
-      id: '/admin/emergency-center/during'
-      path: '/during'
-      fullPath: '/admin/emergency-center/during'
-      preLoaderRoute: typeof AdminEmergencyCenterDuringRouteImport
-      parentRoute: typeof AdminEmergencyCenterRoute
     }
     '/admin/incidents/': {
       id: '/admin/incidents/'
@@ -876,36 +764,10 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TechnicianTasksTaskIdRouteImport
       parentRoute: typeof TechnicianRoute
     }
-    '/admin/emergency-center/operations/$eventId': {
-      id: '/admin/emergency-center/operations/$eventId'
-      path: '/operations/$eventId'
-      fullPath: '/admin/emergency-center/operations/$eventId'
-      preLoaderRoute: typeof AdminEmergencyCenterOperationsEventIdRouteImport
-      parentRoute: typeof AdminEmergencyCenterRoute
-    }
   }
 }
 
-interface AdminEmergencyCenterRouteChildren {
-  AdminEmergencyCenterAfterRoute: typeof AdminEmergencyCenterAfterRoute
-  AdminEmergencyCenterBeforeRoute: typeof AdminEmergencyCenterBeforeRoute
-  AdminEmergencyCenterDuringRoute: typeof AdminEmergencyCenterDuringRoute
-  AdminEmergencyCenterOperationsEventIdRoute: typeof AdminEmergencyCenterOperationsEventIdRoute
-}
-
-const AdminEmergencyCenterRouteChildren: AdminEmergencyCenterRouteChildren = {
-  AdminEmergencyCenterAfterRoute: AdminEmergencyCenterAfterRoute,
-  AdminEmergencyCenterBeforeRoute: AdminEmergencyCenterBeforeRoute,
-  AdminEmergencyCenterDuringRoute: AdminEmergencyCenterDuringRoute,
-  AdminEmergencyCenterOperationsEventIdRoute:
-    AdminEmergencyCenterOperationsEventIdRoute,
-}
-
-const AdminEmergencyCenterRouteWithChildren =
-  AdminEmergencyCenterRoute._addFileChildren(AdminEmergencyCenterRouteChildren)
-
 interface AdminRouteChildren {
-  AdminEmergencyCenterRoute: typeof AdminEmergencyCenterRouteWithChildren
   AdminIngestRoute: typeof AdminIngestRoute
   AdminMapRoute: typeof AdminMapRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -931,7 +793,6 @@ interface AdminRouteChildren {
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
-  AdminEmergencyCenterRoute: AdminEmergencyCenterRouteWithChildren,
   AdminIngestRoute: AdminIngestRoute,
   AdminMapRoute: AdminMapRoute,
   AdminIndexRoute: AdminIndexRoute,
@@ -992,7 +853,6 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
   AdminRoute: AdminRouteWithChildren,
-  DisasterRoute: DisasterRoute,
   DocsRoute: DocsRoute,
   LoginRoute: LoginRoute,
   MapRoute: MapRoute,

@@ -6,6 +6,7 @@
 node_modules/
 dist/
 .vite/
+.tanstack/
 coverage/
 playwright-report/
 test-results/

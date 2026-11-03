@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { Asset } from '../api';
 import { api } from '../api';
+import { asList } from '../lib/httpClient';
 
 // Types for IoT data - matching actual API response
 export interface Sensor {
@@ -110,23 +111,42 @@ export const iotApi = {
     async getSensors(assetId?: string): Promise<Sensor[]> {
         const params = assetId ? `?asset_id=${assetId}` : '';
         const response = await api.get(`/iot/sensors${params}`);
-        return response.data;
+        return asList<Sensor>(response.data);
     },
 
     async getSensorReadings(sensorId: string, hours: number = 24): Promise<SensorReading[]> {
         const response = await api.get(`/iot/sensors/${sensorId}/readings?limit=${hours * 12}`);
-        return response.data.readings;
+        return asList<SensorReading>(response.data?.readings);
     },
 
     async getAssetIoTData(assetId: string, hours: number = 24): Promise<AssetIoTData> {
         const response = await api.get(`/iot/assets/${assetId}/iot-data?hours=${hours}`);
-        return response.data;
+        const payload = response.data;
+        if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+            return {
+                asset_id: assetId,
+                asset: { id: assetId, feature_type: 'infrastructure', feature_code: assetId },
+                sensors: [],
+                readings: [],
+                alerts: [],
+                summary: { total_sensors: 0, total_readings: 0, active_alerts: 0 },
+            };
+        }
+        const record = payload as Partial<AssetIoTData>;
+        return {
+            asset_id: record.asset_id || assetId,
+            asset: record.asset || { id: assetId, feature_type: 'infrastructure', feature_code: assetId },
+            sensors: asList<Sensor>(record.sensors),
+            readings: asList<SensorReading>(record.readings),
+            alerts: asList<IoTAlert>(record.alerts),
+            summary: record.summary || { total_sensors: 0, total_readings: 0, active_alerts: 0 },
+        };
     },
 
     async getAlerts(acknowledged?: boolean): Promise<IoTAlert[]> {
         const params = acknowledged !== undefined ? `?acknowledged=${acknowledged}` : '';
         const response = await api.get(`/iot/alerts${params}`);
-        return response.data;
+        return asList<IoTAlert>(response.data);
     },
 
     async acknowledgeAlert(alertId: string): Promise<void> {
@@ -138,34 +158,38 @@ export const iotApi = {
 export const useIoT = (initialAssets: Asset[] | undefined) => {
     const [assetsWithStatus, setAssetsWithStatus] = useState<AssetWithIoTStatus[]>([]);
     const [alerts, setAlerts] = useState<string[]>([]);
+    const safeInitialAssets = useMemo<Asset[]>(
+        () => (Array.isArray(initialAssets) ? initialAssets : []),
+        [initialAssets]
+    );
 
     const seededAssets = useMemo<AssetWithIoTStatus[]>(() => {
-        if (!initialAssets || initialAssets.length === 0) {
+        if (safeInitialAssets.length === 0) {
             return [];
         }
-        return createInitialAssetStatuses(initialAssets);
-    }, [initialAssets]);
+        return createInitialAssetStatuses(safeInitialAssets);
+    }, [safeInitialAssets]);
 
     const assetsInSync = useMemo(() => {
-        if (!initialAssets) {
+        if (safeInitialAssets.length === 0) {
             return assetsWithStatus.length === 0;
         }
-        if (assetsWithStatus.length !== initialAssets.length) {
+        if (assetsWithStatus.length !== safeInitialAssets.length) {
             return false;
         }
         const currentIds = new Set(assetsWithStatus.map(asset => asset.id));
-        return initialAssets.every(asset => currentIds.has(asset.id));
-    }, [assetsWithStatus, initialAssets]);
+        return safeInitialAssets.every(asset => currentIds.has(asset.id));
+    }, [assetsWithStatus, safeInitialAssets]);
 
     useEffect(() => {
-        if (!initialAssets || initialAssets.length === 0) return;
+        if (safeInitialAssets.length === 0) return;
 
         const seededById = new Map(seededAssets.map(asset => [asset.id, asset]));
 
         const interval = setInterval(() => {
             setAssetsWithStatus(current => {
                 const currentById = new Map(current.map(asset => [asset.id, asset]));
-                const next: AssetWithIoTStatus[] = initialAssets.map(asset => {
+                const next: AssetWithIoTStatus[] = safeInitialAssets.map(asset => {
                     const existing = currentById.get(asset.id) ?? seededById.get(asset.id);
                     if (existing) {
                         return {
@@ -204,7 +228,7 @@ export const useIoT = (initialAssets: Asset[] | undefined) => {
         }, 2000);
 
         return () => clearInterval(interval);
-    }, [initialAssets, seededAssets]);
+    }, [safeInitialAssets, seededAssets]);
 
     const stableAssetsWithStatus = assetsInSync ? assetsWithStatus : seededAssets;
 

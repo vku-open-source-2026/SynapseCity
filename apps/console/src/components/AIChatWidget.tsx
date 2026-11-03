@@ -82,23 +82,6 @@ const getFeatureCount = (value: unknown): number | null => {
 
 // API definitions for interactive testing
 const API_DEFINITIONS: Record<string, ApiCardData> = {
-  '/api/opendata/assets': {
-    endpoint: '/api/opendata/assets',
-    method: 'GET',
-    description: 'Lấy danh sách tài sản hạ tầng (định dạng JSON-LD)',
-    params: [
-      { name: 'skip', type: 'number', description: 'Số bản ghi bỏ qua', default: 0, required: false },
-      { name: 'limit', type: 'number', description: 'Số bản ghi tối đa', default: 100, required: false },
-      { name: 'feature_type', type: 'string', description: 'Lọc theo loại (ví dụ: trạm điện)', default: '', required: false },
-      { name: 'feature_code', type: 'string', description: 'Lọc theo mã (ví dụ: tram_dien)', default: '', required: false },
-    ]
-  },
-  '/api/opendata/feature-types': {
-    endpoint: '/api/opendata/feature-types',
-    method: 'GET',
-    description: 'Lấy các loại tài sản và số lượng',
-    params: []
-  },
   '/v1/assets': {
     endpoint: '/v1/assets',
     method: 'GET',
@@ -931,8 +914,7 @@ export default function AIChatWidget({
           {/* Quick API Buttons */}
           <div className="px-3 py-2 border-b border-blue-100 bg-blue-50/50 flex gap-2 overflow-x-auto">
             {[
-              { label: '📦 Tài sản', query: 'opendata assets' },
-              { label: '📋 Loại', query: 'feature types' },
+              { label: '📦 Tài sản', query: 'assets' },
               { label: '📡 Cảm biến', query: 'sensors' },
               { label: '🚨 Sự cố', query: 'incidents' },
             ].map(btn => (

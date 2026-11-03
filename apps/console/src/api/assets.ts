@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
-import { httpClient } from "../lib/httpClient";
+import { asList, httpClient } from "../lib/httpClient";
+import { readFileAsDataUrl } from "../lib/files";
 import type {
     Asset,
     AssetAttachment,
@@ -28,7 +29,7 @@ export interface AssetListParams {
 export const assetsApi = {
     list: async (params?: AssetListParams): Promise<Asset[]> => {
         const response = await httpClient.get<Asset[]>("/assets", { params });
-        return response.data;
+        return asList<Asset>(response.data);
     },
 
     getById: async (id: string): Promise<Asset> => {
@@ -67,32 +68,22 @@ export const assetsApi = {
     },
 
     uploadPhoto: async (id: string, file: File): Promise<Asset> => {
-        const formData = new FormData();
-        formData.append("file", file);
-        const response = await httpClient.post<Asset>(
-            `/assets/${id}/photos`,
-            formData,
-            {
-                headers: {
-                    "Content-Type": "multipart/form-data",
-                },
-            }
-        );
+        const fileUrl = await readFileAsDataUrl(file);
+        const response = await httpClient.post<Asset>(`/assets/${id}/photos`, {
+            photos: [fileUrl],
+            file_name: file.name,
+            file_type: file.type || "image/*",
+        });
         return response.data;
     },
 
     uploadAttachment: async (id: string, file: File): Promise<Asset> => {
-        const formData = new FormData();
-        formData.append("file", file);
-        const response = await httpClient.post<Asset>(
-            `/assets/${id}/attachments`,
-            formData,
-            {
-                headers: {
-                    "Content-Type": "multipart/form-data",
-                },
-            }
-        );
+        const fileUrl = await readFileAsDataUrl(file);
+        const response = await httpClient.post<Asset>(`/assets/${id}/attachments`, {
+            file_name: file.name,
+            file_url: fileUrl,
+            file_type: file.type || "application/octet-stream",
+        });
         return response.data;
     },
 
@@ -155,7 +146,7 @@ export const assetsApi = {
         const response = await httpClient.get<AssetAttachment[]>(
             `/assets/${id}/documents`
         );
-        return response.data;
+        return asList<AssetAttachment>(response.data);
     },
 
     uploadDocument: async (
@@ -164,18 +155,15 @@ export const assetsApi = {
         documentType?: string,
         isPublic?: boolean
     ): Promise<AssetAttachment> => {
-        const formData = new FormData();
-        formData.append("file", file);
-        if (documentType) formData.append("document_type", documentType);
-        if (isPublic !== undefined)
-            formData.append("is_public", String(isPublic));
+        const fileUrl = await readFileAsDataUrl(file);
         const response = await httpClient.post<AssetAttachment>(
             `/assets/${id}/documents`,
-            formData,
             {
-                headers: {
-                    "Content-Type": "multipart/form-data",
-                },
+                file_name: file.name,
+                file_url: fileUrl,
+                file_type: file.type || "application/octet-stream",
+                document_type: documentType,
+                is_public: isPublic,
             }
         );
         return response.data;

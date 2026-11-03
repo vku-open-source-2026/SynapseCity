@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
-import { httpClient } from '../lib/httpClient';
+import { asList, httpClient } from '../lib/httpClient';
 import type {
   Incident,
   IncidentCreateRequest,
@@ -63,7 +63,7 @@ export const incidentsApi = {
       return incidents;
     }
     const response = await httpClient.get<Incident[]>('/incidents', { params });
-    return response.data;
+    return asList<Incident>(response.data);
   },
 
   getById: async (id: string): Promise<Incident> => {
@@ -156,14 +156,14 @@ export const incidentsApi = {
     const response = await httpClient.post<DuplicateDetectionResult[]>(
       `/incidents/${id}/check-duplicates`
     );
-    return response.data;
+    return asList<DuplicateDetectionResult>(response.data);
   },
 
   getMergeSuggestions: async (id: string, status?: string): Promise<MergeSuggestion[]> => {
     const response = await httpClient.get<MergeSuggestion[]>(`/incidents/${id}/merge-suggestions`, {
       params: status ? { status } : undefined,
     });
-    return response.data;
+    return asList<MergeSuggestion>(response.data);
   },
 
   mergeIncidents: async (
@@ -195,6 +195,6 @@ export const incidentsApi = {
 
   getRelatedIncidents: async (id: string): Promise<Incident[]> => {
     const response = await httpClient.get<Incident[]>(`/incidents/${id}/related`);
-    return response.data;
+    return asList<Incident>(response.data);
   },
 };

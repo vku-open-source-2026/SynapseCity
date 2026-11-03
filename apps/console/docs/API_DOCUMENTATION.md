@@ -1916,8 +1916,9 @@ Consider implementing WebSocket for:
 ### Frontend (.env)
 
 ```bash
-VITE_BASE_API_URL=http://localhost:8000/api/v1
-VITE_LEADERBOARD_URL=https://contribapi.openinfra.space/api
+VITE_BASE_API_URL=/v1
+# Local dev only: the Vite dev server proxies /v1 to the City service.
+VITE_DEV_API_PROXY=http://localhost:8083
 ```
 
 ---

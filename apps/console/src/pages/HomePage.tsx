@@ -8,12 +8,9 @@ import {
     Droplet,
     MapPin,
     Download,
-    Siren,
-    ShieldAlert,
-    Radio,
     ClipboardList,
 } from "lucide-react";
-import { getAssets, getLeaderboard } from "../api";
+import { getAssets } from "../api";
 import AIChatWidget from "../components/AIChatWidget";
 import Footer from "../components/Footer";
 import Header from "../components/Header";
@@ -56,40 +53,23 @@ const dashboardImage =
 const HomePage = () => {
     const { canShowInstallButton, promptInstall } = usePWA();
     const [assetCount, setAssetCount] = useState<number | null>(null);
-    const [, setContributorCount] = useState<number | null>(null);
-    const [, setTotalContributions] = useState<number | null>(null);
     const [loadingAssets, setLoadingAssets] = useState(true);
-    const [, setLoadingLeaderboard] = useState(true);
 
     useEffect(() => {
         let cancelled = false;
 
-        Promise.allSettled([getAssets(), getLeaderboard()]).then((results) => {
-            if (cancelled) return;
-
-            const [assetsResult, leaderboardResult] = results;
-
-            if (assetsResult.status === "fulfilled") {
-                setAssetCount(assetsResult.value.length);
-            } else {
+        getAssets()
+            .then((assets) => {
+                if (cancelled) return;
+                setAssetCount(assets.length);
+            })
+            .catch(() => {
+                if (cancelled) return;
                 setAssetCount(null);
-            }
-            setLoadingAssets(false);
-
-            if (leaderboardResult.status === "fulfilled") {
-                const leaderboard = leaderboardResult.value;
-                setContributorCount(leaderboard.length);
-                const total = leaderboard.reduce(
-                    (sum, entry) => sum + (entry.count || 0),
-                    0
-                );
-                setTotalContributions(total);
-            } else {
-                setContributorCount(null);
-                setTotalContributions(null);
-            }
-            setLoadingLeaderboard(false);
-        });
+            })
+            .finally(() => {
+                if (!cancelled) setLoadingAssets(false);
+            });
 
         return () => {
             cancelled = true;
@@ -256,110 +236,34 @@ const HomePage = () => {
                     </div>
                 </section>
 
-                {/* SOSConn Section */}
-                <section className="bg-gradient-to-br from-red-50 via-orange-50 to-amber-50 py-20 border-y border-red-100">
-                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                        <div className="grid md:grid-cols-2 gap-12 items-center">
-                            <div className="space-y-6">
-                                <div className="inline-flex items-center gap-2 px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm font-medium">
-                                    <Siren className="w-4 h-4" />
-                                    SOSConn — Điều hành khẩn cấp
-                                </div>
-                                <h2 className="text-3xl md:text-4xl font-bold text-slate-900 leading-tight">
-                                    Ứng phó thảm họa{" "}
-                                    <span className="bg-gradient-to-r from-red-500 to-orange-500 bg-clip-text text-transparent">
-                                        nhanh hơn, chính xác hơn
-                                    </span>
-                                </h2>
-                                <p className="text-lg text-slate-600 leading-relaxed">
-                                    Hệ thống điều hành khẩn cấp tích hợp — theo dõi sự kiện thảm họa, tạo kế hoạch ứng phó (EOP) bằng AI, điều phối nguồn lực và cảnh báo cộng đồng từ một bảng điều khiển duy nhất.
-                                </p>
-                                <div className="grid grid-cols-2 gap-4">
-                                    {[
-                                        { icon: ShieldAlert, label: "Theo dõi thảm họa thời gian thực" },
-                                        { icon: ClipboardList, label: "EOP tự động bằng AI" },
-                                        { icon: Radio, label: "Điều phối nguồn lực tối ưu" },
-                                        { icon: BarChart3, label: "Báo cáo sau sự cố (AAR)" },
-                                    ].map(({ icon: Icon, label }) => (
-                                        <div key={label} className="flex items-start gap-2 text-sm text-slate-700">
-                                            <Icon className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
-                                            <span>{label}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                                <Link
-                                    to="/admin/emergency-center"
-                                    className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-500 to-orange-500 text-white font-semibold rounded-full shadow-lg hover:shadow-xl transition-all transform hover:scale-105"
-                                >
-                                    <Siren className="w-4 h-4" />
-                                    Vào Trung tâm điều hành
-                                    <ArrowRight className="w-4 h-4" />
-                                </Link>
-                            </div>
-                            <div className="relative">
-                                <div className="bg-white rounded-2xl p-6 shadow-xl border border-red-100">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <span className="text-sm font-semibold text-slate-700">Sự kiện khẩn cấp đang hoạt động</span>
-                                        <span className="flex items-center gap-1.5 text-xs text-red-600 font-medium">
-                                            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                                            LIVE
-                                        </span>
-                                    </div>
-                                    <div className="space-y-3">
-                                        {[
-                                            { type: "Lũ lụt", area: "Quảng Nam", level: "Nghiêm trọng", color: "red" },
-                                            { type: "Mất điện", area: "Đà Nẵng - Q. Hải Châu", level: "Trung bình", color: "orange" },
-                                            { type: "Sạt lở", area: "Kon Tum - Đắk Glei", level: "Theo dõi", color: "amber" },
-                                        ].map((item) => (
-                                            <div key={item.area} className={`flex items-center justify-between p-3 rounded-lg border bg-${item.color}-50 border-${item.color}-100`}>
-                                                <div>
-                                                    <p className="text-sm font-semibold text-slate-800">{item.type}</p>
-                                                    <p className="text-xs text-slate-500">{item.area}</p>
-                                                </div>
-                                                <span className={`text-xs px-2 py-1 rounded-full font-medium bg-${item.color}-100 text-${item.color}-700`}>
-                                                    {item.level}
-                                                </span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                    <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-                                        <span>3 sự kiện đang hoạt động</span>
-                                        <span>Cập nhật: vừa xong</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
                 {/* Citizen Services Section */}
                 <section className="bg-gradient-to-br from-amber-50 via-white to-cyan-50 py-20 border-y border-amber-100">
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                         <div className="grid md:grid-cols-2 gap-12 items-center">
                             <div className="space-y-6">
                                 <div className="inline-flex items-center gap-2 px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-sm font-medium">
-                                    <ShieldAlert className="w-4 h-4" />
+                                    <ClipboardList className="w-4 h-4" />
                                     Dành cho người dân
                                 </div>
                                 <h2 className="text-3xl md:text-4xl font-bold text-slate-900 leading-tight">
-                                    Bản đồ cảnh báo thiên tai
-                                    <span className="bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-transparent"> theo thời gian thực</span>
+                                    Báo sự cố hạ tầng
+                                    <span className="bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-transparent"> trực tuyến</span>
                                 </h2>
                                 <p className="text-lg text-slate-600 leading-relaxed">
-                                    Theo dõi mưa, gió, lũ, mực nước và động đất trên toàn quốc từ dữ liệu VNDMS chính thức. Báo sự cố ngay tại bản đồ để chính quyền xử lý kịp thời.
+                                    Gửi phản ánh về hư hỏng, sự cố hoặc nguy cơ mất an toàn của hạ tầng đô thị ngay trên bản đồ. Theo dõi trạng thái tiếp nhận và xử lý một cách minh bạch.
                                 </p>
                                 <div className="grid sm:grid-cols-3 gap-3 text-sm">
-                                    <div className="rounded-lg border border-amber-200 bg-white p-3 text-slate-700">🌊 Cảnh báo lũ, bão, động đất</div>
-                                    <div className="rounded-lg border border-amber-200 bg-white p-3 text-slate-700">📍 Lọc theo khu vực, mức độ</div>
-                                    <div className="rounded-lg border border-amber-200 bg-white p-3 text-slate-700">📢 Báo sự cố trực tiếp trên bản đồ</div>
+                                    <div className="rounded-lg border border-amber-200 bg-white p-3 text-slate-700">📍 Chọn vị trí trên bản đồ</div>
+                                    <div className="rounded-lg border border-amber-200 bg-white p-3 text-slate-700">📷 Đính kèm ảnh minh chứng</div>
+                                    <div className="rounded-lg border border-amber-200 bg-white p-3 text-slate-700">📢 Theo dõi trạng thái xử lý</div>
                                 </div>
                                 <div className="flex flex-col sm:flex-row gap-4 pt-2">
                                     <Link
-                                        to="/disaster"
+                                        to="/public/report"
                                         className="inline-flex items-center justify-center px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold rounded-full shadow-lg hover:shadow-xl transition-all"
                                     >
-                                        <ShieldAlert className="w-4 h-4 mr-2" />
-                                        Bản đồ thiên tai
+                                        <ClipboardList className="w-4 h-4 mr-2" />
+                                        Báo sự cố ngay
                                         <ArrowRight className="w-4 h-4 ml-2" />
                                     </Link>
                                 </div>
@@ -375,14 +279,14 @@ const HomePage = () => {
                                         </div>
                                     </div>
                                     <div className="flex items-start gap-3 p-3 rounded-lg bg-slate-50">
-                                        <Radio className="w-5 h-5 text-amber-600 mt-0.5" />
+                                        <MapPin className="w-5 h-5 text-amber-600 mt-0.5" />
                                         <div>
                                             <p className="font-medium text-slate-900">Theo dõi trạng thái xử lý</p>
                                             <p className="text-sm text-slate-600">Tra cứu bằng mã báo cáo hoặc ID để cập nhật mới nhất.</p>
                                         </div>
                                     </div>
                                     <div className="flex items-start gap-3 p-3 rounded-lg bg-slate-50">
-                                        <ShieldAlert className="w-5 h-5 text-amber-600 mt-0.5" />
+                                        <BarChart3 className="w-5 h-5 text-amber-600 mt-0.5" />
                                         <div>
                                             <p className="font-medium text-slate-900">Quy trình xác minh minh bạch</p>
                                             <p className="text-sm text-slate-600">Báo cáo được tiếp nhận, phân loại và điều phối xử lý có theo dõi trạng thái.</p>

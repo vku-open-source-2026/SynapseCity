@@ -47,16 +47,24 @@ const AssetLayerFilter: React.FC<AssetLayerFilterProps> = ({ assets, onFilterCha
     const [isOpen, setIsOpen] = useState(false);
     const [selectedLayers, setSelectedLayers] = useState<Set<string> | null>(null);
 
+    // Defensive normalization: a 200 HTML/string payload must never reach
+    // forEach/filter. The API client already normalizes lists, but this keeps
+    // the map resilient if a future endpoint regresses.
+    const safeAssets = useMemo(
+        () => (Array.isArray(assets) ? assets : []),
+        [assets]
+    );
+
     // Get all unique feature codes from assets
     const availableFeatureCodes = useMemo(() => {
         const codes = new Set<string>();
-        assets.forEach(asset => {
+        safeAssets.forEach(asset => {
             if (asset.feature_code) {
                 codes.add(asset.feature_code);
             }
         });
         return Array.from(codes).sort();
-    }, [assets]);
+    }, [safeAssets]);
 
     const effectiveSelectedLayers = useMemo(
         () => selectedLayers ?? new Set(availableFeatureCodes),
@@ -70,11 +78,11 @@ const AssetLayerFilter: React.FC<AssetLayerFilterProps> = ({ assets, onFilterCha
             return;
         }
 
-        const filtered = assets.filter(asset =>
+        const filtered = safeAssets.filter(asset =>
             effectiveSelectedLayers.has(asset.feature_code)
         );
         onFilterChange(filtered);
-    }, [effectiveSelectedLayers, assets, onFilterChange]);
+    }, [effectiveSelectedLayers, safeAssets, onFilterChange]);
 
     const toggleLayer = (featureCode: string) => {
         setSelectedLayers(prev => {

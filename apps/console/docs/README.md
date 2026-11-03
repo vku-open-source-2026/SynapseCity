@@ -2,6 +2,13 @@
 
 Welcome to the OpenInfra Urban Infrastructure Asset Management System documentation. This documentation provides comprehensive guidance for understanding, developing, and deploying the system.
 
+> **Product scope:** SynapseCity owns city/infrastructure operations only (assets,
+> incidents, IoT, maintenance, alerts, budgets, reports, geofences, ingest and
+> the public asset map). Emergency/hazard feeds, EOP, dispatch, resource units,
+> SITREP and after-action reports belong to SynapseCitySOS
+> (https://sos.synapsecity.sbs). See the workspace `FEATURE_BOUNDARY.md` for the
+> authoritative split.
+
 ## 📚 Documentation Overview
 
 ### 1. [Architecture](./architecture.md)

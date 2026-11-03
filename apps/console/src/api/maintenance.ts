@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
-import { httpClient } from "../lib/httpClient";
+import { asList, httpClient } from "../lib/httpClient";
+import { readFileAsDataUrl } from "../lib/files";
 import type {
     Maintenance,
     MaintenanceCreateRequest,
@@ -53,7 +54,7 @@ export const maintenanceApi = {
         const response = await httpClient.get<Maintenance[]>("/maintenance", {
             params,
         });
-        return response.data;
+        return asList<Maintenance>(response.data);
     },
 
     /**
@@ -67,7 +68,7 @@ export const maintenanceApi = {
                 params: days ? { days } : undefined,
             }
         );
-        return response.data;
+        return asList<Maintenance>(response.data);
     },
 
     /**
@@ -192,19 +193,17 @@ export const maintenanceApi = {
         if (!files || files.length === 0) {
             throw new Error("At least one file is required");
         }
-        const formData = new FormData();
-        files.forEach((file) => {
-            formData.append("files", file);
-        });
+        const attachments = await Promise.all(files.map(async (file) => ({
+            file_name: file.name,
+            file_url: await readFileAsDataUrl(file),
+            file_type: file.type || "image/*",
+            uploaded_by: "technician",
+            uploaded_at: new Date().toISOString(),
+        })));
         const response = await httpClient.post<Maintenance>(
             `/maintenance/${id}/photos`,
-            formData,
-            {
-                params: { photo_type: photoType },
-                headers: {
-                    "Content-Type": "multipart/form-data",
-                },
-            }
+            { attachments },
+            { params: { photo_type: photoType } }
         );
         return response.data;
     },
@@ -222,7 +221,7 @@ export const maintenanceApi = {
             `/maintenance/asset/${assetId}`,
             { params }
         );
-        return response.data;
+        return asList<Maintenance>(response.data);
     },
 
     getHistory: async (
@@ -283,7 +282,7 @@ export const maintenanceApi = {
             `/maintenance/asset/${assetId}`,
             { params: filters }
         );
-        return response.data;
+        return asList<Maintenance>(response.data);
     },
 
     approve: async (

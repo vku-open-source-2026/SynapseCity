@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
-import { asList, httpClient, leaderboardApi } from "./lib/httpClient";
+import { asList, httpClient } from "./lib/httpClient";
+import { readFileAsDataUrl } from "./lib/files";
 import axios from "axios";
 
 // Force HTTPS in production
@@ -64,25 +65,11 @@ export const loginAdmin = async (username: string, password: string) => {
     return { token: response.data.access_token };
 };
 
-export interface LeaderboardEntry {
-    msv: string;
-    contributor_name: string;
-    unit: string;
-    count: number;
-}
-
-export const getLeaderboard = async () => {
-    const response = await leaderboardApi.get<LeaderboardEntry[]>(
-        "/leaderboard"
-    );
-    return asList<LeaderboardEntry>(response.data);
-};
-
 export const getMaintenanceLogs = async (assetId: string) => {
     const response = await httpClient.get<MaintenanceLog[]>(
         `/maintenance/asset/${assetId}`
     );
-    return response.data;
+    return asList<MaintenanceLog>(response.data);
 };
 
 export const createMaintenanceLog = async (data: Record<string, unknown>) => {
@@ -125,16 +112,14 @@ export interface IncidentCreate {
 }
 
 export const createIncident = async (data: IncidentCreate, image?: File, turnstileToken?: string) => {
-    const formData = new FormData();
-    formData.append("data", JSON.stringify(data));
-    if (image) {
-        formData.append("image", image);
-    }
-    const headers: Record<string, string> = { "Content-Type": "multipart/form-data" };
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (turnstileToken) {
         headers["CF-Turnstile-Response"] = turnstileToken;
     }
-    const response = await httpClient.post("/incidents", formData, {
+    // Public citizen reports use the JSON public route. Photos are embedded as
+    // data URLs because the City service does not accept multipart uploads.
+    const photos = image ? [await readFileAsDataUrl(image)] : [];
+    const response = await httpClient.post("/public/incidents", { ...data, photos }, {
         headers,
     });
     return response.data;
