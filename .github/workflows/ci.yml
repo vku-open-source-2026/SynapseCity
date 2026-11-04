@@ -43,6 +43,9 @@ jobs:
       - name: Browser E2E
         run: npm run test:e2e --workspace=@synapsecity/console
 
+      - name: Prepare compose env
+        run: cp .env.example .env
+
       - name: Compose config
         run: docker compose config >/dev/null
 

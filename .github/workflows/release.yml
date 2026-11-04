@@ -34,6 +34,9 @@ jobs:
           npm run build
           npm test
 
+      - name: Prepare compose env
+        run: cp .env.example .env
+
       - name: Build images
         run: docker compose build
 
@@ -47,6 +50,7 @@ jobs:
           SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
+          OWNER="$(echo "${OWNER}" | tr '[:upper:]' '[:lower:]')"
           images="synapsecity-city-service synapsecity-gateway synapsecity-console"
           for image in $images; do
             remote="ghcr.io/${OWNER}/${image}"
