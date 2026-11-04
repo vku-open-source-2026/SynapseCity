@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2026 VKU.VIC
-FROM node:20-bookworm-slim AS build
+FROM node:26-bookworm-slim AS build
 WORKDIR /workspace
 COPY SynapseCity/package*.json ./SynapseCity/
 COPY SynapseCity/vendor ./SynapseCity/vendor
@@ -9,7 +9,7 @@ COPY SynapseCity/apps/city-service/package*.json SynapseCity/apps/city-service/t
 COPY SynapseCity/apps/city-service/src ./SynapseCity/apps/city-service/src
 RUN cd SynapseCity && npm ci && npm run check:release && npm run build --workspace=@synapsecity/city-service
 
-FROM node:20-bookworm-slim
+FROM node:26-bookworm-slim
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /workspace/SynapseCity/package*.json ./
