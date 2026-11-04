@@ -244,12 +244,12 @@ const AboutUs: React.FC = () => {
                         </a>{" "}
                         · Dữ liệu theo giấy phép{" "}
                         <a
-                            href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/"
+                            href="https://opendatacommons.org/licenses/pddl/1-0/"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-sky-500 hover:underline"
                         >
-                            Open Government Licence v3.0 (OGL)
+                            PDDL 1.0 (Public Domain Dedication and License)
                         </a>
                     </p>
                 </div>

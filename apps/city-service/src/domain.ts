@@ -3,32 +3,35 @@
 import { Request } from 'express';
 import { CapabilitiesClient, CapabilitiesError, Dataset } from '@synapsedx/capabilities';
 
+/** Published City datasets are dedicated to the public domain under PDDL 1.0. */
+export const DATA_LICENSE = 'PDDL-1.0';
+
 export const DATASETS = {
   // Public datasets: these feed the public asset map and public incident lookup.
   assets: {
     id: 'city-assets', name: 'SynapseCity infrastructure assets', entityType: 'CityAsset',
-    license: 'CC-BY-4.0', description: 'Public projection of city infrastructure assets',
+    license: DATA_LICENSE, description: 'Public projection of city infrastructure assets',
     public: true,
   },
   incidents: {
     id: 'city-incidents', name: 'SynapseCity infrastructure incidents', entityType: 'CityIncident',
-    license: 'CC-BY-4.0', description: 'Public projection of generalized infrastructure incidents',
+    license: DATA_LICENSE, description: 'Public projection of generalized infrastructure incidents',
     public: true,
   },
   // Private datasets: operational records must never be published to the open
   // data projection. In particular city-users holds operator profiles and must
   // stay private forever.
-  maintenance: { id: 'city-maintenance', name: 'SynapseCity maintenance work orders', entityType: 'MaintenanceWorkOrder', license: 'CC-BY-4.0', description: 'Infrastructure maintenance lifecycle records', public: false },
-  sensors: { id: 'city-iot-sensors', name: 'SynapseCity IoT sensors', entityType: 'IoTSensor', license: 'CC-BY-4.0', description: 'Infrastructure sensor metadata and readings', public: false },
-  sensorData: { id: 'city-iot-readings', name: 'SynapseCity IoT readings', entityType: 'SensorReading', license: 'CC-BY-4.0', description: 'Infrastructure sensor observations', public: false },
-  alerts: { id: 'city-alerts', name: 'SynapseCity alerts', entityType: 'InfrastructureAlert', license: 'CC-BY-4.0', description: 'Operational alerts associated with city infrastructure', public: false },
-  budgets: { id: 'city-budgets', name: 'SynapseCity budgets', entityType: 'InfrastructureBudget', license: 'CC-BY-4.0', description: 'Infrastructure budget records', public: false },
-  transactions: { id: 'city-budget-transactions', name: 'SynapseCity budget transactions', entityType: 'BudgetTransaction', license: 'CC-BY-4.0', description: 'Infrastructure budget transactions', public: false },
-  reports: { id: 'city-reports', name: 'SynapseCity reports', entityType: 'InfrastructureReport', license: 'CC-BY-4.0', description: 'Infrastructure operational reports', public: false },
-  notifications: { id: 'city-notifications', name: 'SynapseCity notifications', entityType: 'InfrastructureNotification', license: 'CC-BY-4.0', description: 'Infrastructure notification records', public: false },
-  users: { id: 'city-users', name: 'SynapseCity users', entityType: 'CityUser', license: 'CC-BY-4.0', description: 'Domain operator profiles', public: false },
-  geofences: { id: 'city-geofences', name: 'SynapseCity geofences', entityType: 'CityGeofence', license: 'CC-BY-4.0', description: 'Infrastructure geofence records', public: false },
-  ingest: { id: 'city-ingest-jobs', name: 'SynapseCity ingest jobs', entityType: 'IngestJob', license: 'CC-BY-4.0', description: 'Infrastructure data ingestion records', public: false },
+  maintenance: { id: 'city-maintenance', name: 'SynapseCity maintenance work orders', entityType: 'MaintenanceWorkOrder', license: DATA_LICENSE, description: 'Infrastructure maintenance lifecycle records', public: false },
+  sensors: { id: 'city-iot-sensors', name: 'SynapseCity IoT sensors', entityType: 'IoTSensor', license: DATA_LICENSE, description: 'Infrastructure sensor metadata and readings', public: false },
+  sensorData: { id: 'city-iot-readings', name: 'SynapseCity IoT readings', entityType: 'SensorReading', license: DATA_LICENSE, description: 'Infrastructure sensor observations', public: false },
+  alerts: { id: 'city-alerts', name: 'SynapseCity alerts', entityType: 'InfrastructureAlert', license: DATA_LICENSE, description: 'Operational alerts associated with city infrastructure', public: false },
+  budgets: { id: 'city-budgets', name: 'SynapseCity budgets', entityType: 'InfrastructureBudget', license: DATA_LICENSE, description: 'Infrastructure budget records', public: false },
+  transactions: { id: 'city-budget-transactions', name: 'SynapseCity budget transactions', entityType: 'BudgetTransaction', license: DATA_LICENSE, description: 'Infrastructure budget transactions', public: false },
+  reports: { id: 'city-reports', name: 'SynapseCity reports', entityType: 'InfrastructureReport', license: DATA_LICENSE, description: 'Infrastructure operational reports', public: false },
+  notifications: { id: 'city-notifications', name: 'SynapseCity notifications', entityType: 'InfrastructureNotification', license: DATA_LICENSE, description: 'Infrastructure notification records', public: false },
+  users: { id: 'city-users', name: 'SynapseCity users', entityType: 'CityUser', license: DATA_LICENSE, description: 'Domain operator profiles', public: false },
+  geofences: { id: 'city-geofences', name: 'SynapseCity geofences', entityType: 'CityGeofence', license: DATA_LICENSE, description: 'Infrastructure geofence records', public: false },
+  ingest: { id: 'city-ingest-jobs', name: 'SynapseCity ingest jobs', entityType: 'IngestJob', license: DATA_LICENSE, description: 'Infrastructure data ingestion records', public: false },
 } as const;
 
 export interface DatasetSpec {
@@ -64,13 +67,27 @@ export function capabilitiesFromRequest(req: Request): CapabilitiesClient {
 export async function ensureDataset(client: CapabilitiesClient, spec: DatasetSpec): Promise<Dataset> {
   try {
     const existing = await client.datasets.get(spec.id);
-    if (spec.public !== true && existing.public === true) {
-      // Never silently accept an operational dataset that was previously
-      // published. Revoking an existing public projection is an operator
-      // action; the service must not keep publishing new records into it.
-      console.warn(`[synapsecity] dataset ${spec.id} is public but must be private; revoke its public projection in Tier-2.`);
+    const desiredPublic = spec.public === true;
+    const needsReconcile = existing.license !== spec.license
+      || existing.public !== desiredPublic
+      || existing.name !== spec.name
+      || existing.entityType !== spec.entityType
+      || (existing.description || '') !== (spec.description || '');
+    if (!needsReconcile) return existing;
+
+    // An old operational dataset may still have a public projection. Revoke it
+    // before making the dataset private so Tier-2 can never keep exposing it.
+    if (existing.public === true && !desiredPublic && existing.status === 'published') {
+      await client.datasets.revoke(existing.id);
     }
-    return existing;
+    return client.datasets.update(existing.id, {
+      name: spec.name,
+      entityType: spec.entityType,
+      license: spec.license,
+      description: spec.description,
+      public: desiredPublic,
+      schemaVersion: existing.schemaVersion || '1.0.0',
+    });
   } catch (error) {
     if (!(error instanceof CapabilitiesError) || error.status !== 404) throw error;
     // Only the explicit public projection datasets are created as public and

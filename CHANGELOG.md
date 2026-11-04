@@ -3,10 +3,13 @@
 All notable changes to SynapseCity are documented here. Entries follow the
 Keep a Changelog format and version tags use Semantic Versioning.
 
-## [Unreleased] - 2026-11-03
+## [Unreleased] - 2026-11-04
 
 ### Changed
 
+- Changed the published City data license from CC-BY-4.0/OGL to **PDDL 1.0**
+  (Open Data Commons Public Domain Dedication and License 1.0). Source code
+  remains Apache-2.0.
 - Split SynapseCity from SynapseCitySOS. SynapseCity now owns only city
   infrastructure operations: assets/GIS/lifecycle/health, city incidents and
   citizen reports, IoT, maintenance and the technician portal, infrastructure

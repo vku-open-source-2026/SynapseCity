@@ -1,7 +1,9 @@
 # Third-party components
 
-SynapseCity source is Apache-2.0. Dependencies are installed unmodified from
-public registries and remain under their upstream licenses.
+SynapseCity source is Apache-2.0. Published City datasets are dedicated to the
+public domain under PDDL 1.0 (Open Data Commons Public Domain Dedication and
+License). Dependencies are installed unmodified from public registries and
+remain under their upstream licenses.
 
 | Component family | License | Use |
 |---|---|---|

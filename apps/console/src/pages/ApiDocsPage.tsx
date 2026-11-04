@@ -178,6 +178,18 @@ const ApiDocsPage = () => {
               <li>Không trả về thông tin liên hệ hoặc ghi chú nội bộ.</li>
               <li>Không có endpoint POST/PUT/PATCH/DELETE.</li>
               <li>Không gọi API của SynapseCitySOS.</li>
+              <li>
+                Giấy phép dữ liệu:{" "}
+                <a
+                  href="https://opendatacommons.org/licenses/pddl/1-0/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-sky-600 hover:underline"
+                >
+                  PDDL 1.0
+                </a>
+                .
+              </li>
             </ul>
             <a
               href="https://github.com/vku-open-source-2026/SynapseCity"

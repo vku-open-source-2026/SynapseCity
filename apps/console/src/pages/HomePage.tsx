@@ -373,12 +373,12 @@ const HomePage = () => {
                             </a>
                             <span className="text-slate-400">·</span>
                             <a
-                                href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/"
+                                href="https://opendatacommons.org/licenses/pddl/1-0/"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="hover:text-[#4FACFE] transition-colors"
                             >
-                                Dữ liệu: OGL v3.0
+                                Dữ liệu: PDDL 1.0
                             </a>
                         </div>
                     </div>

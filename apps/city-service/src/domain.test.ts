@@ -3,7 +3,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CapabilitiesError } from '@synapsedx/capabilities';
-import { DATASETS, ensureDataset } from './domain';
+import { DATA_LICENSE, DATASETS, ensureDataset } from './domain';
+
+test('every City dataset uses the PDDL-1.0 data license', () => {
+  assert.equal(DATA_LICENSE, 'PDDL-1.0');
+  for (const dataset of Object.values(DATASETS)) {
+    assert.equal(dataset.license, 'PDDL-1.0', `${dataset.id} must use PDDL-1.0`);
+  }
+});
 
 test('only the public projection datasets are marked public', () => {
   assert.equal(DATASETS.assets.public, true);
@@ -13,6 +20,38 @@ test('only the public projection datasets are marked public', () => {
     assert.equal(DATASETS[key].public, false, `${DATASETS[key].id} must stay private`);
   }
   assert.equal(DATASETS.users.public, false);
+});
+
+test('ensureDataset reconciles an old public City dataset to PDDL and private visibility', async () => {
+  const revoked: string[] = [];
+  const updated: Array<{ id: string; input: Record<string, unknown> }> = [];
+  const existing = {
+    id: 'city-users',
+    slug: 'city-users',
+    name: 'SynapseCity users',
+    entityType: 'CityUser',
+    license: 'CC-BY-4.0',
+    description: 'Domain operator profiles',
+    public: true,
+    schemaVersion: '1.0.0',
+    status: 'published',
+    createdAt: '2026-11-01T00:00:00.000Z',
+    updatedAt: '2026-11-01T00:00:00.000Z',
+  };
+  const client = {
+    datasets: {
+      get: async () => existing,
+      revoke: async (id: string) => { revoked.push(id); return { ...existing, status: 'revoked' }; },
+      update: async (id: string, input: Record<string, unknown>) => { updated.push({ id, input }); return { ...existing, ...input, id }; },
+    },
+  } as any;
+
+  const dataset = await ensureDataset(client, DATASETS.users);
+  assert.deepEqual(revoked, ['city-users']);
+  assert.equal(updated.length, 1);
+  assert.equal(updated[0].input.license, 'PDDL-1.0');
+  assert.equal(updated[0].input.public, false);
+  assert.equal(dataset.license, 'PDDL-1.0');
 });
 
 test('ensureDataset creates city-users private and does not publish it', async () => {
@@ -46,5 +85,6 @@ test('ensureDataset creates and publishes city-assets as a public projection', a
 
   await ensureDataset(client, DATASETS.assets);
   assert.equal(created[0].public, true);
+  assert.equal(created[0].license, 'PDDL-1.0');
   assert.equal(published, 'city-assets');
 });

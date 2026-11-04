@@ -85,12 +85,12 @@ const Footer = () => {
                             Apache 2.0 (Mã nguồn)
                         </a>
                         <a
-                            href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/"
+                            href="https://opendatacommons.org/licenses/pddl/1-0/"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-sm text-[#6C7580] flex w-fit items-center space-x-2 capitalize hover:underline"
                         >
-                            OGL (Dữ liệu)
+                            PDDL 1.0 (Dữ liệu)
                         </a>
                     </div>
                 </div>
@@ -108,12 +108,12 @@ const Footer = () => {
                     </a>
                     . Dữ liệu theo giấy phép{" "}
                     <a
-                        href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/"
+                        href="https://opendatacommons.org/licenses/pddl/1-0/"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-blue-500 hover:underline"
                     >
-                        OGL
+                        PDDL 1.0
                     </a>
                     .
                 </p>
