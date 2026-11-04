@@ -1,5 +1,8 @@
 # SynapseCity — city infrastructure operations (Tier 3)
 
+![CI](https://github.com/vku-open-source-2026/SynapseCity/actions/workflows/ci.yml/badge.svg)
+![Release](https://github.com/vku-open-source-2026/SynapseCity/actions/workflows/release.yml/badge.svg)
+
 SynapseCity is the city infrastructure product of the Synapse platform. It owns
 the day-to-day lifecycle of physical infrastructure: assets and GIS data, city
 incidents and citizen reports, IoT sensors, maintenance and technician work,
