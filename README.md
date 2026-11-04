@@ -287,6 +287,15 @@ The public edge routes `synapsecity.sbs` to the gateway. The gateway proxies
 `/v1` to `city-service` and serves the console for browser routes. See
 `infra/nginx/synapsecity.conf`.
 
+## DX-OS 2026
+
+City is a Tier-3 domain application in the OLP 2026 DX-OS model: it owns city
+assets, incidents, maintenance and budget rules, and consumes reusable H-P-D-I
+capabilities from SynapseDX over the public API. It never imports the Tier-1
+SDK or calls a Tier-1 service directly. The tier matrix, HITL contract and OLP
+evidence checklist are in
+[`SynapseDX/docs/DX_OS_TIER_MODEL_2026-11-04.md`](https://github.com/vku-open-source-2026/SynapseDX/blob/main/docs/DX_OS_TIER_MODEL_2026-11-04.md).
+
 ## PoF project checklist
 
 - Source license: Apache-2.0 (`LICENSE`) with per-source SPDX headers and attribution in `NOTICE`.

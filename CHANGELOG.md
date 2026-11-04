@@ -7,6 +7,10 @@ Keep a Changelog format and version tags use Semantic Versioning.
 
 ### Added
 
+- CI hardening: CodeQL, dependency review on pull requests, actionlint,
+  CycloneDX SBOM artifact, npm audit gate, Dependabot, PR template and
+  concurrency controls. Tier-2 HITL adoption is tracked in issue #30.
+
 - Tier-2 files capability adoption: `POST /v1/files`, `POST /v1/files/upload`,
   `PUT /v1/files/:id/content`, `GET /v1/files/:id/content`,
   `POST /v1/files/:id/presign`, `POST /v1/files/:id/complete`,
