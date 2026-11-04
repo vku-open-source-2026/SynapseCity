@@ -69,7 +69,7 @@ This document summarizes all API endpoints that need to be implemented in the ba
 ```json
 {
   "report_type": "maintenance_summary" | "incident_summary" | "lifecycle_overview" | "end_of_life_forecast" | "custom",
-  "format": "pdf" | "excel",
+  "format": "csv" | "json",
   "filters": {
     "date_from": "2024-01-01",
     "date_to": "2024-12-31",
@@ -79,14 +79,21 @@ This document summarizes all API endpoints that need to be implemented in the ba
   }
 }
 ```
-- **Description**: Generates a report for the asset
+- **Description**: Generates a report for the asset from City assets,
+  incidents and maintenance. `pdf`/`excel` are not supported yet and return
+  `415 unsupported_report_format`; use `csv` or `json`.
 - **Response**:
 ```json
 {
-  "report_url": "https://storage.example.com/reports/report-123.pdf",
-  "report_id": "report-123"
+  "report_url": "https://synapsecity.sbs/v1/reports/report-123/download",
+  "report_id": "report-123",
+  "row_count": 42,
+  "format": "csv"
 }
 ```
+- **Download**: `GET /api/v1/reports/{id}/download` streams the stored CSV/JSON
+  bytes with `Content-Disposition: attachment`. It requires the operator
+  session; there is no public storage URL.
 
 ## Maintenance History Endpoints
 

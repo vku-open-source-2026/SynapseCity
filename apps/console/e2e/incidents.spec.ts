@@ -3,10 +3,11 @@
 import { describe, test, expect, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { navigateTo } from './helpers';
+import { navigateTo, signOut } from './helpers';
 
 describe('Incidents Module', () => {
   beforeEach(async () => {
+        signOut();
     await navigateTo('/admin/incidents');
     // Wait for page to load
     await waitFor(() => document.body, { timeout: 5000 });

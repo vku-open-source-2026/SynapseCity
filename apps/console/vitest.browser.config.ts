@@ -19,6 +19,9 @@ export default defineConfig({
     include: ['leaflet-draw'],
   },
   test: {
+    // Browser specs share one page, so run files sequentially: several specs
+    // seed or clear the auth store and must not interleave.
+    fileParallelism: false,
     setupFiles: ['./e2e/setup.ts'],
     include: ['e2e/**/*.spec.ts'],
     browser: {

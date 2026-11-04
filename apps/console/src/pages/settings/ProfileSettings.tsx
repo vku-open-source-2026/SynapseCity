@@ -152,6 +152,7 @@ const ProfileSettings: React.FC = () => {
     };
 
     const handleLogout = () => {
+        void authApi.logout(refreshToken ?? undefined).catch(() => undefined);
         logout();
         queryClient.clear();
         navigate({ to: "/" });

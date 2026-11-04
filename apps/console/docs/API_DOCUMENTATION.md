@@ -447,37 +447,55 @@ headers: {
 ---
 
 ### 7. Upload Asset Photo
-**POST** `/assets/{id}/photos`
+**POST** `/files/upload` then **POST** `/assets/{id}/photos`
 
 **Headers**: `Authorization: Bearer <token>` (required)
 
-**Request**: `multipart/form-data`
-- `file`: File (image)
+**Step 1** — upload the raw bytes through the City files adapter:
 
-**Response** (200 OK): Asset object (with updated attachments)
+```http
+POST /files/upload
+Content-Type: image/png
+X-File-Name: lamp.png
+X-Checksum-SHA256: <64 hex chars, optional but verified>
 
-**Data Flow**:
-1. Frontend uploads image file
-2. Backend stores file in storage service
-3. Backend adds attachment URL to asset
-4. Returns updated asset
+<binary body>
+```
+
+The adapter forwards the bytes to the Tier-2 files capability (Tier-1 object
+storage) and returns file metadata. The browser never sends a `data:` URL.
+
+**Step 2** — attach the returned id:
+
+```json
+POST /assets/{id}/photos
+{ "file_ids": ["<file_id>"] }
+```
+
+**Response** (200 OK): Asset object whose `photos` and `attachments` contain the
+stable City download URL (`/v1/files/{file_id}/content`), content type, size and
+SHA-256 checksum.
 
 ---
 
-### 8. Upload Asset Attachment
-**POST** `/assets/{id}/attachments`
+### 8. Upload Asset Attachment / Document
+**POST** `/files/upload` then **POST** `/assets/{id}/attachments` or
+**POST** `/assets/{id}/documents`
 
-**Headers**: `Authorization: Bearer <token>` (required)
+Send `{ "file_id": "<file_id>", "document_type": "manual", "is_public": false }`.
+`POST /assets/{id}/documents` returns the created attachment.
 
-**Request**: `multipart/form-data`
-- `file`: File (any document type)
-
-**Response** (200 OK): Asset object
+Legacy external references are still accepted as `{ "file_url": "https://..." }`
+(absolute HTTPS only). `data:` URLs, `blob:` URLs and inline base64 bodies are
+rejected with `415`.
 
 ---
 
 ### 9. Delete Asset Attachment
 **DELETE** `/assets/{id}/attachments/{attachment_url}`
+
+When the attachment is a City-managed file, City also deletes the object through
+the Tier-2 files capability and removes the `city-files` metadata.
 
 **Headers**: `Authorization: Bearer <token>` (required)
 
@@ -1340,7 +1358,7 @@ headers: {
   "id": "string",
   "report_code": "string",
   "type": "maintenance | budget | incident | asset",
-  "format": "pdf | excel | csv",
+  "format": "csv | json",
   "status": "pending | generating | completed | failed",
   "parameters": {},
   "file_url": "string | null",
@@ -1360,7 +1378,7 @@ headers: {
 ```json
 {
   "type": "maintenance | budget | incident | asset",
-  "format": "pdf | excel | csv",
+  "format": "csv | json",
   "parameters": {}
 }
 ```
@@ -1401,7 +1419,7 @@ headers: {
 {
   "file_url": "string",
   "report_code": "string",
-  "format": "pdf"
+  "format": "csv"
 }
 ```
 

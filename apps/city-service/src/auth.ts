@@ -32,6 +32,18 @@ export interface SessionPrincipal {
   exp: number;
   /** Unique token id so a refresh always rotates the access token. */
   jti?: string;
+  /** Marks a session minted by the demo credential shell. */
+  demo?: boolean;
+  /** Verified identity source. `tier2` is the production path. */
+  auth_source?: 'tier2' | 'demo';
+  /**
+   * User-scoped Tier-2 credential minted/verified by the Tier-2 auth
+   * capability. It is kept inside the signed City session and never returned to
+   * the browser; `capabilitiesFromRequest` forwards it upstream.
+   */
+  tier2_token?: string;
+  /** Tier-2 refresh token, used only to rotate the delegated credential. */
+  tier2_refresh_token?: string;
 }
 
 export interface SessionUser {
@@ -61,6 +73,48 @@ function resolveSecret(): string {
 }
 
 const AUTH_SECRET = resolveSecret();
+
+/**
+ * The demo credential shell is a local development aid, never an identity
+ * provider. It is enabled by default outside production and must be opted into
+ * explicitly in production with `AUTH_DEMO_MODE=true`.
+ */
+export function demoModeEnabled(): boolean {
+  const configured = (process.env.AUTH_DEMO_MODE || '').trim().toLowerCase();
+  if (configured === 'true') return true;
+  if (configured === 'false') return false;
+  return process.env.NODE_ENV !== 'production';
+}
+
+/**
+ * Ephemeral demo-session revocation list. This is not a user/session store: it
+ * only remembers the `jti` of tokens that were logged out until they expire, so
+ * `AUTH_SECRET`-signed demo sessions can be invalidated. Production revocation
+ * belongs to the Tier-1 IAM provider.
+ */
+const revokedTokens = new Map<string, number>();
+
+function activeRevocations(now: number): void {
+  for (const [jti, exp] of revokedTokens) {
+    if (exp <= now) revokedTokens.delete(jti);
+  }
+}
+
+export function revokeSession(principal: Pick<SessionPrincipal, 'jti' | 'exp'>): void {
+  if (!principal.jti) return;
+  revokedTokens.set(principal.jti, Number(principal.exp) || Math.floor(Date.now() / 1000) + ACCESS_TTL_SECONDS);
+}
+
+export function isSessionRevoked(jti: string | undefined): boolean {
+  if (!jti) return false;
+  const exp = revokedTokens.get(jti);
+  if (exp === undefined) return false;
+  if (exp <= Math.floor(Date.now() / 1000)) {
+    revokedTokens.delete(jti);
+    return false;
+  }
+  return true;
+}
 
 function encode(value: string): string {
   return Buffer.from(value, 'utf8').toString('base64url');
@@ -101,6 +155,7 @@ export function verifyToken(token: string, expected: 'access' | 'refresh' = 'acc
   if (payload.typ !== expected) return null;
   if (!Number.isFinite(payload.exp) || payload.exp <= Math.floor(Date.now() / 1000)) return null;
   if (!payload.sub || !payload.username) return null;
+  if (isSessionRevoked(payload.jti)) return null;
   return payload;
 }
 
@@ -109,12 +164,74 @@ export function normalizeRole(value: unknown, fallback: SessionRole = 'citizen')
   return ROLES.includes(role) ? role : fallback;
 }
 
+/**
+ * Permission vocabulary enforced by every City operator route. `*` is the
+ * admin wildcard and is the only wildcard accepted.
+ */
+export type Permission =
+  | 'assets:read' | 'assets:write'
+  | 'incidents:read' | 'incidents:write' | 'incidents:verify'
+  | 'maintenance:read' | 'maintenance:write'
+  | 'iot:read' | 'iot:write'
+  | 'alerts:read' | 'alerts:write'
+  | 'budgets:read' | 'budgets:write' | 'budgets:approve'
+  | 'reports:read' | 'reports:write' | 'reports:generate'
+  | 'notifications:read' | 'notifications:write'
+  | 'files:read' | 'files:write'
+  | 'users:read' | 'users:admin'
+  | 'geofences:read' | 'geofences:write'
+  | 'ingest:write' | 'geo:read' | 'ai:use' | 'public:read';
+
+const ROLE_PERMISSIONS: Record<SessionRole, readonly string[]> = {
+  admin: ['*'],
+  manager: [
+    'assets:read', 'assets:write',
+    'incidents:read', 'incidents:write', 'incidents:verify',
+    'maintenance:read', 'maintenance:write',
+    'iot:read', 'iot:write',
+    'alerts:read', 'alerts:write',
+    'budgets:read', 'budgets:write', 'budgets:approve',
+    'reports:read', 'reports:write', 'reports:generate',
+    'notifications:read', 'notifications:write',
+    'files:read', 'files:write',
+    'users:read',
+    'geofences:read', 'geofences:write',
+    'ingest:write', 'geo:read', 'ai:use',
+  ],
+  technician: [
+    'assets:read',
+    'incidents:read',
+    'maintenance:read', 'maintenance:write',
+    'iot:read',
+    'alerts:read',
+    'notifications:read',
+    'files:read', 'files:write',
+    'geo:read',
+  ],
+  volunteer: [
+    'assets:read',
+    'incidents:read',
+    'geofences:read',
+    'notifications:read',
+    'files:read',
+    'geo:read',
+    'public:read',
+  ],
+  citizen: ['public:read'],
+};
+
 export function permissionsForRole(role: SessionRole): string[] {
-  if (role === 'admin') return ['*'];
-  if (role === 'manager') return ['assets:read', 'incidents:read', 'incidents:write', 'maintenance:read', 'maintenance:write', 'reports:read'];
-  if (role === 'technician') return ['assets:read', 'incidents:read', 'maintenance:read', 'maintenance:write'];
-  if (role === 'volunteer') return ['assets:read', 'incidents:read'];
-  return ['public:read'];
+  return [...(ROLE_PERMISSIONS[role] || ROLE_PERMISSIONS.citizen)];
+}
+
+export function hasPermission(principal: Pick<SessionPrincipal, 'role' | 'permissions'> | undefined, permission: Permission | 'authenticated'): boolean {
+  if (!principal) return false;
+  if (permission === 'authenticated') return true;
+  // Permissions are always derived from the signed role. The permission array
+  // carried by an old token is ignored so a stale or hand-crafted list can never
+  // widen access.
+  const granted = permissionsForRole(principal.role);
+  return granted.includes('*') || granted.includes(permission);
 }
 
 export interface PrincipalInput {
@@ -126,8 +243,11 @@ export interface PrincipalInput {
   sub?: string;
 }
 
-export function principalFromInput(input: PrincipalInput, defaultRole: SessionRole = 'admin'): SessionPrincipal {
-  const role = normalizeRole(input.role, defaultRole);
+export function principalFromInput(input: PrincipalInput, defaultRole: SessionRole = 'citizen'): SessionPrincipal {
+  // A role supplied by the caller is never trusted: `input.role` is ignored and
+  // only the server-side default (resolved by the caller from configuration or
+  // a verified identity provider) is used.
+  const role = normalizeRole(defaultRole, 'citizen');
   const now = Math.floor(Date.now() / 1000);
   const username = input.username.trim();
   return {
@@ -153,14 +273,21 @@ export interface SessionResponse {
 }
 
 export function issueSession(principal: Omit<SessionPrincipal, 'typ' | 'iat' | 'exp'>): SessionResponse {
+  const role = normalizeRole(principal.role, 'citizen');
   const base = {
     sub: principal.sub,
     username: principal.username,
     email: principal.email,
     full_name: principal.full_name,
     ...(principal.phone ? { phone: principal.phone } : {}),
-    role: principal.role,
-    permissions: principal.permissions,
+    role,
+    // Permissions are always derived from the signed role, never copied from a
+    // caller-supplied list.
+    permissions: permissionsForRole(role),
+    ...(principal.demo ? { demo: true } : {}),
+    ...(principal.auth_source ? { auth_source: principal.auth_source } : {}),
+    ...(principal.tier2_token ? { tier2_token: principal.tier2_token } : {}),
+    ...(principal.tier2_refresh_token ? { tier2_refresh_token: principal.tier2_refresh_token } : {}),
   };
   const access_token = signToken({ ...base, typ: 'access' });
   const refresh_token = signToken({ ...base, typ: 'refresh' });
@@ -208,6 +335,26 @@ export function requireSession(req: Request, res: Response, next: NextFunction):
   }
   (req as AuthedRequest).session = principal;
   next();
+}
+
+/**
+ * Declarative permission gate. `authenticated` only checks that a valid session
+ * exists (used by self-service routes such as `/v1/users/me`).
+ */
+export function requirePermission(permission: Permission | 'authenticated') {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const principal = (req as AuthedRequest).session || sessionFromRequest(req);
+    if (!principal) {
+      res.status(401).json({ error: 'unauthorized', detail: 'authentication_required' });
+      return;
+    }
+    (req as AuthedRequest).session = principal;
+    if (!hasPermission(principal, permission)) {
+      res.status(403).json({ error: 'forbidden', detail: `${permission}_required`, role: principal.role });
+      return;
+    }
+    next();
+  };
 }
 
 export function requireAdmin(req: Request, res: Response, next: NextFunction): void {

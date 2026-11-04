@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { assetsApi } from "../../api/assets";
+import { reportsApi } from "../../api/reports";
 import { Button } from "../ui/button";
 import { FileText, FileSpreadsheet } from "lucide-react";
 import { ReportGenerator } from "./ReportGenerator";
@@ -15,7 +16,7 @@ const AssetReportsTab: React.FC<AssetReportsTabProps> = ({ assetId }) => {
   const [reportType, setReportType] = useState<
     "maintenance_summary" | "incident_summary" | "lifecycle_overview" | "end_of_life_forecast" | "custom"
   >("maintenance_summary");
-  const [format, setFormat] = useState<"pdf" | "excel">("pdf");
+  const [format, setFormat] = useState<"csv" | "json">("csv");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [severityFilter, setSeverityFilter] = useState("");
@@ -39,6 +40,16 @@ const AssetReportsTab: React.FC<AssetReportsTabProps> = ({ assetId }) => {
 
   const handleGenerate = () => {
     generateMutation.mutate();
+  };
+
+  const handleDownload = async () => {
+    if (!generatedReport) return;
+    const { url, filename } = await reportsApi.download(generatedReport.report_id);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -75,18 +86,18 @@ const AssetReportsTab: React.FC<AssetReportsTabProps> = ({ assetId }) => {
               <p className="text-sm text-green-700">Mã báo cáo: {generatedReport.report_id}</p>
             </div>
             <Button
-              onClick={() => window.open(generatedReport.report_url, "_blank")}
+              onClick={handleDownload}
               className="bg-green-600 hover:bg-green-700"
             >
-              {format === "pdf" ? (
+              {format === "csv" ? (
                 <>
                   <FileText className="h-4 w-4 mr-2" />
-                  Tải PDF
+                  Tải CSV
                 </>
               ) : (
                 <>
                   <FileSpreadsheet className="h-4 w-4 mr-2" />
-                  Tải Excel
+                  Tải JSON
                 </>
               )}
             </Button>

@@ -1035,7 +1035,7 @@ Record budget transaction.
 Generate budget report.
 
 **Query Parameters**:
-- `format` (string): "json" | "pdf" | "excel"
+- `format` (string): "csv" | "json"
 
 **Response**: Report data or file download
 
@@ -1179,8 +1179,8 @@ List generated reports.
       "name": "November Maintenance Summary",
       "type": "maintenance_summary",
       "status": "completed",
-      "format": "pdf",
-      "file_url": "https://storage.example.com/reports/rep-2024-001.pdf",
+      "format": "csv",
+      "download_url": "https://synapsecity.sbs/v1/reports/rep-2024-001/download",
       "created_at": "2024-11-28T10:00:00Z"
     }
   ]
@@ -1202,7 +1202,7 @@ Generate new report.
     "date_to": "2024-11-30",
     "asset_types": ["Trạm điện", "Đèn đường"]
   },
-  "format": "pdf"
+  "format": "csv"
 }
 ```
 
@@ -1218,7 +1218,7 @@ Generate new report.
 ### GET /reports/{id}/download
 Download generated report file.
 
-**Response**: File download (PDF/Excel/CSV)
+**Response**: File download (CSV/JSON)
 
 ---
 

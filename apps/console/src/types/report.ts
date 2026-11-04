@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 export type ReportType = 'maintenance' | 'budget' | 'incident' | 'asset';
-export type ReportFormat = 'pdf' | 'excel' | 'csv';
+export type ReportFormat = 'csv' | 'json';
 export type ReportStatus = 'pending' | 'generating' | 'completed' | 'failed';
 
 export interface Report {
@@ -12,6 +12,8 @@ export interface Report {
   status: ReportStatus;
   parameters: Record<string, unknown>;
   file_url?: string;
+  download_url?: string;
+  row_count?: number;
   created_at: string;
   completed_at?: string;
 }

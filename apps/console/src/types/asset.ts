@@ -31,9 +31,12 @@ export interface AssetLocation {
 }
 
 export interface AssetAttachment {
+    file_id?: string;
     file_name: string;
     file_url: string;
     file_type: string;
+    size?: number;
+    checksum_sha256?: string;
     uploaded_by: string;
     uploaded_at: string;
     version?: number;

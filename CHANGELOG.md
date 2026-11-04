@@ -5,6 +5,61 @@ Keep a Changelog format and version tags use Semantic Versioning.
 
 ## [Unreleased] - 2026-11-04
 
+### Added
+
+- Tier-2 files capability adoption: `POST /v1/files`, `POST /v1/files/upload`,
+  `PUT /v1/files/:id/content`, `GET /v1/files/:id/content`,
+  `POST /v1/files/:id/presign`, `POST /v1/files/:id/complete`,
+  `DELETE /v1/files/:id`, `GET /v1/files/quota`, anonymous
+  `POST /v1/public/files` and `GET /v1/public/files/:id/content`. Binary bytes
+  live in Tier-1 storage through Tier-2; `city-files` keeps metadata only.
+  MIME/size/checksum/owner checks are enforced before the write, and public
+  photos are restricted to files explicitly marked public.
+- Tier-2 notifications adoption: external email/SMS/push sends through
+  `notifications.send` with deterministic City templates, variables,
+  idempotency keys and Tier-2 preferences. Per-channel receipts are stored on
+  the `city-notifications` in-app projection; unconfigured/suppressed channels
+  are never reported as delivered. New producers: citizen report, work-order
+  assignment, report ready, plus the existing assignment/resolution/alert ones.
+  `GET/PUT /v1/notifications/preferences` and
+  `GET /v1/notifications/:id/delivery` expose preference and receipt state.
+- Tier-2 identity adoption: `CITY_AUTH_MODE=tier2` verifies credentials through
+  the Tier-2 auth capability, keeps the Tier-1 token inside the City session,
+  supports refresh/logout/password change and optional
+  `CITY_AUTH_EXCHANGE` delegated tokens. City roles come from operator
+  profiles or `CITY_BOOTSTRAP_ADMIN_EMAILS`, never from the request.
+- Tier-2 geo adoption: address search/geocode/reverse use the shared
+  provider-neutral `geo` capability by default; `CITY_GEO_PROVIDER=vietmap`
+  remains an explicit legacy opt-in and fallback is disabled by default.
+- `vendor/synapsedx-capabilities-0.3.0.tgz` plus a checksum; the City service
+  no longer needs a sibling SynapseDX checkout to install or build.
+  `npm run check:release` verifies the pinned artifact (and accepts a registry
+  semver release later).
+- `docs/REPORTS.md` documents why report generation stays synchronous and when
+  to adopt the Tier-2 `report.generate` runner.
+
+### Changed
+
+
+### Security
+
+- Every operator namespace now requires a signed City session and a role-derived
+  permission. Anonymous operator requests return `401`; a session without the
+  action permission returns `403`. The gateway also rejects operator requests
+  without an `Authorization` header before proxying. The permission matrix is in
+  `README.md` and enforced by `authz.test.ts`.
+- Demo credential login is refused in production unless `AUTH_DEMO_MODE=true`.
+  The demo role is `AUTH_DEMO_ROLE` server configuration; the request body can
+  never choose a role or permission, and token permissions are always derived
+  from the signed role.
+- Logout revokes the presented access/refresh token. Console tokens are stored in
+  tab-scoped `sessionStorage`; biometric metadata no longer persists bearer
+  tokens in `localStorage`.
+- Added fixed-window rate limits for `/v1/auth/*` and anonymous reporting, and
+  server-side Turnstile verification when `TURNSTILE_SECRET_KEY` is set.
+- `data:` URLs and raw base64 uploads are rejected. Attachments must reference
+  Tier-2 file storage (`415 data_url_not_supported` / `503` capability error).
+
 ### Changed
 
 - Changed the published City data license from CC-BY-4.0/OGL to **PDDL 1.0**
@@ -18,6 +73,36 @@ Keep a Changelog format and version tags use Semantic Versioning.
 - Renamed and documented the public boundary as `https://synapsecity.sbs`.
 - Updated `README.md`, `AGENTS.md`, `MIGRATION.md`, `CONTRIBUTING.md`, the new
   `PRODUCT_BOUNDARY.md` and the console documentation to describe the split.
+- The documented public contract is a stable City JSON projection, not NGSI-LD.
+  Soft-deleted, decommissioned and `public_visible:false` assets are excluded
+  from every public route; public pages use `/v1/public/*` only, including a new
+  aggregate maintenance summary.
+- `city-incidents` now contains only the public projection. Reporter identity,
+  contact data, internal comments and approval/assignee fields live in the
+  private `city-incident-internal` sidecar and are redacted before the Tier-2
+  write.
+- Reports are generated as real CSV/JSON bytes and streamed from
+  `/v1/reports/:id/download`; `pdf`/`excel` return `415` instead of a fake URL.
+- Geo/list endpoints apply filters, pagination and totals server-side; nearby,
+  bounds, polygon, distance and geofence tests use real geometry. Technicians are
+  scoped to their own work orders.
+- IoT readings are scoped by sensor and time window, statistics are computed,
+  and asset IoT data matches the documented object contract. Sensor status is
+  derived from the last reading; the console no longer fabricates telemetry or
+  calendar entries.
+- Preventive maintenance tasks are derived from plans and preventive work
+  orders (upcoming/overdue).
+- Critical/high alerts create one idempotent maintenance order on acknowledge,
+  with a severity SLA and `source_alert_id`.
+- AI status/chat proxy the Tier-2 AI capability; missing provider returns a typed
+  503 and the widget shows the error instead of a canned answer.
+- Incidents, alerts and maintenance transitions produce in-app notifications
+  (deduplicated); external channels report `unsupported` until Tier-2 delivery
+  lands.
+- Health/readiness report per-capability state; `/metrics` and structured logs
+  were added.
+- Added GIS coverage analytics (`POST /v1/geo/coverage`) with
+  population-weighted prioritisation and the `/admin/analytics` console page.
 
 ### Removed
 
@@ -26,6 +111,8 @@ Keep a Changelog format and version tags use Semantic Versioning.
 - SOS API handlers, service modules, client functions, types and navigation
   entries from the City gateway, service and console.
 - SOS datasets and seeds from the City configuration.
+- No-op asset create/edit buttons and the fabricated dashboard telemetry,
+  alerts and maintenance calendar.
 
 ### Added
 
@@ -36,6 +123,14 @@ Keep a Changelog format and version tags use Semantic Versioning.
   prefix.
 - `GET /v1/city` feature metadata that advertises owned City features and lists
   the SOS features as not owned.
+- Asset registration (`/admin/assets/create`) and edit
+  (`/admin/assets/edit/$id`) console routes and forms.
+- Tests for authorization (401/403/200 across roles), production demo-login
+  refusal, public-projection redaction, geo predicates/coverage, reports, IoT,
+  preventive maintenance, alert automation, notifications, rate limits,
+  Turnstile, metrics and the new console routes.
+- An explicit release check for the remaining `file:` Tier-2 dependency
+  (`npm run check:release`).
 
 ### Fixed
 

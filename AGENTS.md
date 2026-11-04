@@ -14,9 +14,10 @@ The repository is split into product parts:
 
 ## Dependency contract
 
-- Import the Tier-2 `@synapsedx/capabilities` client from
-  `../SynapseDX/sdks/capabilities-js` during this workspace build; releases must
-  resolve the same package from the npm registry.
+- Import the Tier-2 `@synapsedx/capabilities` client from the pinned,
+  checksummed artifact in `vendor/synapsedx-capabilities-<version>.tgz`; do not
+  reintroduce a `file:` sibling checkout. `npm run check:release` verifies the
+  tarball and accepts a registry semver release when SynapseDX publishes one.
 - Default Tier-2 URL is `https://synapsedx.sbs`. Set `SYNAPSEDX_BASE_URL` only
   to another public HTTPS endpoint. Do not call SynapseOne, a private service
   port, localhost or a database from this repository.
@@ -64,12 +65,21 @@ The gateway must return `404` with `{ "error": "not_found" }` for
 `/v1/emergency*`, `/v1/hazards*` and `/v1/sos*` before proxying. `/v1/users` is
 City operator administration; it is never an SOS identity source.
 
-`/v1/auth/*` is a stateless HMAC session shell for the console. It stores no
-passwords and creates no shared user/session table. Production identity must be
-delegated to the Tier-1 IAM/API gateway; `AUTH_SECRET` is optional and falls
-back to an ephemeral start-up secret with a warning. `/v1/users` requires a City
-session and must never accept, store or return password fields. The demo shell
-accepts any non-empty credentials, so do not expose it directly to the Internet.
+`/v1/auth/*` verifies credentials through the Tier-2 auth capability by default
+(`CITY_AUTH_MODE=tier2`, Tier-1 IAM backed) and keeps the Tier-1 token inside the
+signed City session. It stores no passwords and creates no shared identity or
+session table. City roles come from City operator profiles or the
+`CITY_BOOTSTRAP_ADMIN_EMAILS` allow-list, never from the request body or an
+unverified claim. `CITY_AUTH_MODE=demo` is the explicit development-only shell
+and is honoured only with `AUTH_DEMO_MODE=true`. `AUTH_SECRET` is optional and
+falls back to an ephemeral start-up secret with a warning. `/v1/users` requires a
+City session and must never accept, store or return password fields.
+
+Every operator namespace requires a session **and** a role-derived permission
+(`assets:write`, `budgets:approve`, `files:write`, `users:admin`, ...). Deny by
+default; a missing session is `401` and a missing permission is `403`. Keep the
+permission matrix in `README.md` and the tests in `authz.test.ts` in sync when
+adding a route.
 
 ## Dataset ownership
 
@@ -82,7 +92,7 @@ city-iot-readings           city-alerts
 city-budgets                city-budget-transactions
 city-reports                city-notifications
 city-users                  city-geofences
-city-ingest-jobs
+city-ingest-jobs            city-files
 ```
 
 Never read or write a `sos-*` dataset. Keep the start-up prefix guard and its
@@ -101,14 +111,17 @@ Keep: `/`, `/about`, `/docs`, `/map`, `/login`, `/register`, `/asset/$id`,
 `/admin/reports[/create]`, `/admin/users[/create|/$id]`, `/admin/ingest`,
 `/admin/settings`, and `/technician[/tasks/$taskId|/maintenance/$id|/settings]`.
 
-Never add `/disaster`, `/admin/emergency-center*` or any hazard, EOP, dispatch,
-SITREP, AAR or command-centre page. `routeTree.gen.ts` must contain only owned
-routes.
+Asset registration (`/admin/assets/create`), asset editing
+(`/admin/assets/edit/$id`) and GIS coverage analytics (`/admin/analytics`) are
+City-owned routes. Never add `/disaster`, `/admin/emergency-center*` or any
+hazard, EOP, dispatch, SITREP, AAR or command-centre page. `routeTree.gen.ts`
+must contain only owned routes.
 
 ## Commands
 
 ```bash
 npm ci
+npm run check:release
 npm run build
 npm test
 npm run start:service                              # city service

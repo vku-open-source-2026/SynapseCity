@@ -51,8 +51,10 @@ export const authApi = {
     return response.data;
   },
 
-  logout: async (): Promise<void> => {
-    await httpClient.post('/auth/logout');
+  logout: async (refreshToken?: string): Promise<void> => {
+    // Sending the refresh token lets the service revoke both halves of the
+    // session instead of only forgetting the client copy.
+    await httpClient.post('/auth/logout', refreshToken ? { refresh_token: refreshToken } : {});
   },
 
   changePassword: async (data: PasswordChangeRequest): Promise<void> => {

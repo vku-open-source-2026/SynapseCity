@@ -11,7 +11,7 @@ type AssetReportType =
   | "end_of_life_forecast"
   | "custom";
 
-type AssetReportFormat = "pdf" | "excel";
+type AssetReportFormat = "csv" | "json";
 
 interface ReportGeneratorProps {
   reportType: AssetReportType;
@@ -177,23 +177,23 @@ export const ReportGenerator: React.FC<ReportGeneratorProps> = ({
             <input
               type="radio"
               name="format"
-              value="pdf"
-              checked={format === "pdf"}
-              onChange={() => onFormatChange("pdf")}
+              value="csv"
+              checked={format === "csv"}
+              onChange={() => onFormatChange("csv")}
               className="rounded border-slate-300"
             />
-            <span className="text-sm text-slate-900">PDF</span>
+            <span className="text-sm text-slate-900">CSV</span>
           </label>
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="radio"
               name="format"
-              value="excel"
-              checked={format === "excel"}
-              onChange={() => onFormatChange("excel")}
+              value="json"
+              checked={format === "json"}
+              onChange={() => onFormatChange("json")}
               className="rounded border-slate-300"
             />
-            <span className="text-sm text-slate-900">Excel</span>
+            <span className="text-sm text-slate-900">JSON</span>
           </label>
         </div>
       </div>

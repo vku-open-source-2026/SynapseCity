@@ -16,6 +16,7 @@ import {
     Menu,
     X,
     Building2,
+    BarChart3,
 } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
 
@@ -122,6 +123,12 @@ const Sidebar: React.FC<SidebarProps> = () => {
             label: "Báo cáo",
             icon: FileText,
             path: "/admin/reports",
+        },
+        {
+            id: "analytics",
+            label: "Phân tích GIS",
+            icon: BarChart3,
+            path: "/admin/analytics",
         },
     ];
 

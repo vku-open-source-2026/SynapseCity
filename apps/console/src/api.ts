@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 import { asList, httpClient } from "./lib/httpClient";
-import { readFileAsDataUrl } from "./lib/files";
+import { FileUploadError, uploadPublicFile } from "./lib/files";
 import axios from "axios";
 
 // Force HTTPS in production
@@ -116,13 +116,18 @@ export const createIncident = async (data: IncidentCreate, image?: File, turnsti
     if (turnstileToken) {
         headers["CF-Turnstile-Response"] = turnstileToken;
     }
-    // Public citizen reports use the JSON public route. Photos are embedded as
-    // data URLs because the City service does not accept multipart uploads.
-    const photos = image ? [await readFileAsDataUrl(image)] : [];
-    const response = await httpClient.post("/public/incidents", { ...data, photos }, {
+    // Photos go through the Tier-2 files capability first; only the file id is
+    // sent with the report, never a data URL or base64 body.
+    const uploaded = image ? await uploadPublicFile(image) : null;
+    const response = await httpClient.post("/public/incidents", {
+        ...data,
+        photos: uploaded ? [uploaded.file_id] : [],
+    }, {
         headers,
     });
     return response.data;
 };
+
+export { FileUploadError };
 
 export default httpClient;

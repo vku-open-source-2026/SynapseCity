@@ -16,7 +16,7 @@ const ReportCreate: React.FC = () => {
   const queryClient = useQueryClient()
   const [formData, setFormData] = useState<Partial<ReportCreateRequest>>({
     type: "maintenance",
-    format: "pdf",
+    format: "csv",
     parameters: {},
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -68,7 +68,6 @@ const ReportCreate: React.FC = () => {
               }}
             >
               <option value="maintenance">Bảo trì</option>
-              <option value="budget">Ngân sách</option>
               <option value="incident">Sự cố</option>
               <option value="asset">Tài sản</option>
             </Select>
@@ -77,14 +76,13 @@ const ReportCreate: React.FC = () => {
           <FormField>
             <FormLabel required>Định dạng</FormLabel>
             <Select
-              value={formData.format || "pdf"}
+              value={formData.format || "csv"}
               onChange={(e) =>
                 setFormData({ ...formData, format: e.target.value as ReportFormat })
               }
             >
-              <option value="pdf">PDF</option>
-              <option value="excel">Excel</option>
               <option value="csv">CSV</option>
+              <option value="json">JSON</option>
             </Select>
           </FormField>
 

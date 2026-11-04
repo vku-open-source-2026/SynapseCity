@@ -2,8 +2,10 @@
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 import React, { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { getAssets, getAssetId, type Asset } from "../api";
+import { alertsApi } from "../api/alerts";
+import { maintenanceApi } from "../api/maintenance";
 import MapComponent from "../components/Map";
 import AssetTable from "../components/AssetTable";
 import MaintenanceLogList from "../components/MaintenanceLog";
@@ -28,11 +30,6 @@ import {
 
 type TabType = "overview" | "calendar";
 
-const pseudoRandom = (seed: number): number => {
-    const value = Math.sin(seed) * 10000;
-    return value - Math.floor(value);
-};
-
 const getPointLatitude = (asset: Asset): number | null => {
     if (
         asset.geometry.type !== "Point" ||
@@ -46,6 +43,7 @@ const getPointLatitude = (asset: Asset): number | null => {
 
 const Dashboard: React.FC = () => {
     const [activeTab, setActiveTab] = useState<TabType>("overview");
+    const navigate = useNavigate();
     const {
         data: initialAssets,
         isLoading,
@@ -55,7 +53,17 @@ const Dashboard: React.FC = () => {
         queryFn: getAssets,
     });
 
-    const { assetsWithStatus, alerts } = useIoT(initialAssets);
+    const { data: upcomingMaintenance } = useQuery({
+        queryKey: ["maintenance", "upcoming", 30],
+        queryFn: () => maintenanceApi.getUpcoming(30),
+    });
+
+    const { data: openAlerts } = useQuery({
+        queryKey: ["alerts", "open"],
+        queryFn: async () => (await alertsApi.list()).filter((alert) => !["resolved", "dismissed", "closed"].includes(alert.status)),
+    });
+
+    const { assetsWithStatus } = useIoT(initialAssets);
     const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
     const [routePoints, setRoutePoints] = useState<Asset[]>([]);
     const [showQRModal, setShowQRModal] = useState(false);
@@ -77,30 +85,24 @@ const Dashboard: React.FC = () => {
         alert(`Tối ưu tuyến cho ${points.length} điểm dừng!`);
     };
 
-    const fakeCalendarLogs = useMemo(() => {
-        if (!initialAssets) return [];
-        const logs = [];
-        const statuses = ["Pending", "In Progress", "Completed"];
-        const now = new Date();
-        for (let i = 0; i < 50; i++) {
-            const date = new Date(now);
-            date.setDate(date.getDate() + Math.floor(pseudoRandom(i + 1) * 60) - 30);
-            const sourceAsset =
-                initialAssets.length > 0
-                    ? initialAssets[i % initialAssets.length]
-                    : undefined;
-            logs.push({
-                _id: `log-${i}`,
-                asset_id: sourceAsset ? getAssetId(sourceAsset) : `asset-${i}`,
-                scheduled_date: date.toISOString(),
-                description: `Maintenance for ${sourceAsset?.feature_code || "Asset"}`,
-                status: statuses[Math.floor(pseudoRandom((i + 1) * 17) * statuses.length)],
-                technician: "System",
-                created_at: now.toISOString(),
-            });
-        }
-        return logs;
-    }, [initialAssets]);
+    const calendarLogs = useMemo(() => (upcomingMaintenance ?? []).map((order) => {
+        const status = String(order.status || "scheduled");
+        const statusLabel = status === "completed"
+            ? "Completed"
+            : status === "in_progress"
+            ? "In Progress"
+            : "Pending";
+        return {
+            _id: String(order.id),
+            asset_id: String(order.asset_id || ""),
+            scheduled_date: String(order.scheduled_date || order.created_at || new Date().toISOString()),
+            description: String(order.title || order.description || "Maintenance"),
+            status: statusLabel,
+            technician: String(order.assigned_to || order.technician || "Unassigned"),
+            created_at: String(order.created_at || ""),
+            approval_status: order.approval_status as "pending" | "approved" | "rejected" | undefined,
+        };
+    }), [upcomingMaintenance]);
 
     if (isLoading) {
         return (
@@ -120,25 +122,25 @@ const Dashboard: React.FC = () => {
     }
 
     const assetCount = displayAssets.length;
-    const activeAlerts = alerts.length + Math.floor(assetCount * 0.02);
-    const maintenanceDue = Math.floor(assetCount * 0.12);
+    const activeAlerts = openAlerts?.length ?? 0;
+    const maintenanceDue = upcomingMaintenance?.length ?? 0;
     const operationalRate = assetCount > 0 
-        ? (((assetCount - activeAlerts) / assetCount) * 100).toFixed(1) 
+        ? (((assetCount - Math.min(assetCount, activeAlerts)) / assetCount) * 100).toFixed(1)
         : "0.0";
 
     return (
         <div className="flex flex-col h-full bg-slate-50 font-sans text-slate-900">
             <main className="flex-1 flex flex-col overflow-hidden relative">
                 {/* Alert Feed Overlay */}
-                {alerts.length > 0 && (
+                {(openAlerts?.length ?? 0) > 0 && (
                     <div className="absolute top-20 right-8 z-50 w-80 pointer-events-none">
-                        {alerts.map((alert, idx) => (
+                        {openAlerts!.slice(0, 5).map((alert) => (
                             <div
-                                key={idx}
-                                className="bg-red-50 border-l-4 border-red-500 p-3 mb-2 shadow-lg rounded-r animate-in slide-in-from-right fade-in duration-300 pointer-events-auto flex items-start gap-3"
+                                key={alert.id}
+                                className="bg-red-50 border-l-4 border-red-500 p-3 mb-2 shadow-lg rounded-r pointer-events-auto flex items-start gap-3"
                             >
                                 <AlertTriangle className="text-red-500 shrink-0" size={18} />
-                                <p className="text-xs font-medium text-red-800">{alert}</p>
+                                <p className="text-xs font-medium text-red-800">{alert.message || alert.id}</p>
                             </div>
                         ))}
                     </div>
@@ -160,7 +162,10 @@ const Dashboard: React.FC = () => {
                             <MapPin size={16} />
                             Mở bản đồ
                         </Link>
-                        <button className="px-4 py-2 bg-blue-600 rounded-lg text-sm font-medium text-white hover:bg-blue-700 shadow-sm flex items-center gap-2">
+                        <button
+                            onClick={() => navigate({ to: "/admin/assets/create" })}
+                            className="px-4 py-2 bg-blue-600 rounded-lg text-sm font-medium text-white hover:bg-blue-700 shadow-sm flex items-center gap-2"
+                        >
                             <Zap size={16} />
                             Thêm tài sản
                         </button>
@@ -198,7 +203,7 @@ const Dashboard: React.FC = () => {
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-8">
                     {activeTab === "calendar" ? (
-                        <CalendarView logs={fakeCalendarLogs} />
+                        <CalendarView logs={calendarLogs} />
                     ) : (
                         <>
                             {/* Stats Row */}
@@ -208,32 +213,24 @@ const Dashboard: React.FC = () => {
                                     value={assetCount}
                                     icon={Zap}
                                     color="bg-blue-500"
-                                    trend="12%"
-                                    trendUp={true}
                                 />
                                 <StatsCard
                                     title="Cảnh báo đang hoạt động"
                                     value={activeAlerts}
                                     icon={AlertTriangle}
                                     color="bg-red-500"
-                                    trend="2"
-                                    trendUp={false}
                                 />
                                 <StatsCard
                                     title="Bảo trì sắp tới"
                                     value={maintenanceDue}
                                     icon={Activity}
                                     color="bg-amber-500"
-                                    trend="5%"
-                                    trendUp={false}
                                 />
                                 <StatsCard
                                     title="Tỷ lệ hoạt động"
                                     value={`${operationalRate}%`}
                                     icon={CheckCircle}
                                     color="bg-green-500"
-                                    trend="0.5%"
-                                    trendUp={true}
                                 />
                             </div>
 
@@ -289,9 +286,11 @@ const Dashboard: React.FC = () => {
                                                     {(selectedAsset as Asset & { status?: string }).status && (
                                                         <span
                                                             className={`px-2 py-1 text-xs font-bold rounded uppercase tracking-wide ${
-                                                                (selectedAsset as Asset & { status?: string }).status === "Online"
+                                                                ["active", "operational"].includes(String((selectedAsset as Asset & { status?: string }).status))
                                                                     ? "bg-green-100 text-green-700"
-                                                                    : "bg-red-100 text-red-700"
+                                                                    : ["maintenance", "under_repair"].includes(String((selectedAsset as Asset & { status?: string }).status))
+                                                                    ? "bg-amber-100 text-amber-700"
+                                                                    : "bg-slate-100 text-slate-600"
                                                             }`}
                                                         >
                                                             {(selectedAsset as Asset & { status?: string }).status}

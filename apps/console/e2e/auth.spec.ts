@@ -3,10 +3,11 @@
 import { describe, test, expect, beforeEach } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { navigateTo } from "./helpers";
+import { navigateTo, signOut } from "./helpers";
 
 describe("Authentication Flow", () => {
     beforeEach(async () => {
+        signOut();
         // Navigate to home page before each test using router (doesn't reload page)
         await navigateTo("/");
         await waitFor(() => document.body, { timeout: 5000 });

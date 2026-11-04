@@ -7,6 +7,8 @@ import type { AddressInfo } from 'node:net';
 
 process.env.ALLOW_LOCAL_DEPENDENCIES = 'true';
 process.env.AUTH_SECRET = 'city-test-session-secret';
+// This suite exercises the explicit development-only demo session shell.
+process.env.CITY_AUTH_MODE = 'demo';
 
 type StoredRecord = { id: string; data: Record<string, unknown> };
 const datasets = new Map<string, Record<string, unknown>>();
@@ -149,8 +151,12 @@ after(async () => {
   }
 });
 
-async function request(path: string, init: RequestInit = {}): Promise<{ status: number; body: any; headers: Headers }> {
-  const response = await fetch(`${baseUrl}${path}`, init);
+async function request(path: string, init: RequestInit = {}, options: { anonymous?: boolean } = {}): Promise<{ status: number; body: any; headers: Headers }> {
+  const headers = new Headers(init.headers);
+  if (!options.anonymous && accessToken && !headers.has('authorization')) {
+    headers.set('authorization', `Bearer ${accessToken}`);
+  }
+  const response = await fetch(`${baseUrl}${path}`, { ...init, headers });
   const text = await response.text();
   let body: any = null;
   try { body = text ? JSON.parse(text) : null; } catch { body = text; }
@@ -205,11 +211,24 @@ test('me, verify, refresh, logout and change-password work with the Bearer token
   accessToken = refreshed.body.access_token;
   refreshToken = refreshed.body.refresh_token;
 
-  const logout = await request('/v1/auth/logout', json('POST', {}, accessToken));
-  assert.equal(logout.status, 204);
-
   const changed = await request('/v1/auth/change-password', json('POST', { current_password: 'old', new_password: 'new-secret' }, accessToken));
-  assert.equal(changed.status, 204);
+  // The demo shell stores no credentials, so a password change must be refused
+  // rather than reported as successful. Tier-2 mode proxies the real IAM call.
+  assert.equal(changed.status, 503);
+  assert.equal(changed.body.error, 'identity_not_configured');
+
+  const revokedToken = accessToken;
+  const logout = await request('/v1/auth/logout', json('POST', {}, revokedToken));
+  assert.equal(logout.status, 204);
+  const revoked = await request('/v1/auth/me', json('GET', undefined, revokedToken), { anonymous: true });
+  assert.equal(revoked.status, 401, 'logout must revoke the access token');
+
+  // Re-authenticate for the remaining operator tests; the previous token is
+  // revoked deliberately.
+  const relogin = await request('/v1/auth/login', json('POST', { username: 'qa', password: 'qa-secret' }));
+  assert.equal(relogin.status, 200);
+  accessToken = relogin.body.access_token;
+  refreshToken = relogin.body.refresh_token;
 
   const badRefresh = await request('/v1/auth/refresh', json('POST', { refresh_token: 'not-a-token' }));
   assert.equal(badRefresh.status, 401);
@@ -226,10 +245,10 @@ test('register returns a session without storing the password', async () => {
 });
 
 test('/v1/users requires a session and returns 401, never 404', async () => {
-  const list = await request('/v1/users');
+  const list = await request('/v1/users', {}, { anonymous: true });
   assert.equal(list.status, 401);
   for (const path of ['/v1/users/me', '/v1/users/technicians', '/v1/users/volunteers']) {
-    const response = await request(path);
+    const response = await request(path, {}, { anonymous: true });
     assert.equal(response.status, 401, `${path} must be 401 without a session, not 404`);
   }
 });
@@ -337,7 +356,7 @@ test('anonymous public reporting creates a retrievable incident and accepts phot
   assert.equal(lookup.body.title, 'Pothole on Main Street');
 
   const photos = await request(`/v1/public/incidents/${created.body.id}/photos`, json('POST', {
-    photos: ['data:image/png;base64,iVBORw0KGgo='],
+    photos: ['https://files.synapsedx.sbs/incidents/photo-1.png'],
   }));
   assert.equal(photos.status, 200);
   assert.equal(photos.body.photos.length, 1);
@@ -426,7 +445,7 @@ test('maintenance upcoming route is not shadowed by the generic :id route', asyn
   assert.ok(Array.isArray(assetOrders.body));
 
   const photos = await request('/v1/maintenance/maint-1/photos', json('POST', {
-    attachments: [{ file_name: 'before.jpg', file_url: 'data:image/jpeg;base64,abc', file_type: 'image/jpeg' }],
+    attachments: [{ file_name: 'before.jpg', file_url: 'https://files.synapsedx.sbs/maintenance/before.jpg', file_type: 'image/jpeg' }],
   }, accessToken));
   assert.equal(photos.status, 200);
   assert.equal(photos.body.attachments.length, 1);
@@ -451,7 +470,7 @@ test('asset update, lifecycle, documents, health, reports and soft delete work',
   assert.ok(Array.isArray(emptyDocuments.body));
 
   const document = await request('/v1/assets/asset-1/documents', json('POST', {
-    file_name: 'manual.pdf', file_url: 'data:application/pdf;base64,abc', file_type: 'application/pdf', document_type: 'manual', is_public: true,
+    file_name: 'manual.pdf', file_url: 'https://files.synapsedx.sbs/assets/manual.pdf', file_type: 'application/pdf', document_type: 'manual', is_public: true,
   }, accessToken));
   assert.equal(document.status, 201);
   assert.equal(document.body.file_name, 'manual.pdf');
@@ -459,18 +478,25 @@ test('asset update, lifecycle, documents, health, reports and soft delete work',
   const documents = await request('/v1/assets/asset-1/documents');
   assert.equal(documents.body.length, 1);
 
-  const removed = await request(`/v1/assets/asset-1/attachments/${encodeURIComponent('data:application/pdf;base64,abc')}`, json('DELETE', undefined, accessToken));
+  const removed = await request(`/v1/assets/asset-1/attachments/${encodeURIComponent('https://files.synapsedx.sbs/assets/manual.pdf')}`, json('DELETE', undefined, accessToken));
   assert.equal(removed.status, 204);
 
   const photos = await request('/v1/assets/asset-1/photos', json('POST', {
-    photos: ['data:image/png;base64,abc'], file_name: 'lamp.png', file_type: 'image/png',
+    photos: ['https://files.synapsedx.sbs/assets/lamp.png'], file_name: 'lamp.png', file_type: 'image/png',
   }, accessToken));
   assert.equal(photos.status, 200);
   assert.equal(photos.body.photos.length, 1);
 
-  const report = await request('/v1/assets/asset-1/reports', json('POST', { report_type: 'maintenance_summary', format: 'pdf' }, accessToken));
+  const report = await request('/v1/assets/asset-1/reports', json('POST', { report_type: 'maintenance_summary', format: 'csv' }, accessToken));
   assert.equal(report.status, 201);
   assert.match(report.body.report_url, /\/v1\/reports\//);
+  assert.ok(report.body.row_count >= 1, 'the report must contain rows from city-maintenance');
+
+  const download = await request(`/v1/reports/${report.body.report_id}/download`);
+  assert.equal(download.status, 200);
+  assert.match(download.headers.get('content-type') || '', /text\/csv/);
+  assert.match(String(download.body), /work_order_id,asset_id,title/);
+  assert.match(String(download.body), /Scheduled inspection/);
 
   const removedAsset = await request('/v1/assets/asset-1', json('DELETE', undefined, accessToken));
   assert.equal(removedAsset.status, 204);

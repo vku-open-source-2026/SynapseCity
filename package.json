@@ -9,6 +9,7 @@
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "build:service": "npm run build --workspace=@synapsecity/city-service",
-    "start:service": "npm run start --workspace=@synapsecity/city-service"
+    "start:service": "npm run start --workspace=@synapsecity/city-service",
+    "check:release": "node scripts/check-release.cjs"
   }
 }

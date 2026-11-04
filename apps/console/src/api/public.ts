@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 import { httpClient } from '../lib/httpClient';
-import { readFileAsDataUrl } from '../lib/files';
+import { uploadPublicFile } from '../lib/files';
 import type { Incident, IncidentCreateRequest } from '../types/incident';
 
 export interface PublicAssetInfo {
+  id?: string;
   asset_code: string;
   name: string;
   feature_type: string;
@@ -15,6 +16,10 @@ export interface PublicAssetInfo {
     coordinates: {
       longitude: number;
       latitude: number;
+    };
+    geometry?: {
+      type: string;
+      coordinates: unknown;
     };
   };
   qr_code: string;
@@ -27,6 +32,15 @@ export interface AssetQRCodeResponse {
 }
 
 export const publicApi = {
+  /**
+   * List published public assets.
+   * GET /public/assets
+   */
+  listPublicAssets: async (params?: { limit?: number; offset?: number }): Promise<PublicAssetInfo[]> => {
+    const response = await httpClient.get<PublicAssetInfo[]>('/public/assets', { params });
+    return Array.isArray(response.data) ? response.data : [];
+  },
+
   /**
    * Get public asset information by asset code
    * GET /public/assets/{code}
@@ -76,17 +90,30 @@ export const publicApi = {
   },
 
   /**
+   * Get the public-safe maintenance summary for an asset.
+   * GET /public/assets/{code}/maintenance-summary
+   */
+  getMaintenanceSummary: async (code: string): Promise<{
+    asset_code: string;
+    work_order_count: number;
+    completed_count: number;
+    last_completed_at: string | null;
+    last_maintenance_type: string | null;
+  }> => {
+    const response = await httpClient.get(`/public/assets/${encodeURIComponent(code)}/maintenance-summary`);
+    return response.data;
+  },
+
+  /**
    * Upload photos for a public incident
    * POST /public/incidents/{incident_id}/photos
    */
   uploadPhotos: async (incidentId: string, files: File[]): Promise<Incident> => {
-    // The City service accepts JSON photo metadata (data URLs or public URLs)
-    // rather than multipart form data.
-    const photos = await Promise.all(files.map((file) => readFileAsDataUrl(file)));
-
+    if (!files.length) throw new Error('At least one photo is required');
+    const uploaded = await Promise.all(files.map((file) => uploadPublicFile(file)));
     const response = await httpClient.post<Incident>(
-      `/public/incidents/${incidentId}/photos`,
-      { photos }
+      `/public/incidents/${encodeURIComponent(incidentId)}/photos`,
+      { file_ids: uploaded.map((file) => file.file_id) }
     );
     return response.data;
   },

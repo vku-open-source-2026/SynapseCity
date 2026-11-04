@@ -16,9 +16,23 @@ let consoleHits: string[] = [];
 let exported: typeof import('./index');
 
 before(async () => {
-  const service = http.createServer((req, res) => {
+  const service = http.createServer(async (req, res) => {
     serviceHits.push(req.url || '');
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    const body = Buffer.concat(chunks);
     res.setHeader('content-type', 'application/json');
+    if ((req.url || '').startsWith('/v1/files/upload')) {
+      res.end(JSON.stringify({
+        service: 'fake-city-service',
+        path: req.url,
+        bytes: body.length,
+        sha256: body.toString('base64'),
+        contentType: req.headers['content-type'],
+        fileName: req.headers['x-file-name'],
+      }));
+      return;
+    }
     res.end(JSON.stringify({ service: 'fake-city-service', path: req.url }));
   });
   const consoleServerInstance = http.createServer((req, res) => {
@@ -115,7 +129,7 @@ test('encoded /v1 prefixes are rejected with JSON 404, never answered with conso
 
   // Non-prefix canonicalization still proxies owned API paths.
   for (const path of ['/v1//assets///1', '/V1/Assets/']) {
-    const response = await fetch(`${baseUrl}${path}`);
+    const response = await fetch(`${baseUrl}${path}`, { headers: { authorization: 'Bearer test-session' } });
     assert.equal(response.status, 200, `${path} must reach the City service`);
     assert.match(response.headers.get('content-type') || '', /application\/json/);
     const body = (await response.json()) as { service: string };
@@ -149,6 +163,12 @@ test('path normalization and ownership checks are shared by the middleware', () 
   for (const foreign of ['/v1/emergency', '/v1/hazards/recent', '/v1/sos', '/v1/unknown', '/v1/public/unknown']) {
     assert.equal(exported.isOwnedV1Path(foreign), false, `${foreign} must not be owned by SynapseCity`);
   }
+  for (const anonymous of ['/v1/public/assets', '/v1/public/incidents/1', '/v1/auth/login', '/v1/city', '/v1/map/config', '/v1/map/tiles/1/2/3.png']) {
+    assert.equal(exported.isPublicV1Path(anonymous), true, `${anonymous} must stay anonymous`);
+  }
+  for (const operator of ['/v1/assets', '/v1/users', '/v1/reports/1/download', '/v1/ai/chat']) {
+    assert.equal(exported.isPublicV1Path(operator), false, `${operator} must require a session`);
+  }
 });
 
 test('binary upstream payloads are proxied byte-for-byte', async () => {
@@ -157,6 +177,52 @@ test('binary upstream payloads are proxied byte-for-byte', async () => {
   const body = await exported.proxyResponseBody(response);
   assert.equal(body[0], 0x89, 'PNG signature must not become a UTF-8 replacement character');
   assert.deepEqual([...body], [...png]);
+});
+
+test('binary file uploads are proxied byte-for-byte with their headers', async () => {
+  const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0xff, 0x10]);
+  const response = await fetch(`${baseUrl}/v1/files/upload`, {
+    method: 'POST',
+    headers: {
+      authorization: 'Bearer operator',
+      'content-type': 'image/png',
+      'x-file-name': 'lamp.png',
+      'x-checksum-sha256': 'a'.repeat(64),
+    },
+    body: bytes,
+  });
+  assert.equal(response.status, 200);
+  const body = await response.json() as Record<string, unknown>;
+  assert.equal(body.bytes, bytes.length);
+  assert.equal(body.sha256, bytes.toString('base64'));
+  assert.equal(body.contentType, 'image/png');
+  assert.equal(body.fileName, 'lamp.png');
+});
+
+test('the files namespace is owned, authenticated and the public files route is anonymous', async () => {
+  assert.equal((await fetch(`${baseUrl}/v1/files`)).status, 401);
+  const publicFiles = await fetch(`${baseUrl}/v1/public/files/file-1/content`);
+  assert.equal(publicFiles.status, 200, 'published report photos stay anonymously readable');
+  assert.ok(serviceHits.includes('/v1/public/files/file-1/content'));
+  const owned = await fetch(`${baseUrl}/v1/files`, { headers: { authorization: 'Bearer operator' } });
+  assert.equal(owned.status, 200);
+});
+
+test('operator namespaces require an Authorization header at the gateway', async () => {
+  for (const path of ['/v1/assets', '/v1/users', '/v1/reports/1/download', '/v1/ai/chat']) {
+    const response = await fetch(`${baseUrl}${path}`);
+    assert.equal(response.status, 401, `${path} must be rejected before proxying without a session`);
+    const body = await response.json() as Record<string, unknown>;
+    assert.equal(body.error, 'unauthorized');
+  }
+  // The anonymous public surface still reaches the City service.
+  for (const path of ['/v1/public/assets', '/v1/public/incidents', '/v1/city', '/v1/map/config', '/v1/auth/login']) {
+    const response = await fetch(`${baseUrl}${path}`);
+    assert.equal(response.status, 200, `${path} must stay anonymous`);
+  }
+  // An authenticated operator request is proxied.
+  const proxied = await fetch(`${baseUrl}/v1/assets`, { headers: { authorization: 'Bearer session' } });
+  assert.equal(proxied.status, 200);
 });
 
 test('CORS advertises PUT and DELETE for the City API', async () => {

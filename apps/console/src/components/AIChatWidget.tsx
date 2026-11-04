@@ -116,7 +116,10 @@ const API_DEFINITIONS: Record<string, ApiCardData> = {
   },
 };
 
-const WEBSOCKET_URL = import.meta.env.VITE_BASE_API_URL?.replace('http', 'ws').replace('/v1', '') + '/v1/ai/ws';
+// The City service exposes no AI transport. The widget talks to the REST
+// endpoint only and reports the capability error; it never opens a WebSocket to
+// a route that does not exist.
+const WEBSOCKET_URL: string = '';
 const API_BASE_URL = import.meta.env.VITE_BASE_API_URL?.replace('/v1', '') || '';
 
 // API Card Component
@@ -339,7 +342,7 @@ export default function AIChatWidget({
     {
       id: 'welcome',
       role: 'assistant',
-      content: 'Xin chào! Tôi là trợ lý SynapseCity AI. Tôi có thể hỗ trợ bạn:\n\n• Truy vấn dữ liệu hạ tầng (tài sản, cảm biến, sự cố)\n• Hướng dẫn sử dụng API với định dạng JSON-LD\n• Cung cấp ví dụ mã\n• **Kiểm thử API trực tiếp** - gõ "test api" để thử!\n• **Chọn một tài sản trên bản đồ** để đặt câu hỏi về nó!\n\nBạn cần giúp gì?',
+      content: 'Trợ lý AI của SynapseCity chưa khả dụng: nền tảng chưa công bố capability suy luận ở Tier-2 (SynapseDX #11). Bạn vẫn có thể dùng công cụ kiểm thử API bên dưới và xem dữ liệu tài sản trực tiếp.',
       timestamp: new Date(),
     }
   ]);
@@ -475,6 +478,10 @@ export default function AIChatWidget({
   }, [updateStreamingMessage]);
 
   const connectWebSocket = useCallback(() => {
+    if (!WEBSOCKET_URL) {
+      setIsConnected(false);
+      return;
+    }
     // Don't connect if already connected or connecting
     if (wsRef.current?.readyState === WebSocket.OPEN || 
         wsRef.current?.readyState === WebSocket.CONNECTING) {
@@ -683,7 +690,12 @@ export default function AIChatWidget({
           }),
         });
 
-        const data = (await response.json()) as { response?: string };
+        const data = (await response.json()) as { response?: string; error?: string; detail?: string; dependency?: string };
+        if (!response.ok) {
+          updateStreamingMessage(`❌ Trợ lý AI chưa khả dụng (HTTP ${response.status}): ${data.detail || data.error || 'ai_capability_unavailable'}${data.dependency ? `\n${data.dependency}` : ''}`);
+          setIsLoading(false);
+          return;
+        }
         updateStreamingMessage(data.response ?? '✅ Đã nhận phản hồi nhưng không có nội dung phản hồi.');
         setIsLoading(false);
       } catch (error) {
@@ -883,7 +895,7 @@ export default function AIChatWidget({
               <div>
                 <span className="font-semibold">SynapseCity AI</span>
                 <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${isConnected ? 'bg-green-500/30' : 'bg-red-500/30'}`}>
-                  {isConnected ? 'Đang kết nối' : 'Mất kết nối'}
+                  {isConnected ? 'Đang kết nối' : 'AI chưa khả dụng'}
                 </span>
               </div>
             </div>

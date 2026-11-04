@@ -3,10 +3,11 @@
 import { describe, test, expect, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { navigateTo } from './helpers';
+import { navigateTo, signOut } from './helpers';
 
 describe('Admin Dashboard', () => {
   beforeEach(async () => {
+        signOut();
     // Note: In a real scenario, you'd need to authenticate first
     // For now, we'll test the public-facing parts or mock auth
     await navigateTo('/admin');

@@ -3,10 +3,11 @@
 import { describe, test, expect, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { navigateTo } from './helpers';
+import { navigateTo, signOut } from './helpers';
 
 describe('Navigation Flow', () => {
   beforeEach(async () => {
+        signOut();
     await navigateTo('/');
     await waitFor(() => document.body, { timeout: 5000 });
   });

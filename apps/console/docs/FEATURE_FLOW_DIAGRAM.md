@@ -33,7 +33,7 @@
        ├──► Preventive ─────────► Schedule + Calendar
        ├──► Lifecycle ──────────► Health Score + Factors
        ├──► Documents ──────────► Upload + Manage Files
-       └──► Reports ────────────► Generate PDF/Excel
+       └──► Reports ────────────► Generate CSV/JSON
 ```
 
 ## Data Flow Architecture
@@ -326,7 +326,7 @@ User Configuration
 ┌──────────────┐
 │ Report Type: │
 │ Maintenance Summary │
-│ Format: PDF  │
+│ Format: CSV  │
 │ Filters: {...} │
 └──────┬───────┘
        │
@@ -348,7 +348,7 @@ Background Processing (Async)
 ┌──────────────┐
 │ 1. Fetch data │
 │ 2. Compile report │
-│ 3. Generate PDF │
+│ 3. Generate CSV │
 │ 4. Upload to storage │
 │ 5. Update status │
 └──────┬───────┘

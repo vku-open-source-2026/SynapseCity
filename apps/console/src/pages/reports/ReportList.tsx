@@ -39,10 +39,12 @@ const ReportList: React.FC = () => {
 
   const handleDownload = async (reportId: string) => {
     try {
-      const { file_url } = await reportsApi.download(reportId)
-      if (file_url) {
-        window.open(file_url, "_blank")
-      }
+      const { url, filename } = await reportsApi.download(reportId)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = filename
+      link.click()
+      URL.revokeObjectURL(url)
     } catch (error) {
       console.error("Tải báo cáo thất bại:", error)
     }
@@ -65,7 +67,6 @@ const ReportList: React.FC = () => {
         >
           <option value="">Tất cả loại</option>
           <option value="maintenance">Bảo trì</option>
-          <option value="budget">Ngân sách</option>
           <option value="incident">Sự cố</option>
           <option value="asset">Tài sản</option>
         </Select>

@@ -353,7 +353,7 @@ AssetReportsTab Component mounts
 User selects:
   - Report Type (Maintenance Summary, Incident Summary, etc.)
   - Filters (if Custom Report)
-  - Output Format (PDF/Excel)
+  - Output Format (CSV/JSON)
     ↓
 User clicks "Generate Report"
     ↓
@@ -362,7 +362,7 @@ useMutation → assetsApi.generateReport(assetId, reportType, format, filters)
 POST /api/v1/assets/{assetId}/reports
   Body: {
     report_type: "maintenance_summary",
-    format: "pdf",
+    format: "csv",
     filters: { date_from, date_to, severity, cost_min, cost_max }
   }
     ↓
@@ -370,7 +370,7 @@ Response: { report_url: "...", report_id: "..." }
     ↓
 Renders Success Message with Download Button
     ↓
-User clicks "Download PDF/Excel"
+User clicks "Download CSV/JSON"
     ↓
 Opens report URL in new tab (downloads file)
 ```
@@ -648,7 +648,7 @@ User clicks "Generate Report"
 POST /api/v1/assets/{id}/reports
   Body: {
     report_type: "maintenance_summary",
-    format: "pdf",
+    format: "csv",
     filters: {...}
   }
     ↓
@@ -660,7 +660,7 @@ Backend (Async Processing):
 Background Worker:
   1. Fetch data based on report_type and filters
   2. Compile data into report structure
-  3. Generate PDF/Excel file
+  3. Generate CSV/JSON file
   4. Upload to cloud storage
   5. Update report status: "completed"
   6. Send notification (optional)

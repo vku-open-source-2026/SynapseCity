@@ -34,6 +34,7 @@ const OWNED_V1_PREFIXES: readonly string[] = [
   '/v1/budgets',
   '/v1/reports',
   '/v1/notifications',
+  '/v1/files',
   '/v1/users',
   '/v1/geofences',
   '/v1/geo',
@@ -42,6 +43,7 @@ const OWNED_V1_PREFIXES: readonly string[] = [
   '/v1/ai',
   '/v1/public/assets',
   '/v1/public/incidents',
+  '/v1/public/files',
 ];
 const NOT_FOUND_BODY = { error: 'not_found', product: BOUNDARY_PRODUCT } as const;
 
@@ -94,6 +96,24 @@ export function isOwnedV1Path(raw: string): boolean {
   return OWNED_V1_PREFIXES.some((prefix) => within(path, prefix));
 }
 
+// Anonymous surface: health/readiness is outside /v1, and only the public
+// projection, auth shell, product metadata and map tiles may be called without
+// a City session. Every operator namespace is rejected here before proxying as
+// defence in depth; the City service still verifies the session itself.
+const PUBLIC_V1_PREFIXES: readonly string[] = [
+  '/v1/auth',
+  '/v1/city',
+  '/v1/map',
+  '/v1/public/assets',
+  '/v1/public/incidents',
+  '/v1/public/files',
+];
+
+export function isPublicV1Path(raw: string): boolean {
+  const path = normalizeV1Path(raw);
+  return PUBLIC_V1_PREFIXES.some((prefix) => within(path, prefix));
+}
+
 /**
  * Read an upstream response as raw bytes. `response.text()` must never be used
  * for proxying: it decodes binary payloads (PNG/PDF/octet-stream) as UTF-8 and
@@ -105,6 +125,18 @@ export async function proxyResponseBody(response: Awaited<ReturnType<typeof fetc
 }
 
 app.disable('x-powered-by');
+// Binary uploads cannot be represented as JSON. Parse them as raw bytes before
+// the JSON parser so a PNG/PDF reaches the City service byte-for-byte, even if
+// the file's content type happens to be application/json.
+const rawUpload = express.raw({ type: () => true, limit: Number(process.env.GATEWAY_UPLOAD_LIMIT_BYTES || 26 * 1024 * 1024) });
+app.use((req, res, next) => {
+  const path = normalizeV1Path(req.originalUrl);
+  const isUpload = path === '/v1/files/upload'
+    || path === '/v1/public/files'
+    || /^\/v1\/files\/[^/]+\/content$/.test(path);
+  if (!isUpload || (req as Request & { _body?: boolean })._body) return next();
+  return rawUpload(req, res, next);
+});
 app.use(express.json({ limit: '10mb' }));
 app.use((req, res, next) => {
   res.setHeader('access-control-allow-origin', process.env.CORS_ORIGIN || 'https://synapsecity.sbs');
@@ -117,13 +149,31 @@ app.use((req, res, next) => {
 
 async function proxy(req: Request, res: Response): Promise<void> {
   const method = req.method.toUpperCase();
-  const headers: Record<string, string> = { 'content-type': 'application/json', 'x-correlation-id': res.getHeader('x-correlation-id')?.toString() || randomUUID() };
-  for (const name of ['authorization', 'x-api-key', 'x-correlation-id']) {
+  const rawBody = Buffer.isBuffer(req.body);
+  const headers: Record<string, string> = {
+    'content-type': rawBody ? String(req.header('content-type') || 'application/octet-stream') : 'application/json',
+    'x-correlation-id': res.getHeader('x-correlation-id')?.toString() || randomUUID(),
+  };
+  for (const name of [
+    'authorization', 'x-api-key', 'x-correlation-id',
+    'x-file-name', 'x-filename', 'x-checksum-sha256', 'x-file-visibility',
+    'x-entity-type', 'x-entity-id', 'x-request-id',
+  ]) {
     const value = req.header(name);
     if (value) headers[name] = value;
   }
+  // Preserve the client address so the City rate limiter keys on the caller,
+  // not on the gateway.
+  headers['x-forwarded-for'] = req.header('x-forwarded-for') || req.ip || '';
+  if (!headers['x-forwarded-for']) delete headers['x-forwarded-for'];
   const response = await fetch(`${UPSTREAM}${req.originalUrl}`, {
-    method, headers, body: method === 'GET' || method === 'HEAD' ? undefined : JSON.stringify(req.body ?? {}),
+    method,
+    headers,
+    body: method === 'GET' || method === 'HEAD'
+      ? undefined
+      : rawBody
+        ? (req.body as unknown as BodyInit)
+        : JSON.stringify(req.body ?? {}),
   });
   const type = response.headers.get('content-type');
   const cacheControl = response.headers.get('cache-control');
@@ -181,6 +231,9 @@ app.use((req, res, next) => {
       req.url = rewritten;
       req.originalUrl = rewritten;
     }
+  }
+  if (!isPublicV1Path(req.originalUrl) && !req.header('authorization')) {
+    return res.status(401).json({ error: 'unauthorized', detail: 'authentication_required', product: BOUNDARY_PRODUCT });
   }
   next();
 });

@@ -4,6 +4,38 @@
  * Helper utilities for e2e browser tests
  * These functions work with Vitest browser mode and TanStack Router
  */
+import { useAuthStore } from "../src/stores/authStore";
+import type { User } from "../src/types/user";
+
+const e2eUser = (role: User["role"] = "admin", username = "e2e-operator"): User => ({
+    id: `user-${username}`,
+    username,
+    email: `${username}@example.com`,
+    full_name: "E2E Operator",
+    role,
+    status: "active",
+    permissions: role === "admin" ? ["*"] : ["assets:read", "maintenance:read", "maintenance:write"],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+});
+
+/**
+ * Seed the auth store so protected admin routes render without a live backend.
+ * API calls still fail in the browser test environment, which is fine: the
+ * specs assert the route renders its form/heading and validates client-side.
+ */
+export function authenticateAs(role: User["role"] = "admin", username = "e2e-operator"): void {
+    useAuthStore.setState({
+        user: e2eUser(role, username),
+        accessToken: "e2e-access-token",
+        refreshToken: "e2e-refresh-token",
+        isAuthenticated: true,
+    });
+}
+
+export function signOut(): void {
+    useAuthStore.setState({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false });
+}
 
 /**
  * Navigate to a route using the router (doesn't reload the page)

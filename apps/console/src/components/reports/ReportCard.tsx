@@ -34,7 +34,7 @@ export const ReportCard: React.FC<ReportCardProps> = ({ report, onDownload }) =>
         <div className="text-xs text-slate-500">
           Format: <span className="font-medium uppercase">{report.format}</span>
         </div>
-        {report.status === "completed" && report.file_url && onDownload && (
+        {report.status === "completed" && onDownload && (
             <Button size="sm" variant="outline" onClick={onDownload}>
             <Download className="h-3 w-3 mr-1" />
             Tải xuống

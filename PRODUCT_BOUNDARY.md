@@ -108,14 +108,24 @@ session; passwords are never accepted, stored or published.
 
 ### Auth shell
 
-`/v1/auth/*` is a stateless HMAC-SHA256 session shell for the console:
-login, register, refresh, logout, change-password, me and verify. It does not
-store passwords or create a user/session table. In production, SynapseCity must
-stay behind the Tier-1 IAM/API gateway and the shell must only adapt that
-identity; set `AUTH_SECRET` for stable sessions. The demo login accepts any
-non-empty credentials, so it must not be exposed directly to the Internet.
-`/v1/users` and `/v1/auth/me` derive the principal from the signed session, not
-from the first row of a dataset.
+`/v1/auth/*` is a session adapter for the console. In the default `tier2` mode
+credentials are verified by the Tier-2 auth capability (Tier-1 IAM) and the
+Tier-1 token stays inside the signed City session; City stores no password or
+identity table. City roles are resolved from City operator profiles or the
+`CITY_BOOTSTRAP_ADMIN_EMAILS` allow-list — never from the request body or an
+unverified token. `CITY_AUTH_MODE=demo` is the explicit development-only shell,
+honoured only with `AUTH_DEMO_MODE=true`; the demo role comes from
+`AUTH_DEMO_ROLE`. Set `AUTH_SECRET` for stable sessions. `/v1/users` and
+`/v1/auth/me` derive the principal from the signed session, not from the first
+row of a dataset.
+
+Every operator namespace requires a session and the role-derived permission for
+the action (for example `assets:write`, `budgets:approve`, `users:admin`).
+Anonymous requests return `401`; a session without the permission returns
+`403`. Technicians only see their own work orders. The gateway additionally
+rejects an operator request without an `Authorization` header before proxying.
+Only `/health`, `/ready`, `/metrics` (optional token), `/v1/city`, `/v1/auth/*`,
+`/v1/public/*` and `/v1/map/*` are anonymous.
 
 ## Dataset ownership
 
@@ -133,6 +143,13 @@ notifications, geofences and ingest jobs) is private and must not be published
 to the open-data layer. Existing public projections created before this rule
 must be revoked in Tier-2 by the operator.
 
+`city-incident-internal` is a private sidecar for reporter identity, contact
+details, internal comments and assignee/approval fields. Field-level redaction
+happens before the Tier-2 write, so the raw `city-incidents` record that Tier-2
+ingests into SynapseLDS never contains that data. The public asset projection
+excludes soft-deleted, decommissioned and `public_visible:false` records; public
+pages use `/v1/public/*` only, including the aggregate maintenance summary.
+
 ```text
 city-assets                 city-incidents
 city-maintenance            city-iot-sensors
@@ -140,7 +157,7 @@ city-iot-readings           city-alerts
 city-budgets                city-budget-transactions
 city-reports                city-notifications
 city-users                  city-geofences
-city-ingest-jobs
+city-ingest-jobs            city-files
 ```
 
 ## Console route ownership
@@ -160,6 +177,9 @@ Owned:
 /admin                         city operations dashboard
 /admin/map                     internal asset map
 /admin/assets[/$id]            asset registry
+/admin/assets/create           asset registration
+/admin/assets/edit/$id         asset edit
+/admin/analytics               GIS coverage analysis
 /admin/incidents[/create|/$id] city incidents
 /admin/alerts[/list]           infrastructure alerts
 /admin/iot[/create|/$id]       IoT sensors

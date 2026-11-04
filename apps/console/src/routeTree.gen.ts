@@ -20,6 +20,7 @@ import { Route as MapRouteImport } from './routes/map'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as TechnicianRouteImport } from './routes/technician'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as AdminAnalyticsRouteImport } from './routes/admin/analytics'
 import { Route as AdminIngestRouteImport } from './routes/admin/ingest'
 import { Route as AdminMapRouteImport } from './routes/admin/map'
 import { Route as AssetIdRouteImport } from './routes/asset.$id'
@@ -29,6 +30,7 @@ import { Route as AdminAlertsIndexRouteImport } from './routes/admin/alerts/inde
 import { Route as AdminAlertsListRouteImport } from './routes/admin/alerts/list'
 import { Route as AdminAssetsIndexRouteImport } from './routes/admin/assets/index'
 import { Route as AdminAssetsIdRouteImport } from './routes/admin/assets/$id'
+import { Route as AdminAssetsCreateRouteImport } from './routes/admin/assets/create'
 import { Route as AdminBudgetsIndexRouteImport } from './routes/admin/budgets/index'
 import { Route as AdminBudgetsIdRouteImport } from './routes/admin/budgets/$id'
 import { Route as AdminBudgetsCreateRouteImport } from './routes/admin/budgets/create'
@@ -49,6 +51,7 @@ import { Route as PublicReportAssetIdRouteImport } from './routes/public/report.
 import { Route as TechnicianMaintenanceIdRouteImport } from './routes/technician/maintenance.$id'
 import { Route as TechnicianSettingsIndexRouteImport } from './routes/technician/settings/index'
 import { Route as TechnicianTasksTaskIdRouteImport } from './routes/technician/tasks.$taskId'
+import { Route as AdminAssetsEditIdRouteImport } from './routes/admin/assets/edit.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -95,6 +98,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminAnalyticsRoute = AdminAnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminIngestRoute = AdminIngestRouteImport.update({
   id: '/ingest',
   path: '/ingest',
@@ -138,6 +146,11 @@ const AdminAssetsIndexRoute = AdminAssetsIndexRouteImport.update({
 const AdminAssetsIdRoute = AdminAssetsIdRouteImport.update({
   id: '/assets/$id',
   path: '/assets/$id',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminAssetsCreateRoute = AdminAssetsCreateRouteImport.update({
+  id: '/assets/create',
+  path: '/assets/create',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminBudgetsIndexRoute = AdminBudgetsIndexRouteImport.update({
@@ -241,6 +254,11 @@ const TechnicianTasksTaskIdRoute = TechnicianTasksTaskIdRouteImport.update({
   path: '/tasks/$taskId',
   getParentRoute: () => TechnicianRoute,
 } as any)
+const AdminAssetsEditIdRoute = AdminAssetsEditIdRouteImport.update({
+  id: '/assets/edit/$id',
+  path: '/assets/edit/$id',
+  getParentRoute: () => AdminRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -251,6 +269,7 @@ export interface FileRoutesByFullPath {
   '/map': typeof MapRoute
   '/register': typeof RegisterRoute
   '/technician': typeof TechnicianRouteWithChildren
+  '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/ingest': typeof AdminIngestRoute
   '/admin/map': typeof AdminMapRoute
   '/asset/$id': typeof AssetIdRoute
@@ -259,6 +278,7 @@ export interface FileRoutesByFullPath {
   '/technician/': typeof TechnicianIndexRoute
   '/admin/alerts/list': typeof AdminAlertsListRoute
   '/admin/assets/$id': typeof AdminAssetsIdRoute
+  '/admin/assets/create': typeof AdminAssetsCreateRoute
   '/admin/budgets/$id': typeof AdminBudgetsIdRoute
   '/admin/budgets/create': typeof AdminBudgetsCreateRoute
   '/admin/incidents/$id': typeof AdminIncidentsIdRoute
@@ -281,6 +301,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings/': typeof AdminSettingsIndexRoute
   '/admin/users/': typeof AdminUsersIndexRoute
   '/technician/settings/': typeof TechnicianSettingsIndexRoute
+  '/admin/assets/edit/$id': typeof AdminAssetsEditIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -289,6 +310,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/map': typeof MapRoute
   '/register': typeof RegisterRoute
+  '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/ingest': typeof AdminIngestRoute
   '/admin/map': typeof AdminMapRoute
   '/asset/$id': typeof AssetIdRoute
@@ -297,6 +319,7 @@ export interface FileRoutesByTo {
   '/technician': typeof TechnicianIndexRoute
   '/admin/alerts/list': typeof AdminAlertsListRoute
   '/admin/assets/$id': typeof AdminAssetsIdRoute
+  '/admin/assets/create': typeof AdminAssetsCreateRoute
   '/admin/budgets/$id': typeof AdminBudgetsIdRoute
   '/admin/budgets/create': typeof AdminBudgetsCreateRoute
   '/admin/incidents/$id': typeof AdminIncidentsIdRoute
@@ -319,6 +342,7 @@ export interface FileRoutesByTo {
   '/admin/settings': typeof AdminSettingsIndexRoute
   '/admin/users': typeof AdminUsersIndexRoute
   '/technician/settings': typeof TechnicianSettingsIndexRoute
+  '/admin/assets/edit/$id': typeof AdminAssetsEditIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -330,6 +354,7 @@ export interface FileRoutesById {
   '/map': typeof MapRoute
   '/register': typeof RegisterRoute
   '/technician': typeof TechnicianRouteWithChildren
+  '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/ingest': typeof AdminIngestRoute
   '/admin/map': typeof AdminMapRoute
   '/asset/$id': typeof AssetIdRoute
@@ -338,6 +363,7 @@ export interface FileRoutesById {
   '/technician/': typeof TechnicianIndexRoute
   '/admin/alerts/list': typeof AdminAlertsListRoute
   '/admin/assets/$id': typeof AdminAssetsIdRoute
+  '/admin/assets/create': typeof AdminAssetsCreateRoute
   '/admin/budgets/$id': typeof AdminBudgetsIdRoute
   '/admin/budgets/create': typeof AdminBudgetsCreateRoute
   '/admin/incidents/$id': typeof AdminIncidentsIdRoute
@@ -360,6 +386,7 @@ export interface FileRoutesById {
   '/admin/settings/': typeof AdminSettingsIndexRoute
   '/admin/users/': typeof AdminUsersIndexRoute
   '/technician/settings/': typeof TechnicianSettingsIndexRoute
+  '/admin/assets/edit/$id': typeof AdminAssetsEditIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -372,6 +399,7 @@ export interface FileRouteTypes {
     | '/map'
     | '/register'
     | '/technician'
+    | '/admin/analytics'
     | '/admin/ingest'
     | '/admin/map'
     | '/asset/$id'
@@ -380,6 +408,7 @@ export interface FileRouteTypes {
     | '/technician/'
     | '/admin/alerts/list'
     | '/admin/assets/$id'
+    | '/admin/assets/create'
     | '/admin/budgets/$id'
     | '/admin/budgets/create'
     | '/admin/incidents/$id'
@@ -402,6 +431,7 @@ export interface FileRouteTypes {
     | '/admin/settings/'
     | '/admin/users/'
     | '/technician/settings/'
+    | '/admin/assets/edit/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -410,6 +440,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/map'
     | '/register'
+    | '/admin/analytics'
     | '/admin/ingest'
     | '/admin/map'
     | '/asset/$id'
@@ -418,6 +449,7 @@ export interface FileRouteTypes {
     | '/technician'
     | '/admin/alerts/list'
     | '/admin/assets/$id'
+    | '/admin/assets/create'
     | '/admin/budgets/$id'
     | '/admin/budgets/create'
     | '/admin/incidents/$id'
@@ -440,6 +472,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/users'
     | '/technician/settings'
+    | '/admin/assets/edit/$id'
   id:
     | '__root__'
     | '/'
@@ -450,6 +483,7 @@ export interface FileRouteTypes {
     | '/map'
     | '/register'
     | '/technician'
+    | '/admin/analytics'
     | '/admin/ingest'
     | '/admin/map'
     | '/asset/$id'
@@ -458,6 +492,7 @@ export interface FileRouteTypes {
     | '/technician/'
     | '/admin/alerts/list'
     | '/admin/assets/$id'
+    | '/admin/assets/create'
     | '/admin/budgets/$id'
     | '/admin/budgets/create'
     | '/admin/incidents/$id'
@@ -480,6 +515,7 @@ export interface FileRouteTypes {
     | '/admin/settings/'
     | '/admin/users/'
     | '/technician/settings/'
+    | '/admin/assets/edit/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -561,6 +597,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/analytics': {
+      id: '/admin/analytics'
+      path: '/analytics'
+      fullPath: '/admin/analytics'
+      preLoaderRoute: typeof AdminAnalyticsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/ingest': {
       id: '/admin/ingest'
       path: '/ingest'
@@ -622,6 +665,13 @@ declare module '@tanstack/react-router' {
       path: '/assets/$id'
       fullPath: '/admin/assets/$id'
       preLoaderRoute: typeof AdminAssetsIdRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/assets/create': {
+      id: '/admin/assets/create'
+      path: '/assets/create'
+      fullPath: '/admin/assets/create'
+      preLoaderRoute: typeof AdminAssetsCreateRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/budgets/': {
@@ -764,15 +814,24 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TechnicianTasksTaskIdRouteImport
       parentRoute: typeof TechnicianRoute
     }
+    '/admin/assets/edit/$id': {
+      id: '/admin/assets/edit/$id'
+      path: '/assets/edit/$id'
+      fullPath: '/admin/assets/edit/$id'
+      preLoaderRoute: typeof AdminAssetsEditIdRouteImport
+      parentRoute: typeof AdminRoute
+    }
   }
 }
 
 interface AdminRouteChildren {
+  AdminAnalyticsRoute: typeof AdminAnalyticsRoute
   AdminIngestRoute: typeof AdminIngestRoute
   AdminMapRoute: typeof AdminMapRoute
   AdminIndexRoute: typeof AdminIndexRoute
   AdminAlertsListRoute: typeof AdminAlertsListRoute
   AdminAssetsIdRoute: typeof AdminAssetsIdRoute
+  AdminAssetsCreateRoute: typeof AdminAssetsCreateRoute
   AdminBudgetsIdRoute: typeof AdminBudgetsIdRoute
   AdminBudgetsCreateRoute: typeof AdminBudgetsCreateRoute
   AdminIncidentsIdRoute: typeof AdminIncidentsIdRoute
@@ -790,14 +849,17 @@ interface AdminRouteChildren {
   AdminReportsIndexRoute: typeof AdminReportsIndexRoute
   AdminSettingsIndexRoute: typeof AdminSettingsIndexRoute
   AdminUsersIndexRoute: typeof AdminUsersIndexRoute
+  AdminAssetsEditIdRoute: typeof AdminAssetsEditIdRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
+  AdminAnalyticsRoute: AdminAnalyticsRoute,
   AdminIngestRoute: AdminIngestRoute,
   AdminMapRoute: AdminMapRoute,
   AdminIndexRoute: AdminIndexRoute,
   AdminAlertsListRoute: AdminAlertsListRoute,
   AdminAssetsIdRoute: AdminAssetsIdRoute,
+  AdminAssetsCreateRoute: AdminAssetsCreateRoute,
   AdminBudgetsIdRoute: AdminBudgetsIdRoute,
   AdminBudgetsCreateRoute: AdminBudgetsCreateRoute,
   AdminIncidentsIdRoute: AdminIncidentsIdRoute,
@@ -815,6 +877,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminReportsIndexRoute: AdminReportsIndexRoute,
   AdminSettingsIndexRoute: AdminSettingsIndexRoute,
   AdminUsersIndexRoute: AdminUsersIndexRoute,
+  AdminAssetsEditIdRoute: AdminAssetsEditIdRoute,
 }
 
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)

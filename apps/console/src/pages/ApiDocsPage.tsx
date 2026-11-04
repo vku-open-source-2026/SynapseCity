@@ -8,8 +8,9 @@ import { useState } from "react";
 /**
  * Public City API documentation.
  *
- * SynapseCity only publishes the read-only NGSI-LD open-data projection.
- * Operator/auth/admin endpoints are intentionally not documented here.
+ * SynapseCity publishes a stable JSON open-data projection (not NGSI-LD) plus
+ * anonymous citizen incident reporting. Operator/auth/admin endpoints are
+ * intentionally not documented here.
  */
 const API_BASE_URL = "https://synapsecity.sbs/v1";
 const PUBLIC_API_BASE_URL = `${API_BASE_URL}/public`;
@@ -19,6 +20,7 @@ interface PublicEndpoint {
   title: string;
   description: string;
   query?: string;
+  method?: "GET" | "POST";
 }
 
 const publicEndpoints: PublicEndpoint[] = [
@@ -26,15 +28,45 @@ const publicEndpoints: PublicEndpoint[] = [
     path: "/assets",
     title: "Danh sách tài sản công khai",
     description:
-      "Projection NGSI-LD chỉ đọc của city-assets. Không trả về dữ liệu vận hành nội bộ.",
+      "JSON projection của city-assets: id, asset_code, name, feature_type, category, status, location { address, coordinates, geometry }, qr_code, public_url. Tài sản đã xoá, ngưng sử dụng hoặc public_visible=false bị loại trừ.",
     query: "limit, offset",
+  },
+  {
+    path: "/assets/{code}",
+    title: "Chi tiết tài sản công khai",
+    description:
+      "Tra cứu theo asset_code. Trả 404 nếu tài sản không còn công khai.",
+  },
+  {
+    path: "/assets/{code}/qr-code",
+    title: "QR code tài sản",
+    description: "Trả URL công khai dùng cho QR/NFC của tài sản.",
+  },
+  {
+    path: "/assets/{code}/maintenance-summary",
+    title: "Tóm tắt bảo trì công khai",
+    description:
+      "Chỉ trả số lượng phiếu bảo trì, số đã hoàn thành và loại bảo trì gần nhất. Không có danh tính kỹ thuật viên hay ghi chú nội bộ.",
   },
   {
     path: "/incidents",
     title: "Danh sách sự cố công khai",
     description:
-      "Projection NGSI-LD chỉ đọc của city-incidents. Chỉ các bản ghi public_visible được trả về; không có thông tin liên hệ người báo.",
+      "Chỉ các bản ghi public_visible được trả về; không có thông tin liên hệ, bình luận nội bộ hay người phụ trách.",
     query: "limit, offset",
+  },
+  {
+    path: "/incidents/{incidentId}",
+    title: "Tra cứu sự cố công khai",
+    description:
+      "Tra cứu theo id hoặc incident_number. Trả 404 nếu sự cố không công khai.",
+  },
+  {
+    path: "/incidents",
+    method: "POST",
+    title: "Gửi báo cáo sự cố của công dân",
+    description:
+      "Tạo báo cáo ẩn danh. Thông tin liên hệ chỉ lưu ở bản ghi nội bộ, không xuất hiện trong projection công khai. Ảnh phải là URL HTTPS đã lưu qua capability tệp của Tier-2.",
   },
 ];
 
@@ -68,7 +100,7 @@ function EndpointCard({ endpoint }: { endpoint: PublicEndpoint }) {
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="rounded bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">
-              GET
+              {endpoint.method || "GET"}
             </span>
             <code className="break-all font-mono text-sm text-slate-900">
               {endpoint.path}
@@ -107,16 +139,15 @@ const ApiDocsPage = () => {
         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
           <div className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-700">
             <Database size={15} />
-            Open Data · NGSI-LD · GET only
+            Open Data · JSON projection
           </div>
           <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 md:text-4xl">
             SynapseCity Open API
           </h1>
           <p className="mt-3 max-w-3xl text-base leading-relaxed text-slate-600">
-            SynapseCity chỉ công bố API mở NGSI-LD dạng <strong>GET</strong> cho
-            dữ liệu tài sản và sự cố đã được publish qua Tier-2. Không cần API
-            key, không có endpoint ghi, không có API vận hành nội bộ trên trang
-            này.
+            SynapseCity công bố projection JSON ổn định cho dữ liệu tài sản và
+            sự cố đã publish qua Tier-2, cùng endpoint gửi báo cáo sự cố ẩn danh.
+            Không cần API key; không có API vận hành nội bộ trên trang này.
           </p>
 
           <div className="mt-5 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
@@ -132,7 +163,7 @@ const ApiDocsPage = () => {
             Endpoint công khai
           </h2>
           <p className="mt-1 text-sm text-slate-500">
-            Chỉ các endpoint dưới đây là API mở. Tất cả đều là GET, read-only.
+            Chỉ các endpoint dưới đây là API mở. Ngoài báo cáo sự cố ẩn danh, tất cả đều là GET, read-only.
           </p>
           <div className="mt-4 grid gap-4">
             {publicEndpoints.map((endpoint) => (

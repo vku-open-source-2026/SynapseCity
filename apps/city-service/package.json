@@ -6,13 +6,12 @@
   "description": "SynapseCity Tier-3 domain backend",
   "type": "commonjs",
   "scripts": {
-    "prebuild": "npm --prefix ../../../SynapseDX/sdks/capabilities-js install && npm --prefix ../../../SynapseDX/sdks/capabilities-js run build",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/src/server.js",
     "test": "npm run build && node --test dist/src/*.test.js"
   },
   "dependencies": {
-    "@synapsedx/capabilities": "file:../../../SynapseDX/sdks/capabilities-js",
+    "@synapsedx/capabilities": "file:../../vendor/synapsedx-capabilities-0.3.0.tgz",
     "express": "^4.21.2"
   },
   "devDependencies": {

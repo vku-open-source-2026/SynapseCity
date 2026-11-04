@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 import { asList, httpClient } from "../lib/httpClient";
-import { readFileAsDataUrl } from "../lib/files";
+import { uploadFile } from "../lib/files";
 import type {
     Maintenance,
     MaintenanceCreateRequest,
@@ -193,17 +193,13 @@ export const maintenanceApi = {
         if (!files || files.length === 0) {
             throw new Error("At least one file is required");
         }
-        const attachments = await Promise.all(files.map(async (file) => ({
-            file_name: file.name,
-            file_url: await readFileAsDataUrl(file),
-            file_type: file.type || "image/*",
-            uploaded_by: "technician",
-            uploaded_at: new Date().toISOString(),
-        })));
+        const uploaded = await Promise.all(files.map((file) => uploadFile(file)));
         const response = await httpClient.post<Maintenance>(
             `/maintenance/${id}/photos`,
-            { attachments },
-            { params: { photo_type: photoType } }
+            {
+                file_ids: uploaded.map((file) => file.file_id),
+                photo_type: photoType,
+            }
         );
         return response.data;
     },

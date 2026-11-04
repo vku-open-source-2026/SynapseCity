@@ -18,6 +18,9 @@ export const DATASETS = {
     license: DATA_LICENSE, description: 'Public projection of generalized infrastructure incidents',
     public: true,
   },
+  // Private sidecar for incident data that must never reach the public
+  // projection: reporter identity, contact details and internal comments.
+  incidentInternal: { id: 'city-incident-internal', name: 'SynapseCity incident internal records', entityType: 'CityIncidentInternal', license: DATA_LICENSE, description: 'Private reporter identity and internal incident notes', public: false },
   // Private datasets: operational records must never be published to the open
   // data projection. In particular city-users holds operator profiles and must
   // stay private forever.
@@ -28,6 +31,7 @@ export const DATASETS = {
   budgets: { id: 'city-budgets', name: 'SynapseCity budgets', entityType: 'InfrastructureBudget', license: DATA_LICENSE, description: 'Infrastructure budget records', public: false },
   transactions: { id: 'city-budget-transactions', name: 'SynapseCity budget transactions', entityType: 'BudgetTransaction', license: DATA_LICENSE, description: 'Infrastructure budget transactions', public: false },
   reports: { id: 'city-reports', name: 'SynapseCity reports', entityType: 'InfrastructureReport', license: DATA_LICENSE, description: 'Infrastructure operational reports', public: false },
+  files: { id: 'city-files', name: 'SynapseCity file metadata', entityType: 'CityFile', license: DATA_LICENSE, description: 'Metadata for binary files stored through the Tier-2 files capability', public: false },
   notifications: { id: 'city-notifications', name: 'SynapseCity notifications', entityType: 'InfrastructureNotification', license: DATA_LICENSE, description: 'Infrastructure notification records', public: false },
   users: { id: 'city-users', name: 'SynapseCity users', entityType: 'CityUser', license: DATA_LICENSE, description: 'Domain operator profiles', public: false },
   geofences: { id: 'city-geofences', name: 'SynapseCity geofences', entityType: 'CityGeofence', license: DATA_LICENSE, description: 'Infrastructure geofence records', public: false },
@@ -59,7 +63,11 @@ export const TIER2_URL = assertPublicDependency(process.env.SYNAPSEDX_BASE_URL |
 
 export function capabilitiesFromRequest(req: Request): CapabilitiesClient {
   const authorization = req.header('authorization');
-  const token = authorization?.replace(/^Bearer\s+/i, '').trim() || process.env.SYNAPSEDX_TOKEN;
+  const headerToken = authorization?.replace(/^Bearer\s+/i, '').trim() || undefined;
+  // A City session carries the user-scoped Tier-2 credential minted by the
+  // Tier-2 auth capability. The City HMAC token itself is never sent upstream.
+  const session = (req as Request & { session?: { tier2_token?: string } }).session;
+  const token = session?.tier2_token || (session ? undefined : headerToken) || process.env.SYNAPSEDX_TOKEN;
   const apiKey = req.header('x-api-key') || process.env.SYNAPSEDX_API_KEY;
   return new CapabilitiesClient({ baseUrl: TIER2_URL, token: token || undefined, apiKey: apiKey || undefined });
 }

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { incidentsApi } from "../../api/incidents";
 import { format } from "date-fns";
 import { Skeleton } from "../ui/skeleton";
@@ -17,6 +18,8 @@ interface AssetIncidentsTabProps {
 }
 
 const AssetIncidentsTab: React.FC<AssetIncidentsTabProps> = ({ assetId }) => {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [statusFilter, setStatusFilter] = useState("");
@@ -32,6 +35,23 @@ const AssetIncidentsTab: React.FC<AssetIncidentsTabProps> = ({ assetId }) => {
         status: statusFilter || undefined,
         severity: severityFilter || undefined,
       }),
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: (incident: Incident) => incidentsApi.update(incident.id, { status: "in_progress" }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["incidents", assetId] });
+      setShowDetails(false);
+    },
+  });
+
+  const maintenanceMutation = useMutation({
+    mutationFn: (incident: Incident) => incidentsApi.createMaintenance(incident.id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["incidents", assetId] });
+      await queryClient.invalidateQueries({ queryKey: ["maintenance", assetId] });
+      setShowDetails(false);
+    },
   });
 
   const filteredIncidents = incidents?.filter((incident) => {
@@ -82,12 +102,7 @@ const AssetIncidentsTab: React.FC<AssetIncidentsTabProps> = ({ assetId }) => {
     <div className="space-y-6">
       {/* Top Actions */}
       <div className="flex items-center justify-between">
-        <Button
-          onClick={() => {
-            // TODO: Navigate to incident create with asset_id
-            console.log("Create incident for asset:", assetId);
-          }}
-        >
+        <Button onClick={() => navigate({ to: "/admin/incidents/create" })}>
           <Plus className="h-4 w-4 mr-2" />
           Báo sự cố mới
         </Button>
@@ -317,20 +332,16 @@ const AssetIncidentsTab: React.FC<AssetIncidentsTabProps> = ({ assetId }) => {
               <div className="flex gap-2 pt-4 border-t border-slate-200">
                 <Button
                   variant="outline"
-                  onClick={() => {
-                    // TODO: Navigate to change status
-                    console.log("Change status for incident:", selectedIncident.id);
-                  }}
+                  disabled={statusMutation.isPending || selectedIncident.status === "in_progress"}
+                  onClick={() => statusMutation.mutate(selectedIncident)}
                 >
-                  Change Status
+                  {statusMutation.isPending ? "Đang cập nhật..." : "Bắt đầu xử lý"}
                 </Button>
                 <Button
-                  onClick={() => {
-                    // TODO: Create maintenance from incident
-                    console.log("Create maintenance from incident:", selectedIncident.id);
-                  }}
+                  disabled={maintenanceMutation.isPending || Boolean(selectedIncident.maintenance_record_id)}
+                  onClick={() => maintenanceMutation.mutate(selectedIncident)}
                 >
-                  Create Maintenance from Incident
+                  {maintenanceMutation.isPending ? "Đang tạo..." : "Tạo phiếu bảo trì"}
                 </Button>
               </div>
             </div>

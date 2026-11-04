@@ -17,7 +17,6 @@ import {
     MapPin,
     TrendingUp,
     Edit,
-    Plus,
     AlertTriangle,
     Map,
 } from "lucide-react";
@@ -290,15 +289,6 @@ const AssetDetail: React.FC = () => {
                 {/* Quick Actions */}
                 <div className="flex flex-wrap gap-2">
                     <Button
-                        onClick={() => {
-                            // TODO: Navigate to maintenance create with asset_id
-                            console.log("Add maintenance for asset:", id);
-                        }}
-                    >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add Maintenance Record
-                    </Button>
-                    <Button
                         variant="outline"
                         onClick={() =>
                             navigate({ to: "/admin/incidents/create" })
@@ -309,10 +299,11 @@ const AssetDetail: React.FC = () => {
                     </Button>
                     <Button
                         variant="outline"
-                        onClick={() => {
-                            // TODO: Navigate to asset edit
-                            console.log("Edit asset:", id);
-                        }}
+                        onClick={() =>
+                            navigate({
+                                to: `/admin/assets/edit/${id}`,
+                            })
+                        }
                     >
                         <Edit className="h-4 w-4 mr-2" />
                         Edit Asset

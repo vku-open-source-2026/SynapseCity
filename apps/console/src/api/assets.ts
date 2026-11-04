@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 import { asList, httpClient } from "../lib/httpClient";
-import { readFileAsDataUrl } from "../lib/files";
+import { uploadFile } from "../lib/files";
 import type {
     Asset,
     AssetAttachment,
@@ -68,22 +68,19 @@ export const assetsApi = {
     },
 
     uploadPhoto: async (id: string, file: File): Promise<Asset> => {
-        const fileUrl = await readFileAsDataUrl(file);
+        const uploaded = await uploadFile(file);
         const response = await httpClient.post<Asset>(`/assets/${id}/photos`, {
-            photos: [fileUrl],
-            file_name: file.name,
-            file_type: file.type || "image/*",
+            file_ids: [uploaded.file_id],
         });
         return response.data;
     },
 
-    uploadAttachment: async (id: string, file: File): Promise<Asset> => {
-        const fileUrl = await readFileAsDataUrl(file);
-        const response = await httpClient.post<Asset>(`/assets/${id}/attachments`, {
-            file_name: file.name,
-            file_url: fileUrl,
-            file_type: file.type || "application/octet-stream",
-        });
+    uploadAttachment: async (id: string, file: File): Promise<AssetAttachment> => {
+        const uploaded = await uploadFile(file);
+        const response = await httpClient.post<AssetAttachment>(
+            `/assets/${id}/attachments`,
+            { file_id: uploaded.file_id }
+        );
         return response.data;
     },
 
@@ -155,15 +152,13 @@ export const assetsApi = {
         documentType?: string,
         isPublic?: boolean
     ): Promise<AssetAttachment> => {
-        const fileUrl = await readFileAsDataUrl(file);
+        const uploaded = await uploadFile(file);
         const response = await httpClient.post<AssetAttachment>(
             `/assets/${id}/documents`,
             {
-                file_name: file.name,
-                file_url: fileUrl,
-                file_type: file.type || "application/octet-stream",
-                document_type: documentType,
-                is_public: isPublic,
+                file_id: uploaded.file_id,
+                ...(documentType ? { document_type: documentType } : {}),
+                ...(isPublic !== undefined ? { is_public: isPublic } : {}),
             }
         );
         return response.data;
@@ -177,7 +172,7 @@ export const assetsApi = {
             | "lifecycle_overview"
             | "end_of_life_forecast"
             | "custom",
-        format: "pdf" | "excel",
+        format: "csv" | "json",
         filters?: {
             date_from?: string;
             date_to?: string;

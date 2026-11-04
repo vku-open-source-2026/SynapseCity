@@ -163,6 +163,11 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ assetId, onUploa
           >
             {uploadMutation.isPending ? "Đang tải lên..." : `Tải lên ${files.length} tệp`}
           </Button>
+          {uploadMutation.error && (
+            <p className="text-sm text-red-600" role="alert">
+              {(uploadMutation.error as Error).message}
+            </p>
+          )}
         </div>
       )}
     </div>

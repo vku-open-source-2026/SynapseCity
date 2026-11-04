@@ -87,16 +87,8 @@ export interface AssetIoTData {
 }
 
 type AssetWithIoTStatus = Omit<Asset, 'status'> & {
-    status: 'Online' | 'Offline';
+    status: string;
     lastPing: string;
-};
-
-const createInitialAssetStatuses = (assets: Asset[]): AssetWithIoTStatus[] => {
-    return assets.map(asset => ({
-        ...asset,
-        status: Math.random() > 0.05 ? 'Online' : 'Offline',
-        lastPing: new Date().toISOString()
-    }));
 };
 
 const getErrorMessage = (error: unknown, fallback: string): string => {
@@ -154,85 +146,20 @@ export const iotApi = {
     }
 };
 
-// Hook for legacy asset status simulation
+// Legacy asset-status view backed by persisted asset fields. It never invents
+// online/offline transitions or alerts: sensor connectivity is reported by the
+// IoT endpoints, and alerts come from /v1/alerts.
 export const useIoT = (initialAssets: Asset[] | undefined) => {
-    const [assetsWithStatus, setAssetsWithStatus] = useState<AssetWithIoTStatus[]>([]);
-    const [alerts, setAlerts] = useState<string[]>([]);
-    const safeInitialAssets = useMemo<Asset[]>(
-        () => (Array.isArray(initialAssets) ? initialAssets : []),
+    const assetsWithStatus = useMemo<AssetWithIoTStatus[]>(
+        () => (Array.isArray(initialAssets) ? initialAssets : []).map((asset) => ({
+            ...asset,
+            status: String((asset as Asset & { status?: string }).status || 'active'),
+            lastPing: String((asset as Asset & { updated_at?: string }).updated_at || ''),
+        })),
         [initialAssets]
     );
 
-    const seededAssets = useMemo<AssetWithIoTStatus[]>(() => {
-        if (safeInitialAssets.length === 0) {
-            return [];
-        }
-        return createInitialAssetStatuses(safeInitialAssets);
-    }, [safeInitialAssets]);
-
-    const assetsInSync = useMemo(() => {
-        if (safeInitialAssets.length === 0) {
-            return assetsWithStatus.length === 0;
-        }
-        if (assetsWithStatus.length !== safeInitialAssets.length) {
-            return false;
-        }
-        const currentIds = new Set(assetsWithStatus.map(asset => asset.id));
-        return safeInitialAssets.every(asset => currentIds.has(asset.id));
-    }, [assetsWithStatus, safeInitialAssets]);
-
-    useEffect(() => {
-        if (safeInitialAssets.length === 0) return;
-
-        const seededById = new Map(seededAssets.map(asset => [asset.id, asset]));
-
-        const interval = setInterval(() => {
-            setAssetsWithStatus(current => {
-                const currentById = new Map(current.map(asset => [asset.id, asset]));
-                const next: AssetWithIoTStatus[] = safeInitialAssets.map(asset => {
-                    const existing = currentById.get(asset.id) ?? seededById.get(asset.id);
-                    if (existing) {
-                        return {
-                            ...asset,
-                            status: existing.status,
-                            lastPing: existing.lastPing
-                        };
-                    }
-                    return {
-                        ...asset,
-                        status: Math.random() > 0.05 ? 'Online' : 'Offline',
-                        lastPing: new Date().toISOString()
-                    };
-                });
-
-                if (next.length === 0) {
-                    return [];
-                }
-
-                const numUpdates = Math.floor(Math.random() * Math.min(3, next.length)) + 1;
-
-                for (let i = 0; i < numUpdates; i++) {
-                    const idx = Math.floor(Math.random() * next.length);
-                    const asset = next[idx];
-
-                    if (asset.status === 'Online' && Math.random() < 0.01) {
-                        asset.status = 'Offline';
-                        setAlerts(prev => [`Alert: ${asset.feature_type} (${asset.feature_code}) went OFFLINE`, ...prev].slice(0, 5));
-                    } else if (asset.status === 'Offline' && Math.random() < 0.1) {
-                        asset.status = 'Online';
-                    }
-                    asset.lastPing = new Date().toISOString();
-                }
-                return next;
-            });
-        }, 2000);
-
-        return () => clearInterval(interval);
-    }, [safeInitialAssets, seededAssets]);
-
-    const stableAssetsWithStatus = assetsInSync ? assetsWithStatus : seededAssets;
-
-    return { assetsWithStatus: stableAssetsWithStatus, alerts };
+    return { assetsWithStatus, alerts: [] as string[] };
 };
 
 // Hook for real IoT sensor data

@@ -3,6 +3,7 @@
 FROM node:20-bookworm-slim AS build
 WORKDIR /workspace
 COPY SynapseCity/package*.json ./SynapseCity/
+COPY SynapseCity/vendor ./SynapseCity/vendor
 COPY SynapseCity/apps/gateway/package*.json SynapseCity/apps/gateway/tsconfig.json ./SynapseCity/apps/gateway/
 COPY SynapseCity/apps/gateway/src ./SynapseCity/apps/gateway/src
 RUN cd SynapseCity && npm ci && npm run build --workspace=@synapsecity/gateway

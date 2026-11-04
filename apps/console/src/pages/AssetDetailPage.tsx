@@ -17,11 +17,9 @@ import {
 } from "lucide-react";
 import React from "react";
 import type { Asset as ApiAsset } from "../api";
-import { getMaintenanceLogs } from "../api";
-import { assetsApi } from "../api/assets";
 import { publicApi } from "../api/public";
 import Header from "../components/Header";
-import MaintenanceLogList from "../components/MaintenanceLog";
+import PublicMaintenanceSummary from "../components/PublicMaintenanceSummary";
 import MapComponent from "../components/Map";
 import ReportModal from "../components/ReportModal";
 import { Button } from "../components/ui/button";
@@ -34,7 +32,8 @@ const AssetDetailPage: React.FC = () => {
     const [showMap, setShowMap] = React.useState(false);
     const [showReportModal, setShowReportModal] = React.useState(false);
 
-    // Try to fetch asset by ID first, then by code if that fails
+    // Public detail is read from the public projection only; it never calls the
+    // authenticated asset or maintenance namespaces.
     const {
         data: asset,
         isLoading,
@@ -42,45 +41,28 @@ const AssetDetailPage: React.FC = () => {
     } = useQuery({
         queryKey: ["asset", id],
         queryFn: async () => {
-            try {
-                // First try to get by ID (authenticated endpoint)
-                return await assetsApi.getById(id);
-            } catch (err) {
-                // If that fails, try public API by code
-                try {
-                    const publicAsset = await publicApi.getPublicAsset(id);
-                    // Convert public asset to full asset format
-                    return {
-                        id: id,
-                        asset_code: publicAsset.asset_code,
-                        name: publicAsset.name,
-                        feature_type: publicAsset.feature_type,
-                        feature_code: publicAsset.asset_code,
-                        category: publicAsset.category,
-                        status: publicAsset.status,
-                        location: publicAsset.location,
-                        geometry: {
-                            type: "Point" as const,
-                            coordinates: [
-                                publicAsset.location.coordinates.longitude,
-                                publicAsset.location.coordinates.latitude,
-                            ],
-                        },
-                        created_at: "",
-                        updated_at: "",
-                    } as Asset;
-                } catch {
-                    throw err; // Throw original error
-                }
-            }
+            const publicAsset = await publicApi.getPublicAsset(id);
+            return {
+                id: id,
+                asset_code: publicAsset.asset_code,
+                name: publicAsset.name,
+                feature_type: publicAsset.feature_type,
+                feature_code: publicAsset.asset_code,
+                category: publicAsset.category,
+                status: publicAsset.status,
+                location: publicAsset.location,
+                geometry: {
+                    type: "Point" as const,
+                    coordinates: [
+                        publicAsset.location.coordinates.longitude,
+                        publicAsset.location.coordinates.latitude,
+                    ],
+                },
+                created_at: "",
+                updated_at: "",
+            } as Asset;
         },
         enabled: !!id,
-    });
-
-    const { data: maintenanceLogs } = useQuery({
-        queryKey: ["maintenance", id],
-        queryFn: () => getMaintenanceLogs(id),
-        enabled: !!id && !!asset,
     });
 
     if (isLoading) {
@@ -526,9 +508,8 @@ const AssetDetailPage: React.FC = () => {
                                     <Calendar size={20} />
                                     Maintenance History
                                 </h2>
-                                {maintenanceLogs &&
-                                maintenanceLogs.length > 0 ? (
-                                    <MaintenanceLogList assetId={id} />
+                                {asset.asset_code ? (
+                                    <PublicMaintenanceSummary assetCode={asset.asset_code} />
                                 ) : (
                                     <div className="text-center py-8 text-slate-500">
                                         <p>No maintenance history available.</p>

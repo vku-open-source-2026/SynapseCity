@@ -29,4 +29,26 @@ export const notificationsApi = {
     const response = await httpClient.post<{ message: string }>('/notifications/mark-all-read');
     return response.data;
   },
+
+  getDelivery: async (id: string): Promise<{ notification_id: string; delivery: Record<string, unknown> }> => {
+    const response = await httpClient.get<{ notification_id: string; delivery: Record<string, unknown> }>(
+      `/notifications/${encodeURIComponent(id)}/delivery`
+    );
+    return response.data;
+  },
+
+  getPreferences: async (): Promise<{ recipient: string; channels: string[]; unsubscribed: boolean }> => {
+    const response = await httpClient.get<{ recipient: string; channels: string[]; unsubscribed: boolean }>(
+      '/notifications/preferences'
+    );
+    return response.data;
+  },
+
+  setPreferences: async (input: { channels?: string[]; unsubscribed?: boolean }): Promise<{ recipient: string; channels: string[]; unsubscribed: boolean }> => {
+    const response = await httpClient.put<{ recipient: string; channels: string[]; unsubscribed: boolean }>(
+      '/notifications/preferences',
+      input
+    );
+    return response.data;
+  },
 };

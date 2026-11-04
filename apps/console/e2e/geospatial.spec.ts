@@ -3,10 +3,11 @@
 import { describe, test, expect, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { navigateTo } from './helpers';
+import { navigateTo, signOut } from './helpers';
 
 describe('Geospatial Features', () => {
   beforeEach(async () => {
+        signOut();
     await navigateTo('/map');
     await waitFor(() => document.body, { timeout: 5000 }); // Wait for map to load
   });

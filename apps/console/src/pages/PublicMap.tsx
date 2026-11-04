@@ -3,9 +3,10 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearch, useNavigate } from "@tanstack/react-router";
-import { getAssets, getAssetId, type Asset } from "../api";
+import { getAssetId, type Asset } from "../api";
+import { publicApi, type PublicAssetInfo } from "../api/public";
 import MapComponent from "../components/Map";
-import MaintenanceLogList from "../components/MaintenanceLog";
+import PublicMaintenanceSummary from "../components/PublicMaintenanceSummary";
 import { useIoT } from "../hooks/useIoT";
 import {
     AlertTriangle,
@@ -17,15 +18,29 @@ import Header from "../components/Header";
 import QRCodeModal from "../components/QRCodeModal";
 import NFCWriteModal from "../components/NFCWriteModal";
 import ReportModal from "../components/ReportModal";
-import IoTSensorChart from "../components/IoTSensorChart";
 import { Button } from "@/components/ui/button";
 import AIChatWidget from "../components/AIChatWidget";
 
-// Extended Asset type with status added by useIoT hook
+// Extended Asset type with status added by the public projection
 type AssetWithStatus = Asset & {
-    status?: "Online" | "Offline";
+    status?: string;
     lastPing?: string;
 };
+
+/** Convert the public projection into the map's asset shape. */
+function toMapAsset(asset: PublicAssetInfo): Asset {
+    return {
+        id: asset.id || asset.asset_code,
+        _id: asset.id || asset.asset_code,
+        feature_type: asset.feature_type,
+        feature_code: asset.asset_code,
+        geometry: (asset.location.geometry || {
+            type: "Point",
+            coordinates: [asset.location.coordinates.longitude, asset.location.coordinates.latitude],
+        }) as Asset["geometry"],
+        created_at: "",
+    } as Asset;
+}
 
 const PublicMap: React.FC = () => {
     const navigate = useNavigate();
@@ -36,12 +51,13 @@ const PublicMap: React.FC = () => {
         error,
     } = useQuery({
         queryKey: ["assets"],
-        queryFn: getAssets,
+        // The public map reads the published projection only.
+        queryFn: async () => (await publicApi.listPublicAssets({ limit: 500 })).map(toMapAsset),
         staleTime: 5 * 60 * 1000, // 5 minutes - prevent refetch on navigation
         refetchOnWindowFocus: false,
     });
 
-    const { assetsWithStatus, alerts } = useIoT(initialAssets);
+    const { assetsWithStatus } = useIoT(initialAssets);
     const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
     const [filteredAssets, setFilteredAssets] = useState<Asset[] | null>(null);
     const [routePoints] = useState<Asset[]>([]);
@@ -117,25 +133,6 @@ const PublicMap: React.FC = () => {
             <Header />
 
             <main className="flex-1 flex flex-col relative pt-20 z-0">
-                {/* Alert Feed Overlay */}
-                {alerts.length > 0 && (
-                    <div className="absolute top-24 right-8 z-50 w-80 pointer-events-none">
-                        {alerts.map((alert, idx) => (
-                            <div
-                                key={idx}
-                                className="bg-red-50 border-l-4 border-red-500 p-3 mb-2 shadow-lg rounded-r animate-in slide-in-from-right fade-in duration-300 pointer-events-auto flex items-start gap-3"
-                            >
-                                <AlertTriangle
-                                    className="text-red-500 shrink-0"
-                                    size={18}
-                                />
-                                <p className="text-xs font-medium text-red-800">
-                                    {alert}
-                                </p>
-                            </div>
-                        ))}
-                    </div>
-                )}
 
                 {/* Fullscreen Map */}
                 <div className="flex-1 w-full relative overflow-hidden">
@@ -171,18 +168,14 @@ const PublicMap: React.FC = () => {
                                             .status && (
                                             <span
                                                 className={`px-2 py-1 text-xs font-bold rounded uppercase tracking-wide ${
-                                                    (
-                                                        selectedAsset as AssetWithStatus
-                                                    ).status === "Online"
+                                                    ["active", "operational"].includes(String((selectedAsset as AssetWithStatus).status))
                                                         ? "bg-green-100 text-green-700"
-                                                        : "bg-red-100 text-red-700"
+                                                        : ["maintenance", "under_repair"].includes(String((selectedAsset as AssetWithStatus).status))
+                                                        ? "bg-amber-100 text-amber-700"
+                                                        : "bg-slate-100 text-slate-600"
                                                 }`}
                                             >
-                                                {(
-                                                    selectedAsset as AssetWithStatus
-                                                ).status === "Online"
-                                                    ? "Trực tuyến"
-                                                    : "Ngoại tuyến"}
+                                                {String((selectedAsset as AssetWithStatus).status).replace(/_/g, " ")}
                                             </span>
                                         )}
                                     </div>
@@ -271,21 +264,8 @@ const PublicMap: React.FC = () => {
                                         <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
                                             Lịch sử bảo trì
                                         </h4>
-                                        <MaintenanceLogList
-                                            assetId={getAssetId(selectedAsset)}
-                                        />
-                                    </div>
-
-                                    {/* IoT Sensor Data */}
-                                    <div>
-                                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
-                                            Dữ liệu cảm biến IoT
-                                        </h4>
-                                        <IoTSensorChart
-                                            assetId={getAssetId(selectedAsset)}
-                                            assetName={
-                                                selectedAsset.feature_type
-                                            }
+                                        <PublicMaintenanceSummary
+                                            assetCode={String(selectedAsset.feature_code || getAssetId(selectedAsset))}
                                         />
                                     </div>
                                 </div>

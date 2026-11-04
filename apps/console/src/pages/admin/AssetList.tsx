@@ -71,10 +71,7 @@ const AssetList: React.FC = () => {
                     </p>
                 </div>
                 <Button
-                    onClick={() => {
-                        // TODO: Navigate to asset create
-                        console.log("Create asset");
-                    }}
+                    onClick={() => navigate({ to: "/admin/assets/create" })}
                 >
                     <Plus className="h-4 w-4 mr-2" />
                     Tạo tài sản

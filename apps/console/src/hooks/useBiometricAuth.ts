@@ -13,6 +13,8 @@ import type { User } from '../types/user';
 const BIOMETRIC_ENABLED_KEY = 'biometric_enabled';
 const BIOMETRIC_CREDENTIAL_KEY = 'biometric_credential_id';
 const BIOMETRIC_USER_KEY = 'biometric_user_data';
+// Session tokens are scoped to the tab and never persisted in localStorage.
+const BIOMETRIC_TOKENS_KEY = 'biometric_session_tokens';
 
 interface BiometricState {
   isAvailable: boolean;
@@ -24,9 +26,12 @@ interface BiometricState {
 interface StoredCredential {
   credentialId: string;
   username: string;
+  user: User;
+}
+
+interface BiometricSessionTokens {
   accessToken: string;
   refreshToken: string;
-  user: User;
 }
 
 const getErrorMessage = (error: unknown, fallback: string): string => {
@@ -165,13 +170,12 @@ export function useBiometricAuth() {
       const storedCredential: StoredCredential = {
         credentialId: bufferToBase64(credential.rawId),
         username,
-        accessToken,
-        refreshToken,
         user,
       };
 
       localStorage.setItem(BIOMETRIC_CREDENTIAL_KEY, storedCredential.credentialId);
       localStorage.setItem(BIOMETRIC_USER_KEY, JSON.stringify(storedCredential));
+      sessionStorage.setItem(BIOMETRIC_TOKENS_KEY, JSON.stringify({ accessToken, refreshToken } satisfies BiometricSessionTokens));
       localStorage.setItem(BIOMETRIC_ENABLED_KEY, 'true');
 
       setState(prev => ({ ...prev, isLoading: false, isEnabled: true }));
@@ -227,8 +231,14 @@ export function useBiometricAuth() {
         throw new Error('Authentication failed');
       }
 
-      // Biometric verified - login with stored credentials
-      login(stored.accessToken, stored.refreshToken, stored.user);
+      // Biometric verified. Tokens live only in this tab's session storage; a
+      // missing session requires a fresh login through the identity provider.
+      const tokensRaw = sessionStorage.getItem(BIOMETRIC_TOKENS_KEY);
+      if (!tokensRaw) {
+        throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+      }
+      const tokens = JSON.parse(tokensRaw) as BiometricSessionTokens;
+      login(tokens.accessToken, tokens.refreshToken, stored.user);
       
       setState(prev => ({ ...prev, isLoading: false }));
       return true;
@@ -258,17 +268,14 @@ export function useBiometricAuth() {
     localStorage.removeItem(BIOMETRIC_ENABLED_KEY);
     localStorage.removeItem(BIOMETRIC_CREDENTIAL_KEY);
     localStorage.removeItem(BIOMETRIC_USER_KEY);
+    sessionStorage.removeItem(BIOMETRIC_TOKENS_KEY);
     setState(prev => ({ ...prev, isEnabled: false }));
   }, []);
 
   // Update stored tokens (after token refresh)
   const updateStoredTokens = useCallback((accessToken: string, refreshToken: string) => {
-    const storedData = localStorage.getItem(BIOMETRIC_USER_KEY);
-    if (storedData) {
-      const stored: StoredCredential = JSON.parse(storedData);
-      stored.accessToken = accessToken;
-      stored.refreshToken = refreshToken;
-      localStorage.setItem(BIOMETRIC_USER_KEY, JSON.stringify(stored));
+    if (localStorage.getItem(BIOMETRIC_USER_KEY)) {
+      sessionStorage.setItem(BIOMETRIC_TOKENS_KEY, JSON.stringify({ accessToken, refreshToken } satisfies BiometricSessionTokens));
     }
   }, []);
 
