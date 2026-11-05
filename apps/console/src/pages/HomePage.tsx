@@ -37,12 +37,12 @@ const AUDIENCES = [
 
 const gradientText = "bg-linear-to-r from-sky-500 to-cyan-400 bg-clip-text text-transparent";
 const primaryBtn =
-    "inline-flex items-center justify-center rounded-full bg-linear-to-r from-cyan-500 to-blue-500 px-7 py-3 font-semibold text-white shadow-lg shadow-cyan-500/25 transition hover:shadow-xl hover:shadow-cyan-500/40";
+    "inline-flex items-center justify-center whitespace-nowrap rounded-full bg-linear-to-r from-cyan-500 to-blue-500 px-5 py-3 text-[15px] font-semibold text-white shadow-lg shadow-cyan-500/25 transition hover:shadow-xl hover:shadow-cyan-500/40";
 const kicker =
     "inline-flex items-center gap-2 rounded-full bg-sky-100 px-3 py-1 text-sm font-semibold text-sky-700 dark:bg-sky-950 dark:text-sky-300";
-const sectionTitle = "mt-4 text-3xl font-bold text-slate-900 md:text-4xl dark:text-white";
-const sectionLead = "mx-auto mt-3 max-w-2xl text-lg text-slate-600 dark:text-slate-300";
-const bodyText = "text-slate-600 dark:text-slate-300";
+const sectionTitle = "mt-4 text-3xl font-bold text-balance text-slate-900 md:text-4xl dark:text-white";
+const sectionLead = "mx-auto mt-3 max-w-2xl text-lg text-balance text-slate-600 dark:text-slate-300";
+const bodyText = "text-pretty text-slate-600 dark:text-slate-300";
 
 function SectionHeader({ kick, title, lead }: { kick: string; title: string; lead?: string }) {
     return (
@@ -96,21 +96,21 @@ const HomePage = () => {
                 <section className="relative overflow-hidden">
                     <div className="pointer-events-none absolute -top-40 right-0 h-[28rem] w-[28rem] rounded-full bg-cyan-200/40 blur-3xl dark:bg-cyan-500/10" />
                     <div className="pointer-events-none absolute -bottom-40 -left-20 h-[24rem] w-[24rem] rounded-full bg-sky-200/40 blur-3xl dark:bg-sky-500/10" />
-                    <div className="relative mx-auto grid max-w-7xl items-center gap-14 px-4 py-16 sm:px-6 md:grid-cols-2 md:py-24 lg:px-8">
-                        <div className="space-y-6 text-center md:text-left">
+                    <div className="relative mx-auto grid max-w-7xl items-center gap-14 px-4 py-16 sm:px-6 md:py-24 lg:grid-cols-[1.4fr_1fr] lg:gap-8 lg:px-8 xl:grid-cols-2 xl:gap-14">
+                        <div className="mx-auto max-w-2xl space-y-6 text-center lg:mx-0 lg:max-w-none lg:text-left">
                             <span className={kicker}>{h.badge}</span>
-                            <h1 className="text-4xl font-bold leading-tight text-slate-900 md:text-5xl lg:text-6xl dark:text-white">
+                            <h1 className="text-4xl font-bold leading-tight text-balance text-slate-900 md:text-5xl lg:text-6xl dark:text-white">
                                 {h.titleStart} <span className={gradientText}>{h.titleHighlight}</span>
                             </h1>
                             <p className={`text-lg leading-relaxed ${bodyText}`}>{h.lead}</p>
-                            <div className="flex flex-col justify-center gap-3 pt-2 sm:flex-row md:justify-start">
+                            <div className="flex flex-col justify-center gap-3 pt-2 sm:flex-row sm:flex-nowrap lg:justify-start">
                                 <Link to="/map" search={{ assetId: undefined }} className={primaryBtn}>
                                     {h.ctaMap}
                                     <ArrowRight className="ml-2 h-4 w-4" />
                                 </Link>
                                 <Link
                                     to="/public/report"
-                                    className="inline-flex items-center justify-center rounded-full border-2 border-amber-400 px-7 py-3 font-semibold text-amber-700 transition hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950"
+                                    className="inline-flex items-center justify-center whitespace-nowrap rounded-full border-2 border-amber-400 px-5 py-3 text-[15px] font-semibold text-amber-700 transition hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950"
                                 >
                                     <ClipboardList className="mr-2 h-4 w-4" />
                                     {h.ctaReport}
@@ -119,7 +119,7 @@ const HomePage = () => {
                                     <button
                                         type="button"
                                         onClick={promptInstall}
-                                        className="inline-flex items-center justify-center rounded-full border border-slate-300 px-7 py-3 font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                                        className="inline-flex items-center justify-center whitespace-nowrap rounded-full border border-slate-300 px-5 py-3 text-[15px] font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
                                     >
                                         <Download className="mr-2 h-4 w-4" />
                                         {h.install}
@@ -127,7 +127,7 @@ const HomePage = () => {
                                 )}
                             </div>
                         </div>
-                        <div className="relative">
+                        <div className="relative mx-auto w-full max-w-2xl lg:max-w-none">
                             <div className="rounded-3xl bg-linear-to-br from-sky-100 to-cyan-100 p-5 shadow-2xl shadow-sky-200/60 dark:from-sky-950 dark:to-cyan-950 dark:shadow-none">
                                 <Link
                                     to="/map"
@@ -208,7 +208,7 @@ const HomePage = () => {
                         <div className="mt-12 flex flex-col justify-center gap-3 sm:flex-row">
                             <Link
                                 to="/public/report"
-                                className="inline-flex items-center justify-center rounded-full bg-linear-to-r from-amber-500 to-orange-500 px-7 py-3 font-semibold text-white shadow-lg shadow-amber-500/25 transition hover:shadow-xl"
+                                className="inline-flex items-center justify-center whitespace-nowrap rounded-full bg-linear-to-r from-amber-500 to-orange-500 px-7 py-3 font-semibold text-white shadow-lg shadow-amber-500/25 transition hover:shadow-xl"
                             >
                                 <ClipboardList className="mr-2 h-4 w-4" />
                                 {h.stepsCta}
@@ -217,7 +217,7 @@ const HomePage = () => {
                             <Link
                                 to="/public/report"
                                 hash="lookup-status"
-                                className="inline-flex items-center justify-center rounded-full border border-amber-300 bg-white px-7 py-3 font-semibold text-amber-800 hover:bg-amber-50 dark:border-amber-800 dark:bg-transparent dark:text-amber-300 dark:hover:bg-amber-950"
+                                className="inline-flex items-center justify-center whitespace-nowrap rounded-full border border-amber-300 bg-white px-7 py-3 font-semibold text-amber-800 hover:bg-amber-50 dark:border-amber-800 dark:bg-transparent dark:text-amber-300 dark:hover:bg-amber-950"
                             >
                                 <Search className="mr-2 h-4 w-4" />
                                 {h.stepsLookup}
@@ -293,20 +293,20 @@ const HomePage = () => {
                     <div className="relative mx-auto max-w-5xl overflow-hidden rounded-3xl bg-linear-to-r from-cyan-500 to-blue-600 px-6 py-14 text-center text-white shadow-xl md:px-12">
                         <div className="pointer-events-none absolute -top-24 -right-24 h-64 w-64 rounded-full bg-white/10" />
                         <div className="pointer-events-none absolute -bottom-28 -left-16 h-64 w-64 rounded-full bg-white/10" />
-                        <h2 className="relative text-3xl font-bold md:text-4xl">{h.ctaTitle}</h2>
-                        <p className="relative mx-auto mt-3 max-w-2xl text-lg text-white/90">{h.ctaText}</p>
+                        <h2 className="relative text-3xl font-bold text-balance md:text-4xl">{h.ctaTitle}</h2>
+                        <p className="relative mx-auto mt-3 max-w-2xl text-lg text-balance text-white/90">{h.ctaText}</p>
                         <div className="relative mt-8 flex flex-col justify-center gap-3 sm:flex-row">
                             <Link
                                 to="/map"
                                 search={{ assetId: undefined }}
-                                className="inline-flex items-center justify-center rounded-full bg-white px-7 py-3 font-semibold text-blue-700 shadow hover:bg-sky-50 dark:bg-white dark:text-blue-700"
+                                className="inline-flex items-center justify-center whitespace-nowrap rounded-full bg-white px-7 py-3 font-semibold text-blue-700 shadow hover:bg-sky-50 dark:bg-white dark:text-blue-700"
                             >
                                 {h.bandMap}
                                 <ArrowRight className="ml-2 h-4 w-4" />
                             </Link>
                             <Link
                                 to="/docs"
-                                className="inline-flex items-center justify-center rounded-full border-2 border-white/80 px-7 py-3 font-semibold text-white hover:bg-white/10"
+                                className="inline-flex items-center justify-center whitespace-nowrap rounded-full border-2 border-white/80 px-7 py-3 font-semibold text-white hover:bg-white/10"
                             >
                                 {h.bandApi}
                             </Link>

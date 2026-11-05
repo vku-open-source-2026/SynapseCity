@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 import React, { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { CheckCircle2, ExternalLink, Layers } from "lucide-react";
+import { Activity, ClipboardList, Code2, ExternalLink, Gauge, Layers, Map as MapIcon, Wrench } from "lucide-react";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import { useI18n } from "../lib/i18n-context";
@@ -26,8 +26,18 @@ const TIER_STYLES = [
     { href: LINKS.synapseOne, ring: "border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900", dot: "from-slate-500 to-slate-700" },
 ];
 
-const sectionTitle = "text-3xl font-bold text-slate-900 dark:text-white";
-const sectionLead = "mx-auto mt-3 max-w-2xl text-slate-600 dark:text-slate-300";
+/** One accent per feature card, in the same order as `about.features`. */
+const FEATURE_STYLES = [
+    { icon: MapIcon, tile: "from-cyan-400 to-blue-500", hover: "hover:border-sky-300 dark:hover:border-sky-700" },
+    { icon: Activity, tile: "from-emerald-400 to-teal-500", hover: "hover:border-emerald-300 dark:hover:border-emerald-700" },
+    { icon: Wrench, tile: "from-amber-400 to-orange-500", hover: "hover:border-amber-300 dark:hover:border-amber-700" },
+    { icon: Code2, tile: "from-violet-400 to-indigo-500", hover: "hover:border-violet-300 dark:hover:border-violet-700" },
+    { icon: ClipboardList, tile: "from-rose-400 to-pink-500", hover: "hover:border-rose-300 dark:hover:border-rose-700" },
+    { icon: Gauge, tile: "from-sky-400 to-cyan-500", hover: "hover:border-cyan-300 dark:hover:border-cyan-700" },
+];
+
+const sectionTitle = "text-3xl font-bold text-balance text-slate-900 dark:text-white";
+const sectionLead = "mx-auto mt-3 max-w-2xl text-balance text-slate-600 dark:text-slate-300";
 const body = "text-slate-600 dark:text-slate-300";
 
 function Avatar({ member }: { member: TeamMember }) {
@@ -73,19 +83,19 @@ const AboutUs: React.FC = () => {
 
             {/* Hero */}
             <section className="relative overflow-hidden px-4 pt-36 pb-16 text-center sm:px-6">
-                <div className="pointer-events-none absolute top-10 left-1/2 h-72 w-[40rem] -translate-x-1/2 rounded-full bg-cyan-200/40 blur-3xl dark:bg-cyan-500/10" />
-                <h1 className="relative text-4xl font-bold text-slate-900 md:text-5xl dark:text-white">
+                <div className="pointer-events-none absolute top-10 left-1/2 h-72 w-[40rem] max-w-full -translate-x-1/2 rounded-full bg-cyan-200/40 blur-3xl dark:bg-cyan-500/10" />
+                <h1 className="relative text-4xl font-bold text-balance text-slate-900 md:text-5xl dark:text-white">
                     {a.titleStart}{" "}
                     <span className="bg-linear-to-r from-sky-500 to-cyan-400 bg-clip-text text-transparent">SynapseCity</span>
                 </h1>
-                <p className="relative mx-auto mt-4 max-w-2xl text-lg text-slate-600 dark:text-slate-300">{a.subtitle}</p>
+                <p className="relative mx-auto mt-4 max-w-2xl text-lg text-balance text-slate-600 dark:text-slate-300">{a.subtitle}</p>
             </section>
 
             {/* Mission */}
             <section className="px-4 py-8 sm:px-6">
                 <div className="mx-auto max-w-3xl rounded-3xl border border-sky-100 bg-linear-to-br from-sky-50 to-cyan-50 p-8 text-center md:p-12 dark:border-sky-900 dark:from-sky-950/50 dark:to-cyan-950/30">
-                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white">{a.missionTitle}</h2>
-                    <div className={`mt-4 space-y-4 text-lg leading-relaxed ${body}`}>
+                    <h2 className="text-2xl font-bold text-balance text-slate-900 dark:text-white">{a.missionTitle}</h2>
+                    <div className={`mt-4 space-y-4 text-lg leading-relaxed text-balance ${body}`}>
                         {a.mission.map((p) => (
                             <p key={p}>{p}</p>
                         ))}
@@ -95,18 +105,28 @@ const AboutUs: React.FC = () => {
 
             {/* Features */}
             <section className="px-4 py-16 sm:px-6">
-                <div className="mx-auto max-w-4xl text-center">
-                    <h2 className={sectionTitle}>{a.featuresTitle}</h2>
-                    <div className="mt-8 grid gap-4 text-left sm:grid-cols-2 lg:grid-cols-3">
-                        {a.features.map((f) => (
-                            <div
-                                key={f}
-                                className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"
-                            >
-                                <CheckCircle2 className="h-5 w-5 shrink-0 text-sky-500" />
-                                <span className="font-medium text-slate-700 dark:text-slate-200">{f}</span>
-                            </div>
-                        ))}
+                <div className="mx-auto max-w-5xl">
+                    <h2 className={`${sectionTitle} text-center`}>{a.featuresTitle}</h2>
+                    <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                        {a.features.map((f, i) => {
+                            const style = FEATURE_STYLES[i % FEATURE_STYLES.length];
+                            const Icon = style.icon;
+                            return (
+                                <div
+                                    key={f.title}
+                                    className={`group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 transition duration-300 hover:-translate-y-1 hover:shadow-xl dark:border-slate-800 dark:bg-slate-900 ${style.hover}`}
+                                >
+                                    <span className="pointer-events-none absolute -top-3 right-4 font-mono text-6xl font-bold text-slate-100 transition group-hover:text-slate-200 dark:text-slate-800 dark:group-hover:text-slate-700">
+                                        {String(i + 1).padStart(2, "0")}
+                                    </span>
+                                    <span className={`relative flex h-12 w-12 items-center justify-center rounded-xl bg-linear-to-br ${style.tile} text-white shadow-md transition group-hover:scale-110`}>
+                                        <Icon className="h-6 w-6" />
+                                    </span>
+                                    <h3 className="relative mt-5 text-lg font-semibold text-balance text-slate-900 dark:text-white">{f.title}</h3>
+                                    <p className={`relative mt-2 text-sm leading-relaxed text-pretty ${body}`}>{f.text}</p>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             </section>
@@ -226,7 +246,7 @@ const AboutUs: React.FC = () => {
                             href={LINKS.repo}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center rounded-full bg-white px-6 py-2.5 font-semibold text-blue-700 hover:bg-sky-50 dark:bg-white dark:text-blue-700"
+                            className="inline-flex items-center whitespace-nowrap rounded-full bg-white px-6 py-2.5 font-semibold text-blue-700 hover:bg-sky-50 dark:bg-white dark:text-blue-700"
                         >
                             {a.contributeRepo}
                         </a>
@@ -234,13 +254,13 @@ const AboutUs: React.FC = () => {
                             href={LINKS.dataContribution}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center rounded-full border-2 border-white/80 px-6 py-2.5 font-semibold text-white hover:bg-white/10"
+                            className="inline-flex items-center whitespace-nowrap rounded-full border-2 border-white/80 px-6 py-2.5 font-semibold text-white hover:bg-white/10"
                         >
                             {a.contributeData}
                         </a>
                         <Link
                             to="/docs"
-                            className="inline-flex items-center rounded-full border-2 border-white/80 px-6 py-2.5 font-semibold text-white hover:bg-white/10"
+                            className="inline-flex items-center whitespace-nowrap rounded-full border-2 border-white/80 px-6 py-2.5 font-semibold text-white hover:bg-white/10"
                         >
                             {m.nav.docs}
                         </Link>

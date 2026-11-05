@@ -8,7 +8,7 @@ import { useTheme } from "../lib/theme-context";
 import { LINKS } from "../lib/site";
 
 const linkBase =
-    "text-[15px] transition-colors max-lg:text-lg max-lg:py-2 flex items-center gap-1.5";
+    "whitespace-nowrap text-[15px] transition-colors max-lg:text-lg max-lg:py-2 flex items-center gap-1.5";
 
 /** Language + theme switches. Shown in the top bar on desktop and inside the drawer on mobile. */
 export function SiteToggles({ className = "" }: { className?: string }) {
@@ -50,8 +50,8 @@ const Header: React.FC = () => {
 
     return (
         <header className="fixed top-0 left-0 z-[1001] h-20 w-full border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
-            <div className="mx-auto flex h-full max-w-7xl items-center justify-between px-4">
-                <Link to="/" onClick={closeMobileMenu} className="flex flex-col leading-tight">
+            <div className="mx-auto flex h-full max-w-7xl items-center justify-between gap-8 px-4">
+                <Link to="/" onClick={closeMobileMenu} className="flex shrink-0 flex-col leading-tight">
                     <span className="font-montserrat text-xl font-bold text-[#087f83] dark:text-teal-400">SynapseCity</span>
                     <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">{m.nav.tagline}</span>
                 </Link>
@@ -70,7 +70,7 @@ const Header: React.FC = () => {
                 </div>
 
                 <nav
-                    className={`flex items-center gap-6 max-lg:fixed max-lg:top-0 max-lg:right-0 max-lg:z-[1002] max-lg:h-screen max-lg:w-4/5 max-lg:max-w-sm max-lg:flex-col max-lg:items-start max-lg:gap-1 max-lg:bg-white max-lg:px-6 max-lg:pt-20 max-lg:shadow-2xl max-lg:transition-transform max-lg:duration-300 dark:max-lg:bg-slate-950 ${
+                    className={`flex items-center gap-4 xl:gap-6 max-lg:fixed max-lg:top-0 max-lg:right-0 max-lg:z-[1002] max-lg:h-screen max-lg:w-4/5 max-lg:max-w-sm max-lg:flex-col max-lg:items-start max-lg:gap-1 max-lg:bg-white max-lg:px-6 max-lg:pt-20 max-lg:shadow-2xl max-lg:transition-transform max-lg:duration-300 dark:max-lg:bg-slate-950 ${
                         isMobileMenuOpen ? "max-lg:translate-x-0" : "max-lg:translate-x-full"
                     }`}
                 >
@@ -128,7 +128,7 @@ const Header: React.FC = () => {
                         to="/map"
                         search={{ assetId: undefined }}
                         onClick={closeMobileMenu}
-                        className="flex h-10 items-center rounded-full bg-linear-to-r from-cyan-500 to-blue-500 px-6 text-[15px] font-semibold text-white shadow-md shadow-cyan-500/25 transition hover:shadow-lg max-lg:mt-4 max-lg:w-full max-lg:justify-center"
+                        className="flex h-10 items-center whitespace-nowrap rounded-full bg-linear-to-r from-cyan-500 to-blue-500 px-6 text-[15px] font-semibold text-white shadow-md shadow-cyan-500/25 transition hover:shadow-lg max-lg:mt-4 max-lg:w-full max-lg:justify-center"
                     >
                         {m.nav.start}
                     </Link>

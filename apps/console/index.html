@@ -26,6 +26,11 @@
       if (dark) root.classList.add('dark');
       root.style.colorScheme = dark ? 'dark' : 'light';
       try { var lang = localStorage.getItem('synapsecity.lang'); if (lang === 'vi' || lang === 'en') root.lang = lang; } catch (e) {}
+      // Keep the one-shot PWA install prompt even if it fires before the app mounts (see src/hooks/usePWA.ts).
+      window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault();
+        window.__synapseInstallPrompt = e;
+      });
     })();
   </script>
   <meta name="apple-mobile-web-app-capable" content="yes" />

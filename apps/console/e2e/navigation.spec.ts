@@ -15,8 +15,8 @@ describe('Navigation Flow', () => {
   test('should navigate from homepage to map', async () => {
     // Look for link or button to map
     // The home page links to the map from the header, hero and footer, so take the first one.
-    const mapLink = screen.queryAllByRole('link', { name: /map|bản đồ/i })[0] ||
-                    screen.queryAllByRole('button', { name: /map|explore|bản đồ/i })[0];
+    const mapLink = screen.queryAllByRole('link', { name: /map|bản\sđồ/i })[0] ||
+                    screen.queryAllByRole('button', { name: /map|explore|bản\sđồ/i })[0];
 
     if (mapLink) {
       await userEvent.click(mapLink);
