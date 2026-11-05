@@ -52,7 +52,7 @@ const Header: React.FC = () => {
         <header className="fixed top-0 left-0 z-[1001] h-20 w-full border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
             <div className="mx-auto flex h-full max-w-7xl items-center justify-between px-4">
                 <Link to="/" onClick={closeMobileMenu} className="flex flex-col leading-tight">
-                    <span className="font-montserrat text-xl font-bold text-teal-700 dark:text-teal-400">SynapseCity</span>
+                    <span className="font-montserrat text-xl font-bold text-[#087f83] dark:text-teal-400">SynapseCity</span>
                     <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">{m.nav.tagline}</span>
                 </Link>
 
@@ -86,14 +86,14 @@ const Header: React.FC = () => {
                     <Link
                         to="/about"
                         onClick={closeMobileMenu}
-                        className={`${linkBase} text-slate-600 hover:text-teal-700 dark:text-slate-300 dark:hover:text-teal-400`}
+                        className={`${linkBase} text-slate-600 hover:text-sky-600 dark:text-slate-300 dark:hover:text-sky-400`}
                     >
                         {m.nav.about}
                     </Link>
                     <Link
                         to="/docs"
                         onClick={closeMobileMenu}
-                        className={`${linkBase} text-slate-600 hover:text-teal-700 dark:text-slate-300 dark:hover:text-teal-400`}
+                        className={`${linkBase} text-slate-600 hover:text-sky-600 dark:text-slate-300 dark:hover:text-sky-400`}
                     >
                         {m.nav.docs}
                     </Link>
@@ -116,7 +116,7 @@ const Header: React.FC = () => {
                     <Link
                         to="/login"
                         onClick={closeMobileMenu}
-                        className={`${linkBase} text-slate-600 hover:text-teal-700 dark:text-slate-300 dark:hover:text-teal-400`}
+                        className={`${linkBase} text-slate-600 hover:text-sky-600 dark:text-slate-300 dark:hover:text-sky-400`}
                     >
                         <LogIn className="h-4 w-4" />
                         {m.nav.login}
@@ -128,7 +128,7 @@ const Header: React.FC = () => {
                         to="/map"
                         search={{ assetId: undefined }}
                         onClick={closeMobileMenu}
-                        className="flex h-10 items-center rounded-lg bg-teal-700 px-5 text-[15px] font-semibold text-white transition-colors hover:bg-teal-800 max-lg:mt-4 max-lg:w-full max-lg:justify-center dark:bg-teal-500 dark:text-slate-950 dark:hover:bg-teal-400"
+                        className="flex h-10 items-center rounded-full bg-linear-to-r from-cyan-500 to-blue-500 px-6 text-[15px] font-semibold text-white shadow-md shadow-cyan-500/25 transition hover:shadow-lg max-lg:mt-4 max-lg:w-full max-lg:justify-center"
                     >
                         {m.nav.start}
                     </Link>

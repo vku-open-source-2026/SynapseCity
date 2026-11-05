@@ -164,9 +164,9 @@ const ApiDocsPage = () => {
                   href={LINKS.dataLicense}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="font-medium text-teal-700 hover:underline dark:text-teal-400"
+                  className="font-medium text-sky-700 hover:underline dark:text-sky-400"
                 >
-                  CC0 1.0 Universal
+                  PDDL 1.0
                 </a>
               </li>
             </ul>
@@ -174,7 +174,7 @@ const ApiDocsPage = () => {
               href={LINKS.repo}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-teal-700 hover:text-teal-800 dark:text-teal-400 dark:hover:text-teal-300"
+              className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-sky-700 hover:text-sky-800 dark:text-sky-400 dark:hover:text-sky-300"
             >
               {d.repoLink}
               <ExternalLink size={14} />

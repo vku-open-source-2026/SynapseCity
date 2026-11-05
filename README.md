@@ -302,7 +302,7 @@ evidence checklist are in
 ## PoF project checklist
 
 - Source license: Apache-2.0 (`LICENSE`) with per-source SPDX headers and attribution in `NOTICE`.
-- Data license: **CC0 1.0 Universal** (public domain dedication, https://creativecommons.org/publicdomain/zero/1.0/) for published City datasets.
+- Data license: **PDDL 1.0** (Open Data Commons Public Domain Dedication and License) for published City datasets.
 - Build from source: `npm ci && npm run build` using Node.js 20+; Docker builds are reproducible with `docker compose build`.
 - Issue tracker: [GitHub Issues](https://github.com/vku-open-source-2026/SynapseCity/issues).
 - Change history: [`CHANGELOG.md`](CHANGELOG.md). Versioned release tags are published on GitHub.

@@ -5,10 +5,10 @@ import assert from 'node:assert/strict';
 import { CapabilitiesError } from '@synapsedx/capabilities';
 import { DATA_LICENSE, DATASETS, ensureDataset } from './domain';
 
-test('every City dataset uses the CC0-1.0 data license', () => {
-  assert.equal(DATA_LICENSE, 'CC0-1.0');
+test('every City dataset uses the PDDL-1.0 data license', () => {
+  assert.equal(DATA_LICENSE, 'PDDL-1.0');
   for (const dataset of Object.values(DATASETS)) {
-    assert.equal(dataset.license, 'CC0-1.0', `${dataset.id} must use CC0-1.0`);
+    assert.equal(dataset.license, 'PDDL-1.0', `${dataset.id} must use PDDL-1.0`);
   }
 });
 
@@ -22,7 +22,7 @@ test('only the public projection datasets are marked public', () => {
   assert.equal(DATASETS.users.public, false);
 });
 
-test('ensureDataset reconciles an old public City dataset to CC0 and private visibility', async () => {
+test('ensureDataset reconciles an old public City dataset to PDDL and private visibility', async () => {
   const revoked: string[] = [];
   const updated: Array<{ id: string; input: Record<string, unknown> }> = [];
   const existing = {
@@ -49,9 +49,9 @@ test('ensureDataset reconciles an old public City dataset to CC0 and private vis
   const dataset = await ensureDataset(client, DATASETS.users);
   assert.deepEqual(revoked, ['city-users']);
   assert.equal(updated.length, 1);
-  assert.equal(updated[0].input.license, 'CC0-1.0');
+  assert.equal(updated[0].input.license, 'PDDL-1.0');
   assert.equal(updated[0].input.public, false);
-  assert.equal(dataset.license, 'CC0-1.0');
+  assert.equal(dataset.license, 'PDDL-1.0');
 });
 
 test('ensureDataset creates city-users private and does not publish it', async () => {
@@ -85,6 +85,6 @@ test('ensureDataset creates and publishes city-assets as a public projection', a
 
   await ensureDataset(client, DATASETS.assets);
   assert.equal(created[0].public, true);
-  assert.equal(created[0].license, 'CC0-1.0');
+  assert.equal(created[0].license, 'PDDL-1.0');
   assert.equal(published, 'city-assets');
 });

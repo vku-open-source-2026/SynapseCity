@@ -6,7 +6,7 @@ import { useI18n } from "../lib/i18n-context";
 import { LINKS } from "../lib/site";
 
 const linkClass =
-    "text-sm text-slate-600 hover:text-teal-700 hover:underline dark:text-slate-400 dark:hover:text-teal-400";
+    "text-sm text-slate-600 hover:text-sky-600 hover:underline dark:text-slate-400 dark:hover:text-sky-400";
 
 function Ext({ href, children }: { href: string; children: ReactNode }) {
     return (
@@ -26,9 +26,9 @@ function Column({ title, children }: { title: string; children: ReactNode }) {
 }
 
 /**
- * Site footer. Besides navigation it carries every pointer the OLP rules ask a
- * submission to expose: source, releases, changelog, build guide, bug tracker,
- * contribution guide and the code / data / third-party licences.
+ * Site footer. Besides navigation it links to the source, releases, changelog,
+ * build guide, bug tracker, contribution guide and the code / data / third-party
+ * licences.
  */
 const Footer = () => {
     const { m } = useI18n();
@@ -38,7 +38,7 @@ const Footer = () => {
         <footer className="border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
             <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-[1.4fr_repeat(4,1fr)] lg:px-8">
                 <div>
-                    <p className="font-montserrat text-lg font-bold text-teal-700 dark:text-teal-400">SynapseCity</p>
+                    <p className="font-montserrat text-lg font-bold text-[#087f83] dark:text-teal-400">SynapseCity</p>
                     <p className="mt-2 max-w-xs text-sm text-slate-600 dark:text-slate-400">{m.footer.tagline}</p>
                 </div>
 
