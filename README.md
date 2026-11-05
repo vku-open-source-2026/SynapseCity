@@ -70,9 +70,9 @@ features.
 
 ## Run
 
-The Tier-2 client is a pinned, checksummed artifact in
-`vendor/synapsedx-capabilities-0.3.0.tgz`, so a clean clone builds without a
-sibling SynapseDX checkout or registry access:
+The Tier-2 client is published on npm as
+`@synapsedx/capabilities@^0.3.0`, so a clean clone builds without a sibling
+SynapseDX checkout:
 
 ```bash
 npm ci
@@ -81,10 +81,8 @@ npm run build
 SYNAPSEDX_BASE_URL=https://synapsedx.sbs npm run start:service
 ```
 
-`npm run check:release` verifies the tarball name, version and SHA-256. Registry
-publication of `@synapsedx/capabilities` is still tracked in SynapseDX #14; once
-it is published, replace the `file:` tarball with the semver range and the same
-check accepts it.
+`npm run check:release` verifies that the dependency is a registry semver
+release and rejects `file:`/sibling-checkout dependencies.
 
 Console development:
 
@@ -93,7 +91,7 @@ npm run dev --workspace=@synapsecity/console
 ```
 
 The production stack is reproducible with `docker compose up -d --build`; the
-Docker build copies `vendor/` and needs no sibling repository.
+Docker build installs the published npm package and needs no sibling repository.
 
 ## API
 

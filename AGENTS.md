@@ -14,10 +14,9 @@ The repository is split into product parts:
 
 ## Dependency contract
 
-- Import the Tier-2 `@synapsedx/capabilities` client from the pinned,
-  checksummed artifact in `vendor/synapsedx-capabilities-<version>.tgz`; do not
-  reintroduce a `file:` sibling checkout. `npm run check:release` verifies the
-  tarball and accepts a registry semver release when SynapseDX publishes one.
+- Import the Tier-2 `@synapsedx/capabilities` client from the public npm
+  registry (`^0.3.0` or later). Do not use a `file:` sibling checkout or a
+  vendored tarball. `npm run check:release` enforces a registry semver range.
 - Default Tier-2 URL is `https://synapsedx.sbs`. Set `SYNAPSEDX_BASE_URL` only
   to another public HTTPS endpoint. Do not call SynapseOne, a private service
   port, localhost or a database from this repository.

@@ -3,7 +3,6 @@
 FROM node:20-bookworm-slim AS build
 WORKDIR /workspace
 COPY SynapseCity/package*.json ./SynapseCity/
-COPY SynapseCity/vendor ./SynapseCity/vendor
 COPY SynapseCity/scripts ./SynapseCity/scripts
 COPY SynapseCity/apps/city-service/package*.json SynapseCity/apps/city-service/tsconfig.json ./SynapseCity/apps/city-service/
 COPY SynapseCity/apps/city-service/src ./SynapseCity/apps/city-service/src
