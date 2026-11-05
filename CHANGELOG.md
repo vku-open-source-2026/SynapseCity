@@ -35,10 +35,9 @@ Keep a Changelog format and version tags use Semantic Versioning.
 - Tier-2 geo adoption: address search/geocode/reverse use the shared
   provider-neutral `geo` capability by default; `CITY_GEO_PROVIDER=vietmap`
   remains an explicit legacy opt-in and fallback is disabled by default.
-- `vendor/synapsedx-capabilities-0.3.0.tgz` plus a checksum; the City service
-  no longer needs a sibling SynapseDX checkout to install or build.
-  `npm run check:release` verifies the pinned artifact (and accepts a registry
-  semver release later).
+- `@synapsedx/capabilities@^0.3.0` from the public npm registry; the City
+  service needs no sibling SynapseDX checkout or vendored tarball.
+  `npm run check:release` enforces a registry semver dependency.
 - `docs/REPORTS.md` documents why report generation stays synchronous and when
   to adopt the Tier-2 `report.generate` runner.
 

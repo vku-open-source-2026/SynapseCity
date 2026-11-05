@@ -26,7 +26,7 @@ jobs:
       - name: Install
         run: npm ci
 
-      - name: Verify pinned Tier-2 SDK
+      - name: Verify registry Tier-2 SDK
         run: npm run check:release
 
       - name: Build and test
@@ -70,8 +70,6 @@ jobs:
           files: |
             docker-compose.yml
             infra/nginx/synapsecity.conf
-            vendor/synapsedx-capabilities-0.3.0.tgz
-            vendor/synapsedx-capabilities-0.3.0.tgz.sha256
           body: |
             SynapseCity ${{ github.ref_name }}
 
