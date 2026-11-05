@@ -61,6 +61,7 @@ export interface MockTier2 {
     refusedExchange: boolean;
   };
   geo: { available: boolean; results: Array<Record<string, unknown>> };
+  approvals: Map<string, Record<string, any>>;
   /** Controls the AI capability contract exposed by the mock. */
   ai: { available: boolean; reply: string };
   seed: (datasetId: string, id: string, data: Record<string, unknown>) => void;
@@ -112,6 +113,7 @@ export async function startMockTier2(): Promise<MockTier2> {
     refusedExchange: false,
   };
   const geo = { available: true, results: [] as Array<Record<string, unknown>> };
+  const approvals = new Map<string, Record<string, any>>();
 
   const recordsFor = (datasetId: string): Map<string, Record<string, unknown>> => {
     if (!records.has(datasetId)) records.set(datasetId, new Map());
@@ -142,6 +144,44 @@ export async function startMockTier2(): Promise<MockTier2> {
         tier: 2,
         dependencies: [{ name: 'base', status: 'ok', critical: true, latency_ms: 1 }],
       });
+    }
+
+    // ---- HITL approvals (#30) ----
+    if (path === '/v1/capabilities/approvals' && req.method === 'POST') {
+      const id = String(body?.id || randomUUID());
+      const now = new Date().toISOString();
+      const approval = {
+        id, tenant: 'demo', title: String(body?.title || 'Approval'), module: String(body?.module || ''),
+        action: String(body?.action || ''), entityType: body?.entityType, entityId: body?.entityId,
+        payload: body?.payload, requester: String(body?.requester || 'city-user'),
+        approverRoles: Array.isArray(body?.approverRoles) ? body.approverRoles : [],
+        requiredApprovals: Number(body?.requiredApprovals || 1), status: 'pending', decisions: [],
+        dueAt: body?.dueAt, createdAt: now, updatedAt: now,
+      };
+      approvals.set(id, approval);
+      return send(res, 201, { approval });
+    }
+    if (path === '/v1/capabilities/approvals' && req.method === 'GET') {
+      const items = [...approvals.values()].filter((item) => !url.searchParams.get('status') || item.status === url.searchParams.get('status'));
+      return send(res, 200, { items, total: items.length });
+    }
+    const approvalMatch = path.match(/^\/v1\/capabilities\/approvals\/([^/]+)$/);
+    if (approvalMatch && req.method === 'GET') {
+      const item = approvals.get(approvalMatch[1]);
+      return item ? send(res, 200, { approval: item }) : send(res, 404, { error: { code: 'approval_not_found' } });
+    }
+    const decideMatch = path.match(/^\/v1\/capabilities\/approvals\/([^/]+)\/decide$/);
+    if (decideMatch && req.method === 'POST') {
+      const item = approvals.get(decideMatch[1]);
+      if (!item) return send(res, 404, { error: { code: 'approval_not_found' } });
+      if (item.status !== 'pending') return send(res, 409, { error: { code: 'approval_not_pending' } });
+      const decision = String(body?.decision || '');
+      if (!['approve', 'reject'].includes(decision)) return send(res, 400, { error: { code: 'invalid_request' } });
+      item.decisions.push({ actor: String(body?.actor || 'approver'), decision, note: body?.note, at: new Date().toISOString() });
+      item.status = decision === 'approve' ? 'approved' : 'rejected';
+      item.updatedAt = new Date().toISOString();
+      approvals.set(item.id, item);
+      return send(res, 200, { approval: item });
     }
 
     // ---- auth ----
@@ -449,6 +489,7 @@ export async function startMockTier2(): Promise<MockTier2> {
     notifications,
     auth,
     geo,
+    approvals,
     ai,
     seed: (datasetId, id, data) => { recordsFor(datasetId).set(id, { ...data, id }); },
     close: () => new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve()))),
