@@ -1,16 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
-import {
-    createContext,
-    useCallback,
-    useContext,
-    useEffect,
-    useMemo,
-    useState,
-    type ReactNode,
-} from "react";
-
-export type ThemeChoice = "light" | "dark" | "system";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { ThemeContext, type ThemeChoice } from "./theme-context";
 
 const STORAGE_KEY = "synapsecity.theme";
 const ORDER: ThemeChoice[] = ["light", "dark", "system"];
@@ -37,14 +28,6 @@ function apply(choice: ThemeChoice) {
     root.style.colorScheme = dark ? "dark" : "light";
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", dark ? "#0b1220" : "#ffffff");
 }
-
-interface ThemeContextValue {
-    choice: ThemeChoice;
-    setChoice: (next: ThemeChoice) => void;
-    cycle: () => void;
-}
-
-const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
     const [choice, setChoiceState] = useState<ThemeChoice>(readChoice);
@@ -73,10 +56,4 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
     const value = useMemo(() => ({ choice, setChoice, cycle }), [choice, setChoice, cycle]);
     return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
-}
-
-export function useTheme(): ThemeContextValue {
-    const ctx = useContext(ThemeContext);
-    if (!ctx) throw new Error("useTheme must be used inside <ThemeProvider>");
-    return ctx;
 }

@@ -3,8 +3,8 @@
 import { Link } from "@tanstack/react-router";
 import { useState, useCallback } from "react";
 import { CircleAlert, LogIn, Menu, Monitor, Moon, Siren, Sun, X } from "lucide-react";
-import { useI18n } from "../lib/i18n";
-import { useTheme } from "../lib/theme";
+import { useI18n } from "../lib/i18n-context";
+import { useTheme } from "../lib/theme-context";
 import { LINKS } from "../lib/site";
 
 const linkBase =

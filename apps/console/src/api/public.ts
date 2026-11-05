@@ -42,6 +42,18 @@ export const publicApi = {
   },
 
   /**
+   * Number of published public assets, read from the `x-total-count` header so
+   * anonymous visitors do not need the operator-only /assets endpoint.
+   * GET /public/assets?limit=1
+   */
+  countPublicAssets: async (): Promise<number> => {
+    const response = await httpClient.get<PublicAssetInfo[]>('/public/assets', { params: { limit: 1 } });
+    const total = Number(response.headers['x-total-count']);
+    if (Number.isFinite(total)) return total;
+    return Array.isArray(response.data) ? response.data.length : 0;
+  },
+
+  /**
    * Get public asset information by asset code
    * GET /public/assets/{code}
    */

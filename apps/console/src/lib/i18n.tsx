@@ -1,18 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
-import {
-    createContext,
-    useCallback,
-    useContext,
-    useEffect,
-    useMemo,
-    useState,
-    type ReactNode,
-} from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { vi, type Messages } from "../locales/vi";
 import { en } from "../locales/en";
-
-export type Lang = "vi" | "en";
+import { I18nContext, type Lang } from "./i18n-context";
 
 const STORAGE_KEY = "synapsecity.lang";
 const DICTS: Record<Lang, Messages> = { vi, en };
@@ -28,15 +19,6 @@ function readLang(): Lang {
     const browser = typeof navigator !== "undefined" ? navigator.language.toLowerCase() : "vi";
     return browser.startsWith("vi") || !browser ? "vi" : "en";
 }
-
-interface I18nContextValue {
-    lang: Lang;
-    m: Messages;
-    setLang: (next: Lang) => void;
-    toggle: () => void;
-}
-
-const I18nContext = createContext<I18nContextValue | null>(null);
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
     const [lang, setLangState] = useState<Lang>(readLang);
@@ -60,10 +42,4 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 
     const value = useMemo(() => ({ lang, m: DICTS[lang], setLang, toggle }), [lang, setLang, toggle]);
     return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
-}
-
-export function useI18n(): I18nContextValue {
-    const ctx = useContext(I18nContext);
-    if (!ctx) throw new Error("useI18n must be used inside <LanguageProvider>");
-    return ctx;
 }

@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { useI18n } from "../lib/i18n";
+import { useI18n } from "../lib/i18n-context";
 import { LINKS } from "../lib/site";
 
 const linkClass =

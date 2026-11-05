@@ -4,7 +4,7 @@ import Header from "../components/Header";
 import Footer from "../components/Footer";
 import { Copy, Check, Database, ExternalLink, ShieldAlert } from "lucide-react";
 import { useState } from "react";
-import { useI18n } from "../lib/i18n";
+import { useI18n } from "../lib/i18n-context";
 import type { Messages } from "../locales/vi";
 import { LINKS } from "../lib/site";
 

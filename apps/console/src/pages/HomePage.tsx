@@ -16,13 +16,13 @@ import {
     Wrench,
     Database,
 } from "lucide-react";
-import { getAssets } from "../api";
+import { publicApi } from "../api/public";
 import AIChatWidget from "../components/AIChatWidget";
 import Footer from "../components/Footer";
 import Header from "../components/Header";
 import mapImage from "../assets/map.png";
 import { usePWA } from "../hooks/usePWA";
-import { useI18n } from "../lib/i18n";
+import { useI18n } from "../lib/i18n-context";
 import { LINKS } from "../lib/site";
 
 const FEATURE_ICONS = [MapPin, Wrench, Activity, Gauge, Wallet, Database];
@@ -42,9 +42,11 @@ const HomePage = () => {
 
     useEffect(() => {
         let cancelled = false;
-        getAssets()
-            .then((assets) => {
-                if (!cancelled) setAssetCount(assets.length);
+        publicApi
+            .countPublicAssets()
+            .then((count) => {
+                // Hide the badge rather than advertise an empty map.
+                if (!cancelled) setAssetCount(count > 0 ? count : null);
             })
             .catch(() => {
                 if (!cancelled) setAssetCount(null);

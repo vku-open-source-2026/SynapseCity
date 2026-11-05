@@ -5,7 +5,7 @@ import { Link } from "@tanstack/react-router";
 import { ExternalLink } from "lucide-react";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
-import { useI18n } from "../lib/i18n";
+import { useI18n } from "../lib/i18n-context";
 import { LINKS } from "../lib/site";
 
 interface TeamMember {
@@ -140,7 +140,7 @@ const AboutUs: React.FC = () => {
                                 rel="noopener noreferrer"
                                 className={`${card} flex items-center gap-4 py-4 hover:border-teal-300 dark:hover:border-teal-800`}
                             >
-                                <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-white p-1.5">
+                                <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-white p-1.5 dark:bg-white">
                                     <img src={p.logo} alt="" className="max-h-full max-w-full object-contain" />
                                 </span>
                                 <span className="font-medium text-slate-800 dark:text-slate-100">{p.label}</span>
@@ -176,7 +176,7 @@ const AboutUs: React.FC = () => {
                             href={LINKS.repo}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
+                            className="inline-flex items-center rounded-lg bg-teal-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 dark:bg-teal-500 dark:text-slate-950 dark:hover:bg-teal-400"
                         >
                             {a.contributeRepo}
                         </a>
