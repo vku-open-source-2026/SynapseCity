@@ -1,5 +1,10 @@
 # SynapseCity — city infrastructure operations (Tier 3)
 
+## OLP 2026 demo
+
+A reproducible 15-minute DX-Lab story lives in [`docs/DEMO_PACK.md`](docs/DEMO_PACK.md). Seed/reset with `npm run demo:seed` and `npm run demo:reset` (requires `CITY_DEMO_TOKEN`).
+
+
 ![CI](https://github.com/vku-open-source-2026/SynapseCity/actions/workflows/ci.yml/badge.svg)
 ![Release](https://github.com/vku-open-source-2026/SynapseCity/actions/workflows/release.yml/badge.svg)
 

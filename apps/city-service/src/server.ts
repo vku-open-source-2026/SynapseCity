@@ -81,6 +81,8 @@ import {
 } from './analytics';
 import { maintenanceFromAlert, shouldCreateMaintenance, type AlertForAutomation } from './alerts';
 import { derivePreventiveTasks, filterPreventiveTasks, type PreventivePlan } from './preventive';
+import { assertApproved, createApproval, decideApproval, hitlRequired, listPendingApprovals, type HitlError } from './hitl';
+import { rankAssetsByRisk, scoreAssetRisk, type RiskSensorReading } from './risk';
 import {
   generateReport,
   normalizeReportFormat,
@@ -160,6 +162,11 @@ app.set('trust proxy', true);
 // Binary upload endpoints must be parsed before the JSON body parser, otherwise
 // a JSON/PDF/PNG file whose content type is `application/json` arrives as an
 // object instead of bytes.
+function hitlActor(req: Request): string {
+  const session = (req as AuthedRequest).session || sessionFromRequest(req);
+  return String((session as any)?.username || (session as any)?.email || (session as any)?.sub || 'city-user');
+}
+
 const uploadRaw = express.raw({ type: () => true, limit: fileMaxBytes() + 1024 * 1024 });
 const isRawUploadPath = (pathname: string): boolean => pathname === '/v1/files/upload'
   || pathname === '/v1/public/files'
@@ -1807,6 +1814,111 @@ function healthScore(asset: Record<string, unknown>, openIncidents: number): Rec
   };
 }
 
+async function assetRiskResult(req: Request, assetId: string): Promise<ReturnType<typeof scoreAssetRisk> | null> {
+  const c = capabilitiesFromRequest(req);
+  const assetsDataset = await ensureDataset(c, DATASETS.assets);
+  const assetRecord = await findRecord(c, assetsDataset.id, assetId, ['asset_code', 'feature_code', 'assetId', 'id']);
+  if (!assetRecord) return null;
+  const asset = assetView(assetRecord);
+  const [incidentsDataset, maintenanceDataset, sensorsDataset, readingsDataset] = await Promise.all([
+    ensureDataset(c, DATASETS.incidents), ensureDataset(c, DATASETS.maintenance),
+    ensureDataset(c, DATASETS.sensors), ensureDataset(c, DATASETS.sensorData),
+  ]);
+  const [incidentRecords, maintenanceRecords, sensorRecords, readingRecords] = await Promise.all([
+    listAllRecords(c, incidentsDataset.id), listAllRecords(c, maintenanceDataset.id),
+    listAllRecords(c, sensorsDataset.id), listAllRecords(c, readingsDataset.id),
+  ]);
+  const key = String(assetRecord.id || assetId);
+  const code = String(asset.asset_code || asset.feature_code || '');
+  const incidents = incidentRecords.map((row) => recordData(row.data))
+    .filter((row) => [row.asset_id, row.assetId, row.asset_code].some((value) => value && (String(value) === key || String(value) === code)));
+  const maintenance = maintenanceRecords.map((row) => recordData(row.data))
+    .filter((row) => [row.asset_id, row.assetId].some((value) => value && (String(value) === key || String(value) === code)));
+  const sensorIds = new Set(sensorRecords.map((row) => recordData(row.data))
+    .filter((row) => [row.asset_id, row.assetId].some((value) => value && (String(value) === key || String(value) === code)))
+    .map((row) => String(row.id || row.sensor_id || '')));
+  const sensors: RiskSensorReading[] = readingRecords.map((row) => recordData(row.data))
+    .filter((row) => sensorIds.size === 0 || sensorIds.has(String(row.sensor_id || row.sensorId || '')))
+    .map((row) => ({
+      metric: row.metric ? String(row.metric) : undefined,
+      value: row.value === undefined ? undefined : Number(row.value),
+      unit: row.unit ? String(row.unit) : undefined,
+      min: row.min === undefined ? undefined : Number(row.min),
+      max: row.max === undefined ? undefined : Number(row.max),
+      observed_at: row.observed_at ? String(row.observed_at) : row.timestamp ? String(row.timestamp) : undefined,
+    }));
+  return scoreAssetRisk({ asset: { ...asset, id: key }, incidents, maintenance, sensors });
+}
+
+app.put('/v1/assets/:id/criticality', async (req, res, next) => {
+  try {
+    const input = objectBody(req.body);
+    const criticality = {
+      service_impact: Math.max(1, Math.min(5, Number(input.service_impact ?? 3))),
+      population_served: Math.max(0, Number(input.population_served ?? 0)),
+      redundancy: Math.max(1, Math.min(5, Number(input.redundancy ?? 3))),
+      safety_impact: Math.max(1, Math.min(5, Number(input.safety_impact ?? 3))),
+    };
+    const existing = await findRecord(capabilitiesFromRequest(req), (await ensureDataset(capabilitiesFromRequest(req), DATASETS.assets)).id, req.params.id, ['asset_code', 'feature_code', 'assetId', 'id']);
+    if (!existing) return res.status(404).json({ error: 'asset_not_found' });
+    const updated = await updateAsset(req, req.params.id, { criticality });
+    res.json({ asset: updated, criticality });
+  } catch (error) { next(error); }
+});
+
+app.get('/v1/assets/:id/risk', async (req, res, next) => {
+  try {
+    const result = await assetRiskResult(req, req.params.id);
+    if (!result) return res.status(404).json({ error: 'asset_not_found' });
+    res.json(result);
+  } catch (error) { next(error); }
+});
+
+app.get('/v1/risk/top', async (req, res, next) => {
+  try {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 100);
+    const c = capabilitiesFromRequest(req);
+    const assets = await listAllRecords(c, (await ensureDataset(c, DATASETS.assets)).id);
+    const results = [] as ReturnType<typeof scoreAssetRisk>[];
+    for (const asset of assets.slice(0, 500)) {
+      const result = await assetRiskResult(req, String(asset.id));
+      if (result) results.push(result);
+    }
+    res.json({ items: rankAssetsByRisk(results).slice(0, limit), total: results.length });
+  } catch (error) { next(error); }
+});
+
+app.post('/v1/assets/:id/risk/work-order', async (req, res, next) => {
+  try {
+    const risk = await assetRiskResult(req, req.params.id);
+    if (!risk) return res.status(404).json({ error: 'asset_not_found' });
+    const input = objectBody(req.body);
+    const approvalId = String(input.approval_id || input.approvalId || '');
+    const actor = hitlActor(req);
+    if (hitlRequired() && !approvalId) {
+      const approval = await createApproval(req, {
+        title: `Predictive maintenance for ${risk.asset_id}`,
+        module: 'city.maintenance', action: 'maintenance.approve', entityType: 'asset', entityId: String(req.params.id),
+        payload: { risk_score: risk.score, band: risk.band, confidence: risk.confidence, factors: risk.factors },
+        requester: actor,
+      });
+      return res.status(202).json({ approval, hitl_required: true, risk });
+    }
+    if (approvalId) await assertApproved(req, approvalId, { entityId: String(req.params.id), action: 'maintenance.approve', actor });
+    const workOrder = await genericWrite(req, 'maintenance', {
+      title: String(input.title || `Predictive maintenance: ${risk.asset_id}`),
+      asset_id: String(req.params.id), type: 'preventive', source: 'predictive-risk',
+      priority: risk.band === 'critical' ? 'critical' : risk.band === 'high' ? 'high' : 'medium',
+      status: approvalId ? 'scheduled' : 'recommended',
+      risk_score: risk.score, risk_band: risk.band, risk_confidence: risk.confidence,
+      risk_factors: risk.factors, risk_flags: risk.flags, data_freshness: risk.data_freshness,
+      ...(approvalId ? { approval_id: approvalId, approved_by: actor } : {}),
+      scheduled_date: String(input.scheduled_date || new Date(Date.now() + 7 * 86_400_000).toISOString()),
+    });
+    res.status(201).json({ work_order: workOrder, risk });
+  } catch (error) { next(error); }
+});
+
 app.get('/v1/assets/:id/health-score', async (req, res, next) => {
   try {
     const client = capabilitiesFromRequest(req);
@@ -2207,9 +2319,54 @@ app.post('/v1/incidents/:id/reject', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
+app.get('/v1/hitl/approvals', async (req, res, next) => {
+  try {
+    const items = await listPendingApprovals(req, req.query.module ? String(req.query.module) : undefined);
+    const now = Date.now();
+    res.json({ items: items.map((item) => ({ ...item, escalated: !!item.dueAt && Date.parse(item.dueAt) < now })), total: items.length });
+  } catch (error) { next(error); }
+});
+
+app.post('/v1/hitl/approvals/:id/decide', async (req, res, next) => {
+  try {
+    const input = objectBody(req.body);
+    const decision = String(input.decision || '').toLowerCase();
+    if (!['approve', 'reject'].includes(decision)) return res.status(400).json({ error: 'invalid_decision' });
+    const approval = await decideApproval(req, req.params.id, decision as 'approve' | 'reject', input.note ? String(input.note) : undefined);
+    res.json({ approval });
+  } catch (error) { next(error); }
+});
+
+app.post('/v1/incidents/:id/cost-approval', async (req, res, next) => {
+  try {
+    const incident = await findIncident(req, req.params.id);
+    if (!incident) return res.status(404).json({ error: 'incident_not_found' });
+    const actor = hitlActor(req);
+    const approval = await createApproval(req, {
+      title: `Incident cost approval: ${String(incident.title || incident.id || req.params.id)}`,
+      module: 'city.incident', action: 'city.cost.approve',
+      entityType: 'incident', entityId: String(req.params.id),
+      payload: { cost: incident.cost ?? incident.estimated_cost ?? null, severity: incident.severity ?? null },
+      requester: actor,
+    });
+    res.status(202).json({ approval, hitl_required: true });
+  } catch (error) { next(error); }
+});
+
 app.post('/v1/incidents/:id/approve-cost', async (req, res, next) => {
   try {
     if (!(await findIncident(req, req.params.id))) return res.status(404).json({ error: 'incident_not_found' });
+    const input = objectBody(req.body);
+    const approvalId = String(input.approval_id || input.approvalId || '');
+    if (hitlRequired() || approvalId) {
+      if (!approvalId) return res.status(428).json({ error: 'approval_required', message: 'create a cost approval first' });
+      const actor = hitlActor(req);
+      const approval = await assertApproved(req, approvalId, { entityId: String(req.params.id), action: 'city.cost.approve', actor });
+      return res.json(await updateIncident(req, req.params.id, {
+        cost_status: 'approved', cost_approved_at: new Date().toISOString(),
+        cost_approval_id: approvalId, cost_approved_by: actor, cost_approval_roles: approval.approverRoles,
+      }));
+    }
     res.json(await updateIncident(req, req.params.id, { cost_status: 'approved', cost_approved_at: new Date().toISOString() }));
   } catch (error) { next(error); }
 });
@@ -2418,11 +2575,37 @@ app.get('/v1/maintenance/asset/:assetId', async (req, res, next) => {
     sendPage(res, rows, req);
   } catch (error) { next(error); }
 });
+app.post('/v1/maintenance/:id/approval', async (req, res, next) => {
+  try {
+    const workOrder = await genericGet(req, 'maintenance', req.params.id);
+    const actor = hitlActor(req);
+    const approval = await createApproval(req, {
+      title: `Maintenance approval: ${String(workOrder.title || workOrder.id || req.params.id)}`,
+      module: 'city.maintenance', action: 'maintenance.approve',
+      entityType: 'maintenance', entityId: String(req.params.id),
+      payload: { priority: workOrder.priority ?? null, cost: workOrder.cost ?? null, asset_id: workOrder.asset_id ?? null },
+      requester: actor,
+    });
+    res.status(202).json({ approval, hitl_required: true });
+  } catch (error) { next(error); }
+});
+
 installGenericCrud('/v1/maintenance', 'maintenance', { reserved: ['upcoming', 'asset'], scope: maintenanceScope, rowAllowed: maintenanceRowAllowed });
 for (const action of ['assign', 'start', 'complete', 'cancel', 'approve', 'reject']) {
   app.post(`/v1/maintenance/:id/${action}`, async (req, res, next) => {
     try {
       const body = Object.keys(genericBody(req)).length > 0 ? genericBody(req) : Object.fromEntries(Object.entries(req.query).map(([key, value]) => [key, String(value)]));
+      if (action === 'approve' || action === 'reject') {
+        const approvalId = String(body.approval_id || body.approvalId || '');
+        if (hitlRequired() || approvalId) {
+          if (!approvalId) return res.status(428).json({ error: 'approval_required', message: 'create a maintenance approval first' });
+          const actor = hitlActor(req);
+          const approval = await assertApproved(req, approvalId, { entityId: String(req.params.id), action: 'maintenance.approve', actor });
+          body.approval_id = approvalId;
+          body.approved_by = actor;
+          body.approval_roles = approval.approverRoles;
+        }
+      }
       const updated = await genericUpdate(req, 'maintenance', req.params.id, {
         ...body,
         ...(action === 'start' ? { status: 'in_progress' } : {}),
@@ -2695,7 +2878,36 @@ installGenericCrud('/v1/budgets', 'budgets');
 for (const action of ['submit', 'approve']) app.post(`/v1/budgets/:id/${action}`, async (req, res, next) => { try { res.json(await genericUpdate(req, 'budgets', req.params.id, { status: action === 'submit' ? 'submitted' : 'approved' })); } catch (error) { next(error); } });
 app.get('/v1/budgets/:id/transactions', async (req, res, next) => { try { res.json((await genericList(req, 'transactions')).filter((row) => String(row.budget_id || '') === req.params.id)); } catch (error) { next(error); } });
 app.post('/v1/budgets/:id/transactions', async (req, res, next) => { try { res.status(201).json(await genericWrite(req, 'transactions', { ...genericBody(req), budget_id: req.params.id })); } catch (error) { next(error); } });
-app.post('/v1/budgets/transactions/:id/approve', async (req, res, next) => { try { res.json(await genericUpdate(req, 'transactions', req.params.id, { status: 'approved' })); } catch (error) { next(error); } });
+app.post('/v1/budgets/transactions/:id/approval', async (req, res, next) => {
+  try {
+    const transaction = await genericGet(req, 'transactions', req.params.id);
+    const actor = hitlActor(req);
+    const approval = await createApproval(req, {
+      title: `Budget transaction approval: ${String(transaction.description || transaction.id || req.params.id)}`,
+      module: 'city.budget', action: 'budget.transaction.approve',
+      entityType: 'budget_transaction', entityId: String(req.params.id),
+      payload: { amount: transaction.amount ?? null, budget_id: transaction.budget_id ?? null },
+      requester: actor,
+    });
+    res.status(202).json({ approval, hitl_required: true });
+  } catch (error) { next(error); }
+});
+app.post('/v1/budgets/transactions/:id/approve', async (req, res, next) => {
+  try {
+    const input = objectBody(req.body);
+    const approvalId = String(input.approval_id || input.approvalId || '');
+    if (hitlRequired() || approvalId) {
+      if (!approvalId) return res.status(428).json({ error: 'approval_required', message: 'create a transaction approval first' });
+      const actor = hitlActor(req);
+      const approval = await assertApproved(req, approvalId, { entityId: String(req.params.id), action: 'budget.transaction.approve', actor });
+      return res.json(await genericUpdate(req, 'transactions', req.params.id, {
+        status: 'approved', approved_at: new Date().toISOString(), approval_id: approvalId,
+        approved_by: actor, approval_roles: approval.approverRoles,
+      }));
+    }
+    res.json(await genericUpdate(req, 'transactions', req.params.id, { status: 'approved' }));
+  } catch (error) { next(error); }
+});
 
 // Reports are City-owned artifacts: creation/generation stores real CSV/JSON
 // bytes on the report record and download streams those bytes.
