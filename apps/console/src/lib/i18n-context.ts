@@ -8,6 +8,8 @@ export type Lang = "vi" | "en";
 export interface I18nContextValue {
     lang: Lang;
     m: Messages;
+    /** Every language's copy, for widths that must not change on a language switch (StableLabel). */
+    dicts: Record<Lang, Messages>;
     setLang: (next: Lang) => void;
     toggle: () => void;
 }

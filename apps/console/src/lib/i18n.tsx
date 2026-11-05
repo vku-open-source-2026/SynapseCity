@@ -70,6 +70,6 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 
     const toggle = useCallback(() => setLang(lang === "vi" ? "en" : "vi"), [lang, setLang]);
 
-    const value = useMemo(() => ({ lang, m: DICTS[lang], setLang, toggle }), [lang, setLang, toggle]);
+    const value = useMemo(() => ({ lang, m: DICTS[lang], dicts: DICTS, setLang, toggle }), [lang, setLang, toggle]);
     return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }

@@ -6,6 +6,7 @@ import { CircleAlert, LogIn, Menu, Monitor, Moon, Siren, Sun, X } from "lucide-r
 import { useI18n } from "../lib/i18n-context";
 import { useTheme } from "../lib/theme-context";
 import { LINKS } from "../lib/site";
+import { StableLabel } from "./StableLabel";
 
 const linkBase =
     "whitespace-nowrap text-[15px] transition-colors max-lg:text-lg max-lg:py-2 flex items-center gap-1.5";
@@ -24,7 +25,7 @@ export function SiteToggles({ className = "" }: { className?: string }) {
                 onClick={toggleLang}
                 title={m.nav.switchLang}
                 aria-label={m.nav.switchLang}
-                className="h-9 min-w-9 rounded-lg px-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+                className="h-9 w-9 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
             >
                 {m.nav.langShort}
             </button>
@@ -88,14 +89,14 @@ const Header: React.FC = () => {
                         onClick={closeMobileMenu}
                         className={`${linkBase} text-slate-600 hover:text-sky-600 dark:text-slate-300 dark:hover:text-sky-400`}
                     >
-                        {m.nav.about}
+                        <StableLabel pick={(d) => d.nav.about} />
                     </Link>
                     <Link
                         to="/docs"
                         onClick={closeMobileMenu}
                         className={`${linkBase} text-slate-600 hover:text-sky-600 dark:text-slate-300 dark:hover:text-sky-400`}
                     >
-                        {m.nav.docs}
+                        <StableLabel pick={(d) => d.nav.docs} />
                     </Link>
                     <Link
                         to="/public/report"
@@ -103,7 +104,7 @@ const Header: React.FC = () => {
                         className={`${linkBase} font-medium text-amber-700 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300`}
                     >
                         <CircleAlert className="h-4 w-4" />
-                        {m.nav.report}
+                        <StableLabel pick={(d) => d.nav.report} />
                     </Link>
                     <a
                         href={LINKS.sos}
@@ -111,7 +112,7 @@ const Header: React.FC = () => {
                         className={`${linkBase} font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300`}
                     >
                         <Siren className="h-4 w-4" />
-                        {m.nav.sos}
+                        <StableLabel pick={(d) => d.nav.sos} />
                     </a>
                     <Link
                         to="/login"
@@ -119,7 +120,7 @@ const Header: React.FC = () => {
                         className={`${linkBase} text-slate-600 hover:text-sky-600 dark:text-slate-300 dark:hover:text-sky-400`}
                     >
                         <LogIn className="h-4 w-4" />
-                        {m.nav.login}
+                        <StableLabel pick={(d) => d.nav.login} />
                     </Link>
 
                     <SiteToggles className="max-lg:hidden" />
@@ -130,7 +131,7 @@ const Header: React.FC = () => {
                         onClick={closeMobileMenu}
                         className="flex h-10 items-center whitespace-nowrap rounded-full bg-linear-to-r from-cyan-500 to-blue-500 px-6 text-[15px] font-semibold text-white shadow-md shadow-cyan-500/25 transition hover:shadow-lg max-lg:mt-4 max-lg:w-full max-lg:justify-center"
                     >
-                        {m.nav.start}
+                        <StableLabel pick={(d) => d.nav.start} />
                     </Link>
                 </nav>
 

@@ -7,6 +7,8 @@ Keep a Changelog format and version tags use Semantic Versioning.
 
 ### Changed
 
+- Header links and buttons keep their place when the language changes, so a
+  click lands on the intended item.
 - Public website (home, about, open API docs, header, footer) is bilingual
   (Vietnamese / English) and supports light, dark and system themes. The
   home page no longer hotlinks a stock photo or shows a placeholder asset
