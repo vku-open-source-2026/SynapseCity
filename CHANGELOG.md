@@ -3,7 +3,17 @@
 All notable changes to SynapseCity are documented here. Entries follow the
 Keep a Changelog format and version tags use Semantic Versioning.
 
-## [Unreleased] - 2026-11-04
+## [Unreleased] - 2026-11-05
+
+### Changed
+
+- Changed the published City data license from PDDL 1.0 to **CC0 1.0
+  Universal**. `ensureDataset` reconciles existing Tier-2 datasets to
+  `CC0-1.0` on start-up. Source code remains Apache-2.0.
+- Public website (home, about, open API docs, header, footer) is bilingual
+  (Vietnamese / English) and supports light, dark and system themes. The
+  home page no longer hotlinks a stock photo or shows a placeholder asset
+  count when the API is unreachable.
 
 ### Added
 

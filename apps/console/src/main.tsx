@@ -7,12 +7,13 @@ import 'leaflet/dist/leaflet.css';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createRouter } from '@tanstack/react-router';
 import { queryClient } from './lib/queryClient';
+import { LanguageProvider } from './lib/i18n';
+import { ThemeProvider } from './lib/theme';
 
 // Import the generated route tree
 import { routeTree } from './routeTree.gen';
 
 document.documentElement.dataset.product = 'city';
-document.title = 'SynapseCity · Infrastructure Operations';
 
 function getRootElement() {
   const existingRoot = document.getElementById('root');
@@ -45,8 +46,12 @@ declare module '@tanstack/react-router' {
 
 ReactDOM.createRoot(getRootElement()).render(
   <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>
+    <ThemeProvider>
+      <LanguageProvider>
+        <QueryClientProvider client={queryClient}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>
+      </LanguageProvider>
+    </ThemeProvider>
   </React.StrictMode>,
 )

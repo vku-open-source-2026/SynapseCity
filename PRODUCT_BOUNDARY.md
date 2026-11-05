@@ -133,9 +133,9 @@ Every dataset uses the `city-` prefix. A `sos-` dataset is foreign and must
 never be read or written. The service fails at start-up if a configured dataset
 does not use the City prefix.
 
-All City datasets are registered in Tier-2 with the **PDDL-1.0** data license
-(Open Data Commons Public Domain Dedication and License 1.0). Source code stays
-Apache-2.0; PDDL applies to the published data.
+All City datasets are registered in Tier-2 with the **CC0-1.0** data license
+(Creative Commons Zero 1.0 Universal public domain dedication). Source code
+stays Apache-2.0; CC0 applies to the published data.
 
 Only `city-assets` and `city-incidents` are public projections. Every other
 dataset (including `city-users`, operational alerts, budgets, reports,

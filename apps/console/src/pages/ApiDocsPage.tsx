@@ -4,6 +4,9 @@ import Header from "../components/Header";
 import Footer from "../components/Footer";
 import { Copy, Check, Database, ExternalLink, ShieldAlert } from "lucide-react";
 import { useState } from "react";
+import { useI18n } from "../lib/i18n";
+import type { Messages } from "../locales/vi";
+import { LINKS } from "../lib/site";
 
 /**
  * Public City API documentation.
@@ -15,74 +18,35 @@ import { useState } from "react";
 const API_BASE_URL = "https://synapsecity.sbs/v1";
 const PUBLIC_API_BASE_URL = `${API_BASE_URL}/public`;
 
+type EndpointKey = keyof Messages["docs"]["endpoints"];
+
 interface PublicEndpoint {
+  key: EndpointKey;
   path: string;
-  title: string;
-  description: string;
   query?: string;
   method?: "GET" | "POST";
 }
 
 const publicEndpoints: PublicEndpoint[] = [
-  {
-    path: "/assets",
-    title: "Danh sách tài sản công khai",
-    description:
-      "JSON projection của city-assets: id, asset_code, name, feature_type, category, status, location { address, coordinates, geometry }, qr_code, public_url. Tài sản đã xoá, ngưng sử dụng hoặc public_visible=false bị loại trừ.",
-    query: "limit, offset",
-  },
-  {
-    path: "/assets/{code}",
-    title: "Chi tiết tài sản công khai",
-    description:
-      "Tra cứu theo asset_code. Trả 404 nếu tài sản không còn công khai.",
-  },
-  {
-    path: "/assets/{code}/qr-code",
-    title: "QR code tài sản",
-    description: "Trả URL công khai dùng cho QR/NFC của tài sản.",
-  },
-  {
-    path: "/assets/{code}/maintenance-summary",
-    title: "Tóm tắt bảo trì công khai",
-    description:
-      "Chỉ trả số lượng phiếu bảo trì, số đã hoàn thành và loại bảo trì gần nhất. Không có danh tính kỹ thuật viên hay ghi chú nội bộ.",
-  },
-  {
-    path: "/incidents",
-    title: "Danh sách sự cố công khai",
-    description:
-      "Chỉ các bản ghi public_visible được trả về; không có thông tin liên hệ, bình luận nội bộ hay người phụ trách.",
-    query: "limit, offset",
-  },
-  {
-    path: "/incidents/{incidentId}",
-    title: "Tra cứu sự cố công khai",
-    description:
-      "Tra cứu theo id hoặc incident_number. Trả 404 nếu sự cố không công khai.",
-  },
-  {
-    path: "/incidents",
-    method: "POST",
-    title: "Gửi báo cáo sự cố của công dân",
-    description:
-      "Tạo báo cáo ẩn danh. Thông tin liên hệ chỉ lưu ở bản ghi nội bộ, không xuất hiện trong projection công khai. Ảnh phải là URL HTTPS đã lưu qua capability tệp của Tier-2.",
-  },
+  { key: "assets", path: "/assets", query: "limit, offset" },
+  { key: "asset", path: "/assets/{code}" },
+  { key: "qr", path: "/assets/{code}/qr-code" },
+  { key: "maintenance", path: "/assets/{code}/maintenance-summary" },
+  { key: "incidents", path: "/incidents", query: "limit, offset" },
+  { key: "incident", path: "/incidents/{incidentId}" },
+  { key: "report", path: "/incidents", method: "POST" },
 ];
 
 const curlExamples = [
-  {
-    label: "Tài sản công khai",
-    command: `curl "${PUBLIC_API_BASE_URL}/assets?limit=50"`,
-  },
-  {
-    label: "Sự cố công khai",
-    command: `curl "${PUBLIC_API_BASE_URL}/incidents?limit=50"`,
-  },
+  { key: "assets" as const, command: `curl "${PUBLIC_API_BASE_URL}/assets?limit=50"` },
+  { key: "incidents" as const, command: `curl "${PUBLIC_API_BASE_URL}/incidents?limit=50"` },
 ];
 
 function EndpointCard({ endpoint }: { endpoint: PublicEndpoint }) {
+  const { m } = useI18n();
   const [copied, setCopied] = useState(false);
+  const info = m.docs.endpoints[endpoint.key];
+  const method = endpoint.method || "GET";
 
   const copy = async () => {
     try {
@@ -95,35 +59,37 @@ function EndpointCard({ endpoint }: { endpoint: PublicEndpoint }) {
   };
 
   return (
-    <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <article className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="rounded bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">
-              {endpoint.method || "GET"}
+            <span
+              className={`rounded px-2 py-0.5 text-xs font-bold ${
+                method === "POST"
+                  ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                  : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+              }`}
+            >
+              {method}
             </span>
-            <code className="break-all font-mono text-sm text-slate-900">
-              {endpoint.path}
-            </code>
+            <code className="break-all font-mono text-sm text-slate-900 dark:text-slate-100">{endpoint.path}</code>
           </div>
-          <h3 className="mt-2 font-semibold text-slate-800">{endpoint.title}</h3>
-          <p className="mt-1 text-sm leading-relaxed text-slate-500">
-            {endpoint.description}
-          </p>
+          <h3 className="mt-2 font-semibold text-slate-800 dark:text-slate-100">{info.title}</h3>
+          <p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{info.text}</p>
           {endpoint.query ? (
-            <p className="mt-2 text-xs text-slate-500">
-              Query: <code className="font-mono">{endpoint.query}</code>
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+              {m.docs.query}: <code className="font-mono">{endpoint.query}</code>
             </p>
           ) : null}
         </div>
         <button
           type="button"
           onClick={copy}
-          title="Copy endpoint URL"
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+          title={m.docs.copy}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
         >
           {copied ? <Check size={14} /> : <Copy size={14} />}
-          {copied ? "Đã copy" : "Copy URL"}
+          {copied ? m.docs.copied : m.docs.copy}
         </button>
       </div>
     </article>
@@ -131,56 +97,45 @@ function EndpointCard({ endpoint }: { endpoint: PublicEndpoint }) {
 }
 
 const ApiDocsPage = () => {
+  const { m } = useI18n();
+  const d = m.docs;
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
+    <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
       <Header />
 
       <main className="mx-auto max-w-5xl px-4 pb-16 pt-28 sm:px-6 lg:px-8">
-        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
-          <div className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-700">
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 md:p-8 dark:border-slate-800 dark:bg-slate-900">
+          <div className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
             <Database size={15} />
-            Open Data · JSON projection
+            {d.badge}
           </div>
-          <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 md:text-4xl">
-            SynapseCity Open API
-          </h1>
-          <p className="mt-3 max-w-3xl text-base leading-relaxed text-slate-600">
-            SynapseCity công bố projection JSON ổn định cho dữ liệu tài sản và
-            sự cố đã publish qua Tier-2, cùng endpoint gửi báo cáo sự cố ẩn danh.
-            Không cần API key; không có API vận hành nội bộ trên trang này.
-          </p>
+          <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 md:text-4xl dark:text-white">{d.title}</h1>
+          <p className="mt-3 max-w-3xl text-base leading-relaxed text-slate-600 dark:text-slate-300">{d.lead}</p>
 
-          <div className="mt-5 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-            <p className="font-semibold">Base URL</p>
-            <code className="mt-1 block break-all font-mono text-emerald-800">
-              {PUBLIC_API_BASE_URL}
-            </code>
+          <div className="mt-5 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm dark:border-emerald-900 dark:bg-emerald-950/50">
+            <p className="font-semibold text-emerald-900 dark:text-emerald-200">{d.baseUrl}</p>
+            <code className="mt-1 block break-all font-mono text-emerald-800 dark:text-emerald-300">{PUBLIC_API_BASE_URL}</code>
           </div>
         </section>
 
         <section className="mt-8">
-          <h2 className="text-xl font-semibold text-slate-900">
-            Endpoint công khai
-          </h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Chỉ các endpoint dưới đây là API mở. Ngoài báo cáo sự cố ẩn danh, tất cả đều là GET, read-only.
-          </p>
+          <h2 className="text-xl font-semibold text-slate-900 dark:text-white">{d.endpointsTitle}</h2>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{d.endpointsLead}</p>
           <div className="mt-4 grid gap-4">
             {publicEndpoints.map((endpoint) => (
-              <EndpointCard key={endpoint.path} endpoint={endpoint} />
+              <EndpointCard key={`${endpoint.method || "GET"} ${endpoint.path}`} endpoint={endpoint} />
             ))}
           </div>
         </section>
 
-        <section className="mt-8 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-900">Ví dụ</h2>
+        <section className="mt-8 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">{d.examplesTitle}</h2>
           <div className="mt-3 space-y-4">
             {curlExamples.map((example) => (
-              <div key={example.label}>
-                <p className="mb-1.5 text-sm font-medium text-slate-700">
-                  {example.label}
-                </p>
-                <pre className="overflow-x-auto rounded-lg bg-slate-900 p-4 text-xs leading-relaxed text-slate-100">
+              <div key={example.key}>
+                <p className="mb-1.5 text-sm font-medium text-slate-700 dark:text-slate-300">{d.examples[example.key]}</p>
+                <pre className="overflow-x-auto rounded-lg bg-slate-900 p-4 text-xs leading-relaxed text-slate-100 dark:bg-black">
                   <code>{example.command}</code>
                 </pre>
               </div>
@@ -189,46 +144,39 @@ const ApiDocsPage = () => {
         </section>
 
         <section className="mt-8 grid gap-4 md:grid-cols-2">
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
-            <div className="flex items-center gap-2 text-amber-800">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 dark:border-amber-900 dark:bg-amber-950/40">
+            <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300">
               <ShieldAlert size={18} />
-              <h2 className="font-semibold">Không có API nội bộ ở đây</h2>
+              <h2 className="font-semibold">{d.internalTitle}</h2>
             </div>
-            <p className="mt-2 text-sm leading-relaxed text-amber-900">
-              Auth/session, quản trị người dùng, CRUD tài sản/sự cố, bảo trì,
-              IoT, cảnh báo, ngân sách, báo cáo, geofence, ingest, map và AI là
-              API vận hành của console. Chúng không được công bố như API mở và
-              không xuất hiện trong tài liệu này.
-            </p>
+            <p className="mt-2 text-sm leading-relaxed text-amber-900 dark:text-amber-200/90">{d.internalText}</p>
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white p-5">
-            <h2 className="font-semibold text-slate-900">Phạm vi dữ liệu</h2>
-            <ul className="mt-2 space-y-1.5 text-sm text-slate-600">
-              <li>Chỉ dữ liệu đã publish công khai qua Tier-2.</li>
-              <li>Không trả về thông tin liên hệ hoặc ghi chú nội bộ.</li>
-              <li>Không có endpoint POST/PUT/PATCH/DELETE.</li>
-              <li>Không gọi API của SynapseCitySOS.</li>
+          <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+            <h2 className="font-semibold text-slate-900 dark:text-white">{d.scopeTitle}</h2>
+            <ul className="mt-2 space-y-1.5 text-sm text-slate-600 dark:text-slate-300">
+              {d.scope.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
               <li>
-                Giấy phép dữ liệu:{" "}
+                {d.licenseLabel}{" "}
                 <a
-                  href="https://opendatacommons.org/licenses/pddl/1-0/"
+                  href={LINKS.dataLicense}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="font-medium text-sky-600 hover:underline"
+                  className="font-medium text-teal-700 hover:underline dark:text-teal-400"
                 >
-                  PDDL 1.0
+                  CC0 1.0 Universal
                 </a>
-                .
               </li>
             </ul>
             <a
-              href="https://github.com/vku-open-source-2026/SynapseCity"
+              href={LINKS.repo}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-sky-600 hover:text-sky-700"
+              className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-teal-700 hover:text-teal-800 dark:text-teal-400 dark:hover:text-teal-300"
             >
-              Mã nguồn & giới hạn sản phẩm
+              {d.repoLink}
               <ExternalLink size={14} />
             </a>
           </div>

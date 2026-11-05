@@ -1,13 +1,33 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 VKU.VIC -->
 <!doctype html>
-<html lang="en">
+<html lang="vi">
 
 <head>
   <meta charset="UTF-8" />
   <link rel="icon" type="image/x-icon" href="/favicon.ico" />
   <link rel="manifest" href="/manifest.json" />
   <meta name="theme-color" content="#ffffff" />
+  <meta name="description" content="SynapseCity là phần mềm mã nguồn mở để quản lý tài sản hạ tầng đô thị, tiếp nhận báo cáo sự cố của người dân và công bố dữ liệu mở theo CC0." />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="SynapseCity" />
+  <meta property="og:title" content="SynapseCity · Bản đồ hạ tầng đô thị mở" />
+  <meta property="og:description" content="Xem tình trạng hạ tầng công cộng, báo sự cố trên bản đồ và dùng dữ liệu mở CC0 qua API. Mã nguồn Apache-2.0." />
+  <meta property="og:url" content="https://synapsecity.sbs/" />
+  <meta property="og:image" content="https://synapsecity.sbs/icons/icon-512x512.png" />
+  <meta name="twitter:card" content="summary" />
+  <script>
+    // Apply the saved theme and language before first paint (mirrors src/lib/theme.tsx and src/lib/i18n.tsx).
+    (function () {
+      var root = document.documentElement;
+      var choice = 'system';
+      try { choice = localStorage.getItem('synapsecity.theme') || 'system'; } catch (e) {}
+      var dark = choice === 'dark' || (choice === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      if (dark) root.classList.add('dark');
+      root.style.colorScheme = dark ? 'dark' : 'light';
+      try { var lang = localStorage.getItem('synapsecity.lang'); if (lang === 'vi' || lang === 'en') root.lang = lang; } catch (e) {}
+    })();
+  </script>
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="SynapseCity" />
@@ -30,7 +50,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Poppins:wght@400;500;600;700&display=swap"
     rel="stylesheet">
-  <title>SynapseCity - Infrastructure Management</title>
+  <title>SynapseCity · Bản đồ hạ tầng đô thị mở</title>
   
   <!-- Inline critical CSS for faster splash -->
   <style>
@@ -120,11 +140,21 @@
       </svg>
     </div>
     <div class="title">SynapseCity</div>
-    <div class="subtitle">City Infrastructure Operations</div>
+    <div class="subtitle">Hạ tầng đô thị mở · Open city infrastructure</div>
     <div class="loader"></div>
   </div>
   
   <div id="root"></div>
+  <noscript>
+    <h1>SynapseCity</h1>
+    <p>Phần mềm mã nguồn mở quản lý hạ tầng đô thị: bản đồ tài sản, báo cáo sự cố của người dân, bảo trì và dữ liệu mở. Trang web cần JavaScript để hiển thị bản đồ.</p>
+    <p>Open-source software for city infrastructure: asset map, resident incident reports, maintenance and open data. JavaScript is required for the map.</p>
+    <ul>
+      <li><a href="https://github.com/vku-open-source-2026/SynapseCity">Source code (Apache-2.0)</a></li>
+      <li><a href="/docs">Open API</a></li>
+      <li><a href="https://creativecommons.org/publicdomain/zero/1.0/">Data licence: CC0 1.0</a></li>
+    </ul>
+  </noscript>
   <script type="module" src="/src/main.tsx"></script>
   <script>
     // Hide splash screen when app is ready

@@ -95,7 +95,7 @@ city-ingest-jobs            city-files
 ```
 
 Never read or write a `sos-*` dataset. Keep the start-up prefix guard and its
-test when adding datasets. Register every City dataset with the `PDDL-1.0` data
+test when adding datasets. Register every City dataset with the `CC0-1.0` data
 license; source code remains Apache-2.0. Only `city-assets` and `city-incidents`
 are public projections; `city-users` and every operational dataset must stay
 private and must not be published to the open-data layer.

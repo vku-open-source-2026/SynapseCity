@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
-import React from "react";
-// import { Link } from 'react-router-dom';
-import Footer from "../components/Footer";
-import Header from "../components/Header";
+import React, { useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { ExternalLink } from "lucide-react";
+import Header from "../components/Header";
+import Footer from "../components/Footer";
+import { useI18n } from "../lib/i18n";
+import { LINKS } from "../lib/site";
 
 interface TeamMember {
     name: string;
@@ -12,249 +14,189 @@ interface TeamMember {
 }
 
 const teamMembers: TeamMember[] = [
-    {
-        name: "Hồ Sỹ Bảo Nhân",
-        avatar: "/avatars/nhan.jpg",
-    },
-    {
-        name: "Võ Thành Nam",
-    },
-    {
-        name: "Trần Thị Thùy Dương",
-    },
+    { name: "Hồ Sỹ Bảo Nhân", avatar: "/avatars/nhan.jpg" },
+    { name: "Trần Thị Thùy Dương" },
+    { name: "Võ Thành Nam" },
 ];
 
-const AboutUs: React.FC = () => {
+const TIER_LINKS: Array<string | null> = [null, LINKS.synapseDX, LINKS.synapseOne];
+
+const card = "rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900";
+const h2 = "text-2xl font-bold text-slate-900 dark:text-white";
+const body = "text-slate-600 dark:text-slate-300";
+
+function Avatar({ member }: { member: TeamMember }) {
+    const [failed, setFailed] = useState(false);
+    const initial = member.name.split(" ").pop()?.charAt(0) ?? "?";
+    if (member.avatar && !failed) {
+        return (
+            <img
+                src={member.avatar}
+                alt={member.name}
+                onError={() => setFailed(true)}
+                className="h-20 w-20 rounded-full object-cover"
+            />
+        );
+    }
     return (
-        <div className="min-h-screen flex flex-col bg-white">
+        <span className="flex h-20 w-20 items-center justify-center rounded-full bg-teal-50 text-2xl font-semibold text-teal-700 dark:bg-teal-950 dark:text-teal-400">
+            {initial}
+        </span>
+    );
+}
+
+const AboutUs: React.FC = () => {
+    const { m } = useI18n();
+    const a = m.about;
+    const c = a.compliance;
+
+    const complianceRows: Array<{ label: string; value: string; href: string }> = [
+        { ...c.source, href: LINKS.sourceLicense },
+        { ...c.data, href: LINKS.dataLicense },
+        { ...c.thirdParty, href: LINKS.thirdParty },
+        { ...c.basemap, href: LINKS.osmCopyright },
+        { ...c.build, href: LINKS.buildFromSource },
+        { ...c.releases, href: LINKS.releases },
+        { ...c.changelog, href: LINKS.changelog },
+        { ...c.issues, href: LINKS.issues },
+        { ...c.contributing, href: LINKS.contributing },
+        { ...c.demo, href: LINKS.demo },
+    ];
+
+    return (
+        <div className="min-h-screen bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100">
             <Header />
+            <main className="mx-auto max-w-5xl px-4 pt-32 pb-20 sm:px-6 lg:px-8">
+                {/* Intro */}
+                <p className="text-sm font-semibold text-teal-700 dark:text-teal-400">{a.kicker}</p>
+                <h1 className="mt-2 text-3xl font-bold text-slate-900 md:text-4xl dark:text-white">{a.title}</h1>
+                <p className={`mt-4 max-w-3xl text-lg leading-relaxed ${body}`}>{a.lead}</p>
 
-            {/* Hero Section - Clean & Light */}
-            <section className="pt-32 pb-16 px-6">
-                <div className="container mx-auto max-w-4xl text-center">
-                    <h1 className="text-4xl md:text-5xl font-semibold text-slate-800 mb-4">
-                        Về <span className="text-sky-500">SynapseCity</span>
-                    </h1>
-                    <p className="text-lg text-slate-500 max-w-2xl mx-auto">
-                        Nền tảng quản lý hạ tầng mã nguồn mở dành cho đô thị thông minh
-                    </p>
-                </div>
-            </section>
-
-            {/* Mission - Simple */}
-            <section className="py-12 px-6">
-                <div className="container mx-auto max-w-3xl">
-                    <div className="bg-sky-50/50 rounded-2xl p-8 md:p-12">
-                        <h2 className="text-2xl font-semibold text-slate-700 mb-4">
-                            Sứ mệnh của chúng tôi
-                        </h2>
-                        <p className="text-slate-600 leading-relaxed mb-4">
-                            SynapseCity là hệ thống dựa trên GIS được xây dựng nhằm hỗ trợ
-                            chính quyền địa phương quản lý và giám sát tài sản hạ tầng
-                            công cộng trên khắp Việt Nam một cách hiệu quả.
-                        </p>
-                        <p className="text-slate-600 leading-relaxed">
-                            Chúng tôi cung cấp giám sát IoT thời gian thực, bản đồ tương
-                            tác và theo dõi bảo trì — được phát triển theo các chuẩn mở
-                            để đảm bảo minh bạch và dễ tiếp cận.
-                        </p>
-                    </div>
-                </div>
-            </section>
-
-            {/* Features - Minimal */}
-            <section className="py-12 px-6">
-                <div className="container mx-auto max-w-3xl">
-                    <h2 className="text-2xl font-semibold text-slate-700 text-center mb-8">
-                        Tính năng
-                    </h2>
-                    <div className="grid md:grid-cols-2 gap-4">
-                        {[
-                            "Bản đồ GIS tương tác",
-                            "Tích hợp cảm biến IoT",
-                            "Theo dõi bảo trì",
-                            "API dữ liệu mở",
-                        ].map((feature, idx) => (
-                            <div
-                                key={idx}
-                                className="flex items-center gap-3 p-4 rounded-xl bg-white border border-slate-100"
-                            >
-                                <div className="w-2 h-2 rounded-full bg-sky-400"></div>
-                                <span className="text-slate-600">
-                                    {feature}
-                                </span>
-                            </div>
+                {/* Story */}
+                <section className="mt-14">
+                    <h2 className={h2}>{a.storyTitle}</h2>
+                    <div className={`mt-4 max-w-3xl space-y-4 leading-relaxed ${body}`}>
+                        {a.story.map((p) => (
+                            <p key={p}>{p}</p>
                         ))}
                     </div>
-                </div>
-            </section>
+                </section>
 
-            {/* Team Section - Clean Cards */}
-            <section className="py-16 px-6 bg-slate-50/50">
-                <div className="container mx-auto max-w-4xl">
-                    <h2 className="text-2xl font-semibold text-slate-700 text-center mb-3">
-                        Đội ngũ
-                    </h2>
-                    <p className="text-slate-500 text-center mb-10">
-                        Các bạn sinh viên VKU đam mê mã nguồn mở
-                    </p>
-                    <div className="grid md:grid-cols-3 gap-6">
-                        {teamMembers.map((member, idx) => (
-                            <div
-                                key={idx}
-                                className="bg-white rounded-xl p-6 text-center border border-slate-100"
-                            >
-                                <div className="w-20 h-20 mx-auto mb-4 rounded-full overflow-hidden bg-gradient-to-br from-sky-100 to-sky-200 flex items-center justify-center">
-                                    {member.avatar ? (
-                                        <img
-                                            src={member.avatar}
-                                            alt={member.name}
-                                            className="w-full h-full object-cover"
-                                            onError={(e) => {
-                                                (
-                                                    e.target as HTMLImageElement
-                                                ).style.display = "none";
-                                                (
-                                                    e.target as HTMLImageElement
-                                                ).parentElement!.innerHTML = `<span class="text-2xl font-medium text-sky-400">${
-                                                    member.name
-                                                        .split(" ")
-                                                        .pop()
-                                                        ?.charAt(0) || "?"
-                                                }</span>`;
-                                            }}
-                                        />
-                                    ) : (
-                                        <span className="text-2xl font-medium text-sky-400">
-                                            {member.name
-                                                .split(" ")
-                                                .pop()
-                                                ?.charAt(0) || "?"}
-                                        </span>
-                                    )}
+                {/* Tiers */}
+                <section className="mt-14">
+                    <h2 className={h2}>{a.tiersTitle}</h2>
+                    <div className="mt-6 space-y-3">
+                        {a.tiers.map((t, i) => {
+                            const href = TIER_LINKS[i];
+                            return (
+                                <div
+                                    key={t.name}
+                                    className={`${card} flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-6 ${i === 0 ? "border-teal-300 dark:border-teal-800" : ""}`}
+                                >
+                                    <div className="sm:w-56 sm:shrink-0">
+                                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t.level}</p>
+                                        {href ? (
+                                            <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-slate-900 hover:text-teal-700 dark:text-white dark:hover:text-teal-400">
+                                                {t.name} <ExternalLink className="h-3.5 w-3.5" />
+                                            </a>
+                                        ) : (
+                                            <p className="font-semibold text-teal-700 dark:text-teal-400">{t.name}</p>
+                                        )}
+                                    </div>
+                                    <p className={`text-sm ${body}`}>{t.text}</p>
                                 </div>
-                                <h3 className="font-medium text-slate-700">
-                                    {member.name}
-                                </h3>
+                            );
+                        })}
+                    </div>
+                    <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">{a.tiersNote}</p>
+                </section>
+
+                {/* Team */}
+                <section className="mt-14">
+                    <h2 className={h2}>{a.teamTitle}</h2>
+                    <p className={`mt-1 ${body}`}>{a.teamLead}</p>
+                    <div className="mt-6 grid gap-6 sm:grid-cols-3">
+                        {teamMembers.map((member) => (
+                            <div key={member.name} className={`${card} flex flex-col items-center text-center`}>
+                                <Avatar member={member} />
+                                <h3 className="mt-4 font-semibold text-slate-900 dark:text-white">{member.name}</h3>
                             </div>
                         ))}
                     </div>
-                </div>
-            </section>
+                </section>
 
-            {/* Sponsors - Simple */}
-            <section className="py-16 px-6">
-                <div className="container mx-auto max-w-4xl">
-                    <h2 className="text-2xl font-semibold text-slate-700 text-center mb-3">
-                        Đơn vị đồng hành
-                    </h2>
-                    <p className="text-slate-500 text-center mb-10">
-                        Nhận được sự ủng hộ từ các tổ chức tin tưởng vào mã nguồn mở
-                    </p>
-                    <div className="flex flex-wrap justify-center items-center gap-8 md:gap-16">
-                        <a
-                            href="https://vku.udn.vn"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex flex-col items-center group"
-                        >
-                            <div className="bg-white rounded-xl p-6 border border-slate-100 hover:border-sky-200 transition-colors">
-                                <img
-                                    src="/vku-logo.svg"
-                                    alt="VKU"
-                                    className="h-16 w-auto object-contain opacity-80 group-hover:opacity-100 transition-opacity"
-                                />
-                            </div>
-                            <span className="mt-3 text-sm text-slate-400">
-                                Đại học VKU
-                            </span>
-                        </a>
-
-                        <a
-                            href="https://www.facebook.com/vaboratory"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex flex-col items-center group"
-                        >
-                            <div className="bg-white rounded-xl p-6 border border-slate-100 hover:border-sky-200 transition-colors">
-                                <img
-                                    src="/vic-logo.svg"
-                                    alt="VIC"
-                                    className="h-16 w-auto object-contain opacity-80 group-hover:opacity-100 transition-opacity"
-                                />
-                            </div>
-                            <span className="mt-3 text-sm text-slate-400">
-                                CLB IT VKU
-                            </span>
-                        </a>
-                    </div>
-                </div>
-            </section>
-
-            {/* CTA - Minimal */}
-            <section className="py-12 px-6">
-                <div className="container mx-auto max-w-2xl text-center">
-                    <p className="text-slate-500 mb-6">
-                        SynapseCity là dự án mở. Mọi đóng góp đều được trân trọng!
-                    </p>
-                    <div className="flex flex-wrap justify-center gap-3">
-                        <a
-                            href="https://github.com/vku-open-source-2026/SynapseCity"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 bg-slate-800 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-700 transition-colors"
-                        >
-                            <svg
-                                className="w-4 h-4"
-                                fill="currentColor"
-                                viewBox="0 0 24 24"
+                {/* Partners */}
+                <section className="mt-14">
+                    <h2 className={h2}>{a.partnersTitle}</h2>
+                    <div className="mt-6 flex flex-wrap gap-4">
+                        {[
+                            { href: LINKS.vku, logo: "/vku-logo.svg", label: a.partners.vku },
+                            { href: LINKS.vic, logo: "/vic-logo.svg", label: a.partners.vic },
+                        ].map((p) => (
+                            <a
+                                key={p.href}
+                                href={p.href}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={`${card} flex items-center gap-4 py-4 hover:border-teal-300 dark:hover:border-teal-800`}
                             >
-                                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
-                            </svg>
-                            GitHub
+                                <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-white p-1.5">
+                                    <img src={p.logo} alt="" className="max-h-full max-w-full object-contain" />
+                                </span>
+                                <span className="font-medium text-slate-800 dark:text-slate-100">{p.label}</span>
+                            </a>
+                        ))}
+                    </div>
+                </section>
+
+                {/* Licences and OLP project documents */}
+                <section id="license" className="mt-14 scroll-mt-28">
+                    <h2 className={h2}>{a.complianceTitle}</h2>
+                    <p className={`mt-1 ${body}`}>{a.complianceLead}</p>
+                    <dl className="mt-6 divide-y divide-slate-200 overflow-hidden rounded-2xl border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
+                        {complianceRows.map((row) => (
+                            <div key={row.label} className="grid gap-1 bg-white px-5 py-3.5 sm:grid-cols-[14rem_1fr] sm:gap-6 dark:bg-slate-900">
+                                <dt className="text-sm font-medium text-slate-900 dark:text-slate-100">{row.label}</dt>
+                                <dd>
+                                    <a href={row.href} target="_blank" rel="noopener noreferrer" className="text-sm text-teal-700 hover:underline dark:text-teal-400">
+                                        {row.value}
+                                    </a>
+                                </dd>
+                            </div>
+                        ))}
+                    </dl>
+                </section>
+
+                {/* Contribute */}
+                <section className={`${card} mt-14`}>
+                    <h2 className="text-xl font-bold text-slate-900 dark:text-white">{a.contributeTitle}</h2>
+                    <p className={`mt-2 max-w-2xl text-sm leading-relaxed ${body}`}>{a.contributeText}</p>
+                    <div className="mt-5 flex flex-wrap gap-3">
+                        <a
+                            href={LINKS.repo}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
+                        >
+                            {a.contributeRepo}
+                        </a>
+                        <a
+                            href={LINKS.dataContribution}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                        >
+                            {a.contributeData}
                         </a>
                         <Link
                             to="/docs"
-                            className="inline-flex items-center gap-2 bg-sky-500 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-sky-600 transition-colors"
+                            className="inline-flex items-center rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
                         >
-                            Tài liệu API
+                            {m.nav.docs}
                         </Link>
-                        {/* <Link
-                            to="/map"
-                            className="inline-flex items-center gap-2 bg-white text-slate-600 px-5 py-2.5 rounded-lg text-sm font-medium border border-slate-200 hover:bg-slate-50 transition-colors"
-                        >
-                            View Map
-                        </Link> */}
                     </div>
-                </div>
-            </section>
-
-            {/* License - Subtle */}
-            <section className="py-6 px-6 border-t border-slate-100">
-                <div className="container mx-auto max-w-4xl text-center">
-                    <p className="text-slate-400 text-xs">
-                        Mã nguồn theo giấy phép{" "}
-                        <a
-                            href="https://www.apache.org/licenses/LICENSE-2.0"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sky-500 hover:underline"
-                        >
-                            Apache 2.0
-                        </a>{" "}
-                        · Dữ liệu theo giấy phép{" "}
-                        <a
-                            href="https://opendatacommons.org/licenses/pddl/1-0/"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sky-500 hover:underline"
-                        >
-                            PDDL 1.0 (Public Domain Dedication and License)
-                        </a>
-                    </p>
-                </div>
-            </section>
-
+                </section>
+            </main>
             <Footer />
         </div>
     );

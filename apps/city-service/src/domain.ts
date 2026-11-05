@@ -3,8 +3,8 @@
 import { Request } from 'express';
 import { CapabilitiesClient, CapabilitiesError, Dataset } from '@synapsedx/capabilities';
 
-/** Published City datasets are dedicated to the public domain under PDDL 1.0. */
-export const DATA_LICENSE = 'PDDL-1.0';
+/** Published City datasets are dedicated to the public domain under CC0 1.0 Universal. */
+export const DATA_LICENSE = 'CC0-1.0';
 
 export const DATASETS = {
   // Public datasets: these feed the public asset map and public incident lookup.

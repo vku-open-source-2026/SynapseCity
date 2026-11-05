@@ -3,12 +3,18 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
+    Activity,
     ArrowRight,
-    BarChart3,
-    Droplet,
-    MapPin,
-    Download,
+    Building2,
     ClipboardList,
+    Code2,
+    Download,
+    Gauge,
+    MapPin,
+    Users,
+    Wallet,
+    Wrench,
+    Database,
 } from "lucide-react";
 import { getAssets } from "../api";
 import AIChatWidget from "../components/AIChatWidget";
@@ -16,370 +22,203 @@ import Footer from "../components/Footer";
 import Header from "../components/Header";
 import mapImage from "../assets/map.png";
 import { usePWA } from "../hooks/usePWA";
+import { useI18n } from "../lib/i18n";
+import { LINKS } from "../lib/site";
 
-const featureCards = [
-    {
-        icon: MapPin,
-        title: "Bản đồ tương tác",
-        description:
-            "Toàn bộ hạ tầng hiển thị trực quan, tìm kiếm và điều hướng ngay trên bản đồ.",
-    },
-    {
-        icon: Droplet,
-        title: "Quản lý nước",
-        description:
-            "Giám sát lưu lượng, cảnh báo rò rỉ và lập kế hoạch bảo trì chủ động.",
-    },
-    {
-        icon: BarChart3,
-        title: "Phân tích chi tiết",
-        description:
-            "Số liệu vận hành, biểu đồ và thống kê giúp bạn ra quyết định nhanh.",
-    },
-];
+const FEATURE_ICONS = [MapPin, Wrench, Activity, Gauge, Wallet, Database];
+const AUDIENCE_ICONS = [Users, Building2, Code2];
 
-const benefitHighlights = [
-    {
-        title: "Rút ngắn thời gian phản ứng",
-        desc: "Phát hiện sự cố nhanh hơn.",
-    },
-    { title: "Tiết kiệm chi phí", desc: "Tối ưu vận hành hiệu quả." },
-    { title: "Độ tin cậy", desc: "Hệ thống giám sát liên tục." },
-];
-
-const dashboardImage =
-    "https://images.unsplash.com/photo-1553877522-43269d4ea984?auto=format&fit=crop&w=1200&q=80";
+const card =
+    "rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900";
+const sectionTitle = "text-2xl font-bold text-slate-900 md:text-3xl dark:text-white";
+const bodyText = "text-slate-600 dark:text-slate-300";
 
 const HomePage = () => {
+    const { m, lang } = useI18n();
+    const h = m.home;
     const { canShowInstallButton, promptInstall } = usePWA();
     const [assetCount, setAssetCount] = useState<number | null>(null);
     const [loadingAssets, setLoadingAssets] = useState(true);
 
     useEffect(() => {
         let cancelled = false;
-
         getAssets()
             .then((assets) => {
-                if (cancelled) return;
-                setAssetCount(assets.length);
+                if (!cancelled) setAssetCount(assets.length);
             })
             .catch(() => {
-                if (cancelled) return;
-                setAssetCount(null);
+                if (!cancelled) setAssetCount(null);
             })
             .finally(() => {
                 if (!cancelled) setLoadingAssets(false);
             });
-
         return () => {
             cancelled = true;
         };
     }, []);
 
+    // Only real numbers are shown. If the API is unreachable the badge is hidden.
     const assetCountLabel =
         assetCount !== null
-            ? `${new Intl.NumberFormat("vi-VN", {
-                  notation: "compact",
-                  maximumFractionDigits: 1,
-              }).format(assetCount)} điểm giám sát đang hoạt động`
+            ? h.assetCount(new Intl.NumberFormat(lang === "vi" ? "vi-VN" : "en-US").format(assetCount))
             : loadingAssets
-            ? "Đang tải số điểm giám sát..."
-            : "200+ điểm giám sát đang hoạt động";
+            ? h.assetLoading
+            : null;
+
+    const audienceLinks = [
+        <Link key="r" to="/public/report" className="inline-flex items-center gap-1 text-sm font-semibold text-teal-700 hover:underline dark:text-teal-400">
+            {h.audiences[0].cta} <ArrowRight className="h-4 w-4" />
+        </Link>,
+        <Link key="l" to="/login" className="inline-flex items-center gap-1 text-sm font-semibold text-teal-700 hover:underline dark:text-teal-400">
+            {h.audiences[1].cta} <ArrowRight className="h-4 w-4" />
+        </Link>,
+        <Link key="d" to="/docs" className="inline-flex items-center gap-1 text-sm font-semibold text-teal-700 hover:underline dark:text-teal-400">
+            {h.audiences[2].cta} <ArrowRight className="h-4 w-4" />
+        </Link>,
+    ];
 
     return (
-        <div className="min-h-screen bg-white text-gray-heading">
+        <div className="min-h-screen bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100">
             <Header />
-            <main className="pt-28">
-                {/* Hero Section */}
-                <section
-                    id="about-us"
-                    className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24"
-                >
-                    <div className="grid md:grid-cols-2 gap-12 items-center">
-                        <div className="space-y-6">
-                            <div className="inline-block px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
-                                Giải pháp hạ tầng số
-                            </div>
-                            <h1 className="text-4xl md:text-5xl font-bold text-slate-900 leading-tight">
-                                Quản lý hạ tầng thông minh{" "}
-                                <span className="bg-gradient-to-r from-main-blue to-main-cyan bg-clip-text text-transparent">
-                                    trở nên dễ dàng
-                                </span>
-                            </h1>
-                            <p className="text-lg text-slate-600 leading-relaxed">
-                                Bản đồ hạ tầng số giúp bạn giám sát, quản lý và
-                                tối ưu toàn bộ hệ thống từ một bảng điều khiển
-                                trực quan.
-                            </p>
-                            <div className="flex flex-col sm:flex-row gap-4 pt-2">
-                                <Link
-                                    to="/map"
-                                    search={{ assetId: undefined }}
-                                    className="inline-flex items-center justify-center px-6 py-3 text-white font-semibold rounded-full bg-gradient-to-r from-[#00F2FE] from-21% to-[#4FACFE] shadow-lg hover:shadow-xl transition-shadow"
-                                >
-                                    Trải nghiệm ngay{" "}
-                                    <ArrowRight className="w-4 h-4 ml-2" />
-                                </Link>
-                                <Link
-                                    to="/docs"
-                                    className="inline-flex items-center justify-center px-6 py-3 border border-slate-200 text-slate-700 rounded-full hover:border-blue hover:text-blue transition-colors"
-                                >
-                                    Dùng API
-                                </Link>
-                                {canShowInstallButton && (
-                                    <button
-                                        onClick={promptInstall}
-                                        className="inline-flex items-center justify-center px-6 py-3 bg-slate-900 text-white font-semibold rounded-full hover:bg-slate-800 transition-colors shadow-lg"
-                                    >
-                                        <Download className="w-4 h-4 mr-2" />
-                                        Cài đặt ứng dụng
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                        <div className="relative z-0">
-                            <div className="bg-gradient-to-br from-blue-100 to-cyan-100 rounded-2xl p-6 shadow-2xl">
-                                <div className="relative overflow-hidden rounded-xl group">
-                                    <img
-                                        src={mapImage}
-                                        alt="Bản đồ hạ tầng"
-                                        className="w-full h-full object-cover transition-all duration-300 group-hover:blur-sm"
-                                    />
-                                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/20">
-                                        <Link
-                                            to="/map"
-                                            search={{ assetId: undefined }}
-                                            className="px-8 py-3 bg-white/90 text-blue font-semibold rounded-full shadow-lg hover:bg-white transition-colors backdrop-blur-sm"
-                                        >
-                                            Trải nghiệm ngay
-                                        </Link>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="absolute -bottom-6 -left-6 bg-white rounded-lg p-4 shadow-lg border border-slate-200">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-3 h-3 rounded-full bg-green-500" />
-                                    <span className="text-sm font-medium text-slate-700">
-                                        {assetCountLabel}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                {/* Features Section */}
-                <section id="features" className="bg-white py-20">
-                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                        <div className="text-center mb-16">
-                            <h2 className="text-3xl md:text-4xl font-bold mb-4 text-slate-900">
-                                Tính năng nổi bật
-                            </h2>
-                            <p className="text-lg text-slate-600">
-                                Đầy đủ công cụ để quản lý hạ tầng hiệu quả
-                            </p>
-                        </div>
-                        <div className="grid md:grid-cols-3 gap-8">
-                            {featureCards.map((feature, index) => (
-                                <div
-                                    key={feature.title + index}
-                                    className="bg-white border border-slate-200 rounded-xl p-6 hover:border-[#4FACFE] hover:shadow-lg transition-all"
-                                >
-                                    <feature.icon className="w-8 h-8 text-[#4FACFE] mb-4" />
-                                    <h3 className="text-xl font-semibold text-slate-900 mb-2">
-                                        {feature.title}
-                                    </h3>
-                                    <p className="text-slate-600">
-                                        {feature.description}
-                                    </p>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </section>
-
-                {/* Benefits Section */}
-                <section
-                    id="benefits"
-                    className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20"
-                >
-                    <div className="text-center mb-16">
-                        <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">
-                            Lợi ích
-                        </h2>
-                        <p className="text-lg text-slate-600">
-                            Tối ưu quản lý hạ tầng của bạn
-                        </p>
-                    </div>
-                    <div className="grid md:grid-cols-2 gap-12">
-                        <div className="space-y-6">
-                            {benefitHighlights.map((item) => (
-                                <div key={item.title} className="flex gap-4">
-                                    <div>
-                                        <h3 className="font-semibold text-slate-900">
-                                            {item.title}
-                                        </h3>
-                                        <p className="text-slate-600">
-                                            {item.desc}
-                                        </p>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                        <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-8 border border-blue-200 shadow-md">
-                            <img
-                                src={dashboardImage}
-                                alt="Bảng điều khiển"
-                                className="rounded-lg w-full object-cover"
-                            />
-                        </div>
-                    </div>
-                </section>
-
-                {/* Citizen Services Section */}
-                <section className="bg-gradient-to-br from-amber-50 via-white to-cyan-50 py-20 border-y border-amber-100">
-                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                        <div className="grid md:grid-cols-2 gap-12 items-center">
-                            <div className="space-y-6">
-                                <div className="inline-flex items-center gap-2 px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-sm font-medium">
-                                    <ClipboardList className="w-4 h-4" />
-                                    Dành cho người dân
-                                </div>
-                                <h2 className="text-3xl md:text-4xl font-bold text-slate-900 leading-tight">
-                                    Báo sự cố hạ tầng
-                                    <span className="bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-transparent"> trực tuyến</span>
-                                </h2>
-                                <p className="text-lg text-slate-600 leading-relaxed">
-                                    Gửi phản ánh về hư hỏng, sự cố hoặc nguy cơ mất an toàn của hạ tầng đô thị ngay trên bản đồ. Theo dõi trạng thái tiếp nhận và xử lý một cách minh bạch.
-                                </p>
-                                <div className="grid sm:grid-cols-3 gap-3 text-sm">
-                                    <div className="rounded-lg border border-amber-200 bg-white p-3 text-slate-700">📍 Chọn vị trí trên bản đồ</div>
-                                    <div className="rounded-lg border border-amber-200 bg-white p-3 text-slate-700">📷 Đính kèm ảnh minh chứng</div>
-                                    <div className="rounded-lg border border-amber-200 bg-white p-3 text-slate-700">📢 Theo dõi trạng thái xử lý</div>
-                                </div>
-                                <div className="flex flex-col sm:flex-row gap-4 pt-2">
-                                    <Link
-                                        to="/public/report"
-                                        className="inline-flex items-center justify-center px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold rounded-full shadow-lg hover:shadow-xl transition-all"
-                                    >
-                                        <ClipboardList className="w-4 h-4 mr-2" />
-                                        Báo sự cố ngay
-                                        <ArrowRight className="w-4 h-4 ml-2" />
-                                    </Link>
-                                </div>
-                            </div>
-                            <div className="bg-white rounded-2xl border border-amber-100 shadow-xl p-6 space-y-4">
-                                <h3 className="text-lg font-semibold text-slate-900">Dịch vụ công dân hiện có</h3>
-                                <div className="space-y-3">
-                                    <div className="flex items-start gap-3 p-3 rounded-lg bg-slate-50">
-                                        <ClipboardList className="w-5 h-5 text-amber-600 mt-0.5" />
-                                        <div>
-                                            <p className="font-medium text-slate-900">Báo sự cố trực tuyến</p>
-                                            <p className="text-sm text-slate-600">Gửi mô tả, vị trí, mức độ nghiêm trọng và ảnh minh chứng.</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-start gap-3 p-3 rounded-lg bg-slate-50">
-                                        <MapPin className="w-5 h-5 text-amber-600 mt-0.5" />
-                                        <div>
-                                            <p className="font-medium text-slate-900">Theo dõi trạng thái xử lý</p>
-                                            <p className="text-sm text-slate-600">Tra cứu bằng mã báo cáo hoặc ID để cập nhật mới nhất.</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-start gap-3 p-3 rounded-lg bg-slate-50">
-                                        <BarChart3 className="w-5 h-5 text-amber-600 mt-0.5" />
-                                        <div>
-                                            <p className="font-medium text-slate-900">Quy trình xác minh minh bạch</p>
-                                            <p className="text-sm text-slate-600">Báo cáo được tiếp nhận, phân loại và điều phối xử lý có theo dõi trạng thái.</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                {/* CTA Section */}
-                <section className="bg-white py-20">
-                    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-8">
-                        <h2 className="text-3xl md:text-5xl font-bold text-slate-900">
-                            Dùng thử ngay
-                        </h2>
-                        <p className="text-xl text-slate-600 max-w-2xl mx-auto">
-                            Khám phá bản đồ hạ tầng trực quan hoặc tích hợp dữ
-                            liệu mở vào ứng dụng của bạn qua API
-                        </p>
-                        <div className="flex flex-col sm:flex-row gap-6 justify-center pt-6">
+            <main className="pt-20">
+                {/* Hero */}
+                <section className="mx-auto grid max-w-7xl items-center gap-12 px-4 py-16 sm:px-6 md:grid-cols-2 md:py-24 lg:px-8">
+                    <div className="space-y-6">
+                        <span className="inline-block rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-sm font-medium text-teal-800 dark:border-teal-900 dark:bg-teal-950 dark:text-teal-300">
+                            {h.badge}
+                        </span>
+                        <h1 className="text-4xl font-bold leading-tight text-slate-900 md:text-5xl dark:text-white">
+                            {h.titleStart}{" "}
+                            <span className="text-teal-700 dark:text-teal-400">{h.titleHighlight}</span>
+                        </h1>
+                        <p className={`text-lg leading-relaxed ${bodyText}`}>{h.lead}</p>
+                        <div className="flex flex-col gap-3 pt-2 sm:flex-row">
                             <Link
                                 to="/map"
                                 search={{ assetId: undefined }}
-                                className="inline-flex items-center justify-center px-10 py-4 text-white font-bold text-lg rounded-full bg-gradient-to-r from-[#00F2FE] from-21% to-[#4FACFE] shadow-lg hover:shadow-xl transition-all transform hover:scale-105"
+                                className="inline-flex items-center justify-center rounded-lg bg-teal-700 px-6 py-3 font-semibold text-white hover:bg-teal-800 dark:bg-teal-500 dark:text-slate-950 dark:hover:bg-teal-400"
                             >
-                                Khám phá bản đồ →
+                                {h.ctaMap}
+                                <ArrowRight className="ml-2 h-4 w-4" />
                             </Link>
                             <Link
-                                to="/docs"
-                                className="inline-flex items-center justify-center px-10 py-4 border-2 border-slate-300 text-slate-700 font-bold text-lg rounded-full hover:border-[#4FACFE] hover:text-[#4FACFE] transition-all transform hover:scale-105"
+                                to="/public/report"
+                                className="inline-flex items-center justify-center rounded-lg border border-amber-300 bg-amber-50 px-6 py-3 font-semibold text-amber-800 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300 dark:hover:bg-amber-900"
                             >
-                                Dùng API
+                                <ClipboardList className="mr-2 h-4 w-4" />
+                                {h.ctaReport}
                             </Link>
+                            {canShowInstallButton && (
+                                <button
+                                    type="button"
+                                    onClick={promptInstall}
+                                    className="inline-flex items-center justify-center rounded-lg border border-slate-300 px-6 py-3 font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                                >
+                                    <Download className="mr-2 h-4 w-4" />
+                                    {h.install}
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                    <div className="relative">
+                        <Link to="/map" search={{ assetId: undefined }} className="block overflow-hidden rounded-2xl border border-slate-200 shadow-xl dark:border-slate-800">
+                            <img src={mapImage} alt={h.mapAlt} className="h-auto w-full object-cover" />
+                        </Link>
+                        {assetCountLabel && (
+                            <div className="absolute -bottom-5 left-4 flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-md dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                                <span className={`h-2.5 w-2.5 rounded-full ${assetCount !== null ? "bg-emerald-500" : "bg-slate-400"}`} />
+                                {assetCountLabel}
+                            </div>
+                        )}
+                    </div>
+                </section>
+
+                {/* Audiences */}
+                <section className="border-y border-slate-200 bg-slate-50 py-16 md:py-20 dark:border-slate-800 dark:bg-slate-900/40">
+                    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                        <h2 className={sectionTitle}>{h.audienceTitle}</h2>
+                        <div className="mt-8 grid gap-6 md:grid-cols-3">
+                            {h.audiences.map((a, i) => {
+                                const Icon = AUDIENCE_ICONS[i];
+                                return (
+                                    <div key={a.title} className={`${card} flex flex-col`}>
+                                        <Icon className="h-6 w-6 text-teal-700 dark:text-teal-400" />
+                                        <h3 className="mt-4 text-lg font-semibold text-slate-900 dark:text-white">{a.title}</h3>
+                                        <p className={`mt-2 flex-1 text-sm leading-relaxed ${bodyText}`}>{a.text}</p>
+                                        <div className="mt-4">{audienceLinks[i]}</div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
                 </section>
 
-                {/* Contribute Section */}
-                <section className="bg-slate-50 py-20">
-                    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-8">
-                        <div className="inline-block px-4 py-1 bg-cyan-100 text-cyan-700 rounded-full text-sm font-medium mb-4">
-                            Mã nguồn mở
+                {/* Incident flow */}
+                <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 md:py-20 lg:px-8">
+                    <h2 className={sectionTitle}>{h.stepsTitle}</h2>
+                    <p className={`mt-2 ${bodyText}`}>{h.stepsLead}</p>
+                    <ol className="mt-8 grid gap-6 md:grid-cols-4">
+                        {h.steps.map((s, i) => (
+                            <li key={s.title} className="relative border-l-2 border-teal-600 pl-5 dark:border-teal-500">
+                                <span className="text-sm font-semibold text-teal-700 dark:text-teal-400">{String(i + 1).padStart(2, "0")}</span>
+                                <h3 className="mt-1 font-semibold text-slate-900 dark:text-white">{s.title}</h3>
+                                <p className={`mt-2 text-sm leading-relaxed ${bodyText}`}>{s.text}</p>
+                            </li>
+                        ))}
+                    </ol>
+                </section>
+
+                {/* Features */}
+                <section className="border-t border-slate-200 py-16 md:py-20 dark:border-slate-800">
+                    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                        <h2 className={sectionTitle}>{h.featuresTitle}</h2>
+                        <div className="mt-8 grid gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
+                            {h.features.map((f, i) => {
+                                const Icon = FEATURE_ICONS[i];
+                                return (
+                                    <div key={f.title} className="flex gap-4">
+                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-400">
+                                            <Icon className="h-5 w-5" />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-semibold text-slate-900 dark:text-white">{f.title}</h3>
+                                            <p className={`mt-1 text-sm leading-relaxed ${bodyText}`}>{f.text}</p>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
-                        <h2 className="text-3xl md:text-5xl font-bold text-slate-900">
-                            Cùng đóng góp với chúng tôi
-                        </h2>
-                        <p className="text-xl text-slate-600 max-w-2xl mx-auto">
-                            SynapseCity là dự án mã nguồn mở. Bạn có thể đóng góp
-                            mã, báo lỗi hoặc bổ sung dữ liệu hạ tầng để xây dựng
-                            cộng đồng.
-                        </p>
-                        <div className="flex flex-col sm:flex-row gap-6 justify-center pt-6">
-                            <a
-                                href="https://github.com/vku-open-source-2026/SynapseCity"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center justify-center gap-3 px-10 py-4 bg-white text-slate-900 font-bold text-lg rounded-full hover:bg-slate-100 transition-all transform hover:scale-105"
-                            >
-                                <svg
-                                    className="w-6 h-6"
-                                    fill="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        fillRule="evenodd"
-                                        d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
-                                        clipRule="evenodd"
-                                    />
-                                </svg>
-                                Xem mã nguồn
-                            </a>
+                    </div>
+                </section>
+
+                {/* Open data + open source */}
+                <section className="border-t border-slate-200 bg-slate-50 py-16 md:py-20 dark:border-slate-800 dark:bg-slate-900/40">
+                    <div className="mx-auto grid max-w-7xl gap-6 px-4 sm:px-6 md:grid-cols-2 lg:px-8">
+                        <div className={card}>
+                            <h2 className="text-xl font-bold text-slate-900 dark:text-white">{h.openDataTitle}</h2>
+                            <p className={`mt-3 text-sm leading-relaxed ${bodyText}`}>{h.openDataText}</p>
+                            <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold">
+                                <Link to="/docs" className="text-teal-700 hover:underline dark:text-teal-400">{h.openDataApi}</Link>
+                                <a href={LINKS.dataLicense} target="_blank" rel="noopener noreferrer" className="text-teal-700 hover:underline dark:text-teal-400">
+                                    {h.openDataLicense}
+                                </a>
+                            </div>
                         </div>
-                        {/* License Links */}
-                        <div className="flex flex-wrap items-center justify-center gap-6 pt-4 text-sm text-slate-500">
-                            <a
-                                href="https://github.com/vku-open-source-2026/SynapseCity/blob/main/LICENSE"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="hover:text-[#4FACFE] transition-colors"
-                            >
-                                Mã nguồn: Apache 2.0
-                            </a>
-                            <span className="text-slate-400">·</span>
-                            <a
-                                href="https://opendatacommons.org/licenses/pddl/1-0/"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="hover:text-[#4FACFE] transition-colors"
-                            >
-                                Dữ liệu: PDDL 1.0
-                            </a>
+                        <div className={card}>
+                            <h2 className="text-xl font-bold text-slate-900 dark:text-white">{h.openSourceTitle}</h2>
+                            <p className={`mt-3 text-sm leading-relaxed ${bodyText}`}>{h.openSourceText}</p>
+                            <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold">
+                                {[
+                                    [LINKS.repo, h.openSourceLinks.repo],
+                                    [LINKS.buildFromSource, h.openSourceLinks.build],
+                                    [LINKS.changelog, h.openSourceLinks.changelog],
+                                    [LINKS.issues, h.openSourceLinks.issues],
+                                ].map(([href, label]) => (
+                                    <a key={href} href={href} target="_blank" rel="noopener noreferrer" className="text-teal-700 hover:underline dark:text-teal-400">
+                                        {label}
+                                    </a>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 </section>
