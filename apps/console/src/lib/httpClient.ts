@@ -70,15 +70,21 @@ const responseErrorInterceptor = (error: AxiosError) => {
         const { status } = error.response;
 
         switch (status) {
-            case 401:
-                // Unauthorized - clear auth and redirect to login
+            case 401: {
+                // A 401 from a secondary endpoint (e.g. notifications) must not
+                // destroy a valid session. Only auth failures invalidate it.
+                const requestUrl = String(error.config?.url || "");
+                const authFailure = /\/auth\/(login|refresh|me|verify|change-password)/.test(requestUrl);
+                if (!authFailure) {
+                    console.error("Unauthorized secondary request:", requestUrl);
+                    break;
+                }
                 useAuthStore.getState().logout();
-
-                // Only redirect if not already on a public page
                 if (window.location.pathname.includes("/admin")) {
-                    window.location.href = "/";
+                    window.location.href = "/login";
                 }
                 break;
+            }
 
             case 403:
                 console.error("Access forbidden");

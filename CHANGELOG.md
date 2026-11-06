@@ -6,6 +6,15 @@ Keep a Changelog format and version tags use Semantic Versioning.
 ## [Unreleased] - 2026-11-06
 
 ### Fixed
+- Desktop sign-in no longer offers biometric enrolment; WebAuthn is only
+  exposed on mobile/tablet devices (iPadOS touch devices included).
+- The login transition no longer loops `/v1/auth/refresh`: `ProtectedRoute`
+  refreshes at most once per mount, so the rotating token cannot retrigger the
+  effect.
+- A 401 from a secondary endpoint (for example notifications) no longer clears
+  the whole session or redirects to the landing page. Only auth-endpoint 401s
+  invalidate a session, and they redirect to `/login`.
+- “Bỏ qua” on the biometric setup screen now lands on `/admin` and stays there.
 - The public citizen-map AI assistant now works without a City session:
   `/v1/ai/status` and `/v1/ai/chat` are proxied with the deployment's Tier-2
   service credential and protected by a per-IP limiter
