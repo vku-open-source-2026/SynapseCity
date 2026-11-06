@@ -35,7 +35,8 @@ services:
     ports:
       # Host 8085 is the local/public-stack gateway entry; 8083 stays the
       # private city-service port so the two can never be confused.
-      - "${GATEWAY_HOST_PORT:-8085}:8080"
+      # Loopback only: the public edge is synapseone-nginx (80/443).
+      - "127.0.0.1:${GATEWAY_HOST_PORT:-8085}:8080"
     networks:
       synapsecity:
         aliases: [synapsecity-gateway]

@@ -33,7 +33,11 @@ export function resetRateLimits(): void {
 
 function clientKey(req: Request): string {
   const forwarded = req.header('x-forwarded-for');
-  const address = forwarded ? forwarded.split(',')[0].trim() : req.ip;
+  // The edge nginx appends the real peer address ($proxy_add_x_forwarded_for),
+  // so the LAST entry is the trusted one; the first is client-controlled.
+  const address = forwarded
+    ? forwarded.split(',').map((part) => part.trim()).filter(Boolean).pop()
+    : req.ip;
   return address || 'unknown';
 }
 
