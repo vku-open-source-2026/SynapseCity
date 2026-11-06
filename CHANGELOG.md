@@ -6,6 +6,12 @@ Keep a Changelog format and version tags use Semantic Versioning.
 ## [Unreleased] - 2026-11-06
 
 ### Fixed
+- **Admin AI assistant on `/admin/map`**: public AI routes bypass the operator
+  middleware, so `capabilitiesFromRequest` forwarded the City HMAC session
+  token to Tier-2 and got `invalid_credential` (503). It now decodes the City
+  session itself and forwards only the user-scoped Tier-2 token, falling back
+  to the deployment service credential for anonymous callers. `/v1/ai/status`
+  reports `ready` and `/v1/ai/chat` returns real model output for administrators.
 - Desktop sign-in no longer offers biometric enrolment; WebAuthn is only
   exposed on mobile/tablet devices (iPadOS touch devices included).
 - The login transition no longer loops `/v1/auth/refresh`: `ProtectedRoute`
