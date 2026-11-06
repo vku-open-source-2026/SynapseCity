@@ -16,6 +16,13 @@ Keep a Changelog format and version tags use Semantic Versioning.
   with their dependency link. The dead WebSocket path is removed; the REST
   route is the published contract.
 
+### Security
+
+- The service now logs a loud production warning when `TURNSTILE_SECRET_KEY`
+  is not configured, making it explicit that anonymous `/v1/public/*` report
+  endpoints run without bot protection until the operator supplies the
+  Cloudflare Turnstile secret (and optionally `REQUIRE_TURNSTILE=true`).
+
 ## [Unreleased] - 2026-11-05
 
 ### Changed
