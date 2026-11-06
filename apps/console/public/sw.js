@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
-const CACHE_NAME = 'synapsecity-v1';
+const CACHE_NAME = 'synapsecity-v2';
 const STATIC_ASSETS = [
     '/',
     '/about',
@@ -49,7 +49,7 @@ self.addEventListener('fetch', (event) => {
     // For navigation requests (HTML pages), use network-first strategy
     if (request.mode === 'navigate') {
         event.respondWith(
-            fetch(request)
+            fetch(request, { cache: 'no-store' })
                 .then((response) => {
                     // Clone the response before caching
                     const responseClone = response.clone();
