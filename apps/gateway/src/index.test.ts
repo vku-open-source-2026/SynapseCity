@@ -163,10 +163,10 @@ test('path normalization and ownership checks are shared by the middleware', () 
   for (const foreign of ['/v1/emergency', '/v1/hazards/recent', '/v1/sos', '/v1/unknown', '/v1/public/unknown']) {
     assert.equal(exported.isOwnedV1Path(foreign), false, `${foreign} must not be owned by SynapseCity`);
   }
-  for (const anonymous of ['/v1/public/assets', '/v1/public/incidents/1', '/v1/auth/login', '/v1/city', '/v1/map/config', '/v1/map/tiles/1/2/3.png']) {
+  for (const anonymous of ['/v1/public/assets', '/v1/public/incidents/1', '/v1/auth/login', '/v1/city', '/v1/map/config', '/v1/map/tiles/1/2/3.png', '/v1/ai/status', '/v1/ai/chat']) {
     assert.equal(exported.isPublicV1Path(anonymous), true, `${anonymous} must stay anonymous`);
   }
-  for (const operator of ['/v1/assets', '/v1/users', '/v1/reports/1/download', '/v1/ai/chat']) {
+  for (const operator of ['/v1/assets', '/v1/users', '/v1/reports/1/download', '/v1/ai/decision']) {
     assert.equal(exported.isPublicV1Path(operator), false, `${operator} must require a session`);
   }
 });
@@ -209,7 +209,7 @@ test('the files namespace is owned, authenticated and the public files route is 
 });
 
 test('operator namespaces require an Authorization header at the gateway', async () => {
-  for (const path of ['/v1/assets', '/v1/users', '/v1/reports/1/download', '/v1/ai/chat']) {
+  for (const path of ['/v1/assets', '/v1/users', '/v1/reports/1/download', '/v1/ai/decision']) {
     const response = await fetch(`${baseUrl}${path}`);
     assert.equal(response.status, 401, `${path} must be rejected before proxying without a session`);
     const body = await response.json() as Record<string, unknown>;
@@ -220,6 +220,11 @@ test('operator namespaces require an Authorization header at the gateway', async
     const response = await fetch(`${baseUrl}${path}`);
     assert.equal(response.status, 200, `${path} must stay anonymous`);
   }
+  // The citizen assistant is public but still proxied (rate-limited upstream).
+  const status = await fetch(`${baseUrl}/v1/ai/status`);
+  assert.notEqual(status.status, 401);
+  const chat = await fetch(`${baseUrl}/v1/ai/chat`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"message":"hello"}' });
+  assert.notEqual(chat.status, 401);
   // An authenticated operator request is proxied.
   const proxied = await fetch(`${baseUrl}/v1/assets`, { headers: { authorization: 'Bearer session' } });
   assert.equal(proxied.status, 200);

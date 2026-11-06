@@ -1047,7 +1047,11 @@ function isAnonymousV1Path(rawPath: string): boolean {
   return within(path, '/v1/auth')
     || within(path, '/v1/city')
     || within(path, '/v1/public')
-    || within(path, '/v1/map');
+    || within(path, '/v1/map')
+    // Public assistant on the citizen map: status + chat are rate-limited and
+    // proxied with the deployment's Tier-2 service credential (no user data).
+    || path === '/v1/ai/status'
+    || path === '/v1/ai/chat';
 }
 
 function operatorPermission(method: string, rawPath: string): Permission | 'authenticated' {
@@ -3683,15 +3687,23 @@ app.get('/v1/map/config', (_req, res) => res.json(vietMapConfigured() ? { provid
 app.get('/v1/map/tiles/:z/:x/:y.png', async (req, res, next) => { try { await proxyVietMapTile(Number(req.params.z), Number(req.params.x), Number(req.params.y), res); } catch (error) { next(error); } });
 app.get('/v1/map/status', (_req, res) => res.json({ provider: vietMapConfigured() ? 'vietmap' : 'openstreetmap', configured: vietMapConfigured(), service: 'synapsecity' }));
 
+// Public assistant: anonymous visitors get a strict per-IP budget; signed-in
+// operators share the same limiter (the session still scopes upstream calls).
+const publicAiRateLimit = rateLimit({
+  name: 'public-ai',
+  windowMs: Math.max(1000, Number(process.env.PUBLIC_AI_RATE_WINDOW_MS || 60_000)),
+  max: Math.max(1, Number(process.env.PUBLIC_AI_RATE_LIMIT || 20)),
+});
+
 // AI is answered by the Tier-2 capability. When the deployment/provider does
 // not expose it the endpoint returns a typed 503 instead of canned text.
-app.get('/v1/ai/status', async (req, res, next) => {
+app.get('/v1/ai/status', publicAiRateLimit, async (req, res, next) => {
   try {
     const status = await aiStatus(capabilitiesFromRequest(req));
     res.status(status.status === 'unavailable' ? 503 : 200).json(status);
   } catch (error) { next(error); }
 });
-app.post('/v1/ai/chat', async (req, res, next) => {
+app.post('/v1/ai/chat', publicAiRateLimit, async (req, res, next) => {
   try {
     const body = privateInput(req);
     const message = String(body.message || '').trim();
