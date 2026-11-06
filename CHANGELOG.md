@@ -5,6 +5,14 @@ Keep a Changelog format and version tags use Semantic Versioning.
 
 ## [Unreleased] - 2026-11-06
 
+### Fixed
+- The public citizen-map AI assistant now works without a City session:
+  `/v1/ai/status` and `/v1/ai/chat` are proxied with the deployment's Tier-2
+  service credential and protected by a per-IP limiter
+  (`PUBLIC_AI_RATE_LIMIT`/`PUBLIC_AI_RATE_WINDOW_MS`, default 20/min), so the
+  widget shows "AI sẵn sàng" and answers instead of the misleading
+  "chưa khả dụng" message.
+
 ### Security
 - `AUTH_SECRET` must be set in production: the service now fails fast instead
   of silently generating an ephemeral session secret (which would invalidate

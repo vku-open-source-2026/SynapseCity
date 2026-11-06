@@ -97,9 +97,10 @@ export function isOwnedV1Path(raw: string): boolean {
 }
 
 // Anonymous surface: health/readiness is outside /v1, and only the public
-// projection, auth shell, product metadata and map tiles may be called without
-// a City session. Every operator namespace is rejected here before proxying as
-// defence in depth; the City service still verifies the session itself.
+// projection, auth shell, product metadata, map tiles and the citizen AI
+// assistant may be called without a City session. Every operator namespace is
+// rejected here before proxying as defence in depth; the City service still
+// verifies the session itself and rate-limits the public assistant.
 const PUBLIC_V1_PREFIXES: readonly string[] = [
   '/v1/auth',
   '/v1/city',
@@ -108,10 +109,11 @@ const PUBLIC_V1_PREFIXES: readonly string[] = [
   '/v1/public/incidents',
   '/v1/public/files',
 ];
+const PUBLIC_AI_PATHS = new Set(['/v1/ai/status', '/v1/ai/chat']);
 
 export function isPublicV1Path(raw: string): boolean {
   const path = normalizeV1Path(raw);
-  return PUBLIC_V1_PREFIXES.some((prefix) => within(path, prefix));
+  return PUBLIC_AI_PATHS.has(path) || PUBLIC_V1_PREFIXES.some((prefix) => within(path, prefix));
 }
 
 /**
