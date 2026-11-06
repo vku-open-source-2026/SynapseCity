@@ -3726,5 +3726,13 @@ app.use((error: any, _req: Request, res: Response, _next: NextFunction) => {
 export function createServer() { return app; }
 
 if (require.main === module) {
+  if (process.env.NODE_ENV === 'production' && !(process.env.TURNSTILE_SECRET_KEY || '').trim()) {
+    const banner = '='.repeat(72);
+    console.error(banner);
+    console.error('[synapsecity] WARNING: TURNSTILE_SECRET_KEY is not configured in production.');
+    console.error('[synapsecity] Anonymous report endpoints (/v1/public/*) run WITHOUT bot protection.');
+    console.error('[synapsecity] Set TURNSTILE_SECRET_KEY (+ REQUIRE_TURNSTILE=true) to enable it.');
+    console.error(banner);
+  }
   app.listen(PORT, () => console.log(`[synapsecity] Tier-3 API listening on :${PORT}; Tier-2=${TIER2_URL}`));
 }
