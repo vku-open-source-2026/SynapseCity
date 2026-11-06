@@ -1,257 +1,270 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
-import React from "react";
-// import { Link } from 'react-router-dom';
-import Footer from "../components/Footer";
-import Header from "../components/Header";
+import React, { useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { Activity, ClipboardList, Code2, ExternalLink, Gauge, Layers, Map as MapIcon, Wrench } from "lucide-react";
+import Header from "../components/Header";
+import Footer from "../components/Footer";
+import { useI18n } from "../lib/i18n-context";
+import { LINKS } from "../lib/site";
 
 interface TeamMember {
     name: string;
     avatar?: string;
 }
 
+// Same order as the original About page.
 const teamMembers: TeamMember[] = [
-    {
-        name: "Hồ Sỹ Bảo Nhân",
-        avatar: "/avatars/nhan.jpg",
-    },
-    {
-        name: "Võ Thành Nam",
-    },
-    {
-        name: "Trần Thị Thùy Dương",
-    },
+    { name: "Hồ Sỹ Bảo Nhân", avatar: "/avatars/nhan.jpg" },
+    { name: "Võ Thành Nam" },
+    { name: "Trần Thị Thùy Dương", avatar: "/avatars/duong.jpg" },
 ];
 
-const AboutUs: React.FC = () => {
+const TIER_STYLES = [
+    { href: null, ring: "border-sky-300 bg-sky-50/60 dark:border-sky-800 dark:bg-sky-950/40", dot: "from-cyan-400 to-blue-500" },
+    { href: LINKS.synapseDX, ring: "border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900", dot: "from-violet-400 to-indigo-500" },
+    { href: LINKS.synapseOne, ring: "border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900", dot: "from-slate-500 to-slate-700" },
+];
+
+/** One accent per feature card, in the same order as `about.features`. */
+const FEATURE_STYLES = [
+    { icon: MapIcon, tile: "from-cyan-400 to-blue-500", hover: "hover:border-sky-300 dark:hover:border-sky-700" },
+    { icon: Activity, tile: "from-emerald-400 to-teal-500", hover: "hover:border-emerald-300 dark:hover:border-emerald-700" },
+    { icon: Wrench, tile: "from-amber-400 to-orange-500", hover: "hover:border-amber-300 dark:hover:border-amber-700" },
+    { icon: Code2, tile: "from-violet-400 to-indigo-500", hover: "hover:border-violet-300 dark:hover:border-violet-700" },
+    { icon: ClipboardList, tile: "from-rose-400 to-pink-500", hover: "hover:border-rose-300 dark:hover:border-rose-700" },
+    { icon: Gauge, tile: "from-sky-400 to-cyan-500", hover: "hover:border-cyan-300 dark:hover:border-cyan-700" },
+];
+
+const sectionTitle = "text-3xl font-bold text-balance text-slate-900 dark:text-white";
+const sectionLead = "mx-auto mt-3 max-w-2xl text-balance text-slate-600 dark:text-slate-300";
+const body = "text-slate-600 dark:text-slate-300";
+
+function Avatar({ member }: { member: TeamMember }) {
+    const [failed, setFailed] = useState(false);
+    const initial = member.name.split(" ").pop()?.charAt(0) ?? "?";
+    if (member.avatar && !failed) {
+        return (
+            <img
+                src={member.avatar}
+                alt={member.name}
+                onError={() => setFailed(true)}
+                className="h-24 w-24 rounded-full object-cover ring-4 ring-sky-100 dark:ring-sky-900"
+            />
+        );
+    }
     return (
-        <div className="min-h-screen flex flex-col bg-white">
+        <span className="flex h-24 w-24 items-center justify-center rounded-full bg-linear-to-br from-sky-100 to-cyan-200 text-3xl font-semibold text-sky-700 ring-4 ring-sky-100 dark:from-sky-900 dark:to-cyan-900 dark:text-sky-200 dark:ring-sky-900">
+            {initial}
+        </span>
+    );
+}
+
+const AboutUs: React.FC = () => {
+    const { m } = useI18n();
+    const a = m.about;
+    const l = a.license;
+
+    const licenseRows: Array<{ label: string; value: string; href: string }> = [
+        { ...l.source, href: LINKS.sourceLicense },
+        { ...l.data, href: LINKS.dataLicense },
+        { ...l.thirdParty, href: LINKS.thirdParty },
+        { ...l.basemap, href: LINKS.basemap },
+        { ...l.build, href: LINKS.buildFromSource },
+        { ...l.releases, href: LINKS.releases },
+        { ...l.changelog, href: LINKS.changelog },
+        { ...l.issues, href: LINKS.issues },
+        { ...l.contributing, href: LINKS.contributing },
+    ];
+
+    return (
+        <div className="min-h-screen bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100">
             <Header />
 
-            {/* Hero Section - Clean & Light */}
-            <section className="pt-32 pb-16 px-6">
-                <div className="container mx-auto max-w-4xl text-center">
-                    <h1 className="text-4xl md:text-5xl font-semibold text-slate-800 mb-4">
-                        Về <span className="text-sky-500">SynapseCity</span>
-                    </h1>
-                    <p className="text-lg text-slate-500 max-w-2xl mx-auto">
-                        Nền tảng quản lý hạ tầng mã nguồn mở dành cho đô thị thông minh
-                    </p>
-                </div>
+            {/* Hero */}
+            <section className="relative overflow-hidden px-4 pt-36 pb-16 text-center sm:px-6">
+                <div className="pointer-events-none absolute top-10 left-1/2 h-72 w-[40rem] max-w-full -translate-x-1/2 rounded-full bg-cyan-200/40 blur-3xl dark:bg-cyan-500/10" />
+                <h1 className="relative text-4xl font-bold text-balance text-slate-900 md:text-5xl dark:text-white">
+                    {a.titleStart}{" "}
+                    <span className="bg-linear-to-r from-sky-500 to-cyan-400 bg-clip-text text-transparent">SynapseCity</span>
+                </h1>
+                <p className="relative mx-auto mt-4 max-w-2xl text-lg text-balance text-slate-600 dark:text-slate-300">{a.subtitle}</p>
             </section>
 
-            {/* Mission - Simple */}
-            <section className="py-12 px-6">
-                <div className="container mx-auto max-w-3xl">
-                    <div className="bg-sky-50/50 rounded-2xl p-8 md:p-12">
-                        <h2 className="text-2xl font-semibold text-slate-700 mb-4">
-                            Sứ mệnh của chúng tôi
-                        </h2>
-                        <p className="text-slate-600 leading-relaxed mb-4">
-                            SynapseCity là hệ thống dựa trên GIS được xây dựng nhằm hỗ trợ
-                            chính quyền địa phương quản lý và giám sát tài sản hạ tầng
-                            công cộng trên khắp Việt Nam một cách hiệu quả.
-                        </p>
-                        <p className="text-slate-600 leading-relaxed">
-                            Chúng tôi cung cấp giám sát IoT thời gian thực, bản đồ tương
-                            tác và theo dõi bảo trì — được phát triển theo các chuẩn mở
-                            để đảm bảo minh bạch và dễ tiếp cận.
-                        </p>
-                    </div>
-                </div>
-            </section>
-
-            {/* Features - Minimal */}
-            <section className="py-12 px-6">
-                <div className="container mx-auto max-w-3xl">
-                    <h2 className="text-2xl font-semibold text-slate-700 text-center mb-8">
-                        Tính năng
-                    </h2>
-                    <div className="grid md:grid-cols-2 gap-4">
-                        {[
-                            "Bản đồ GIS tương tác",
-                            "Tích hợp cảm biến IoT",
-                            "Theo dõi bảo trì",
-                            "API dữ liệu mở",
-                        ].map((feature, idx) => (
-                            <div
-                                key={idx}
-                                className="flex items-center gap-3 p-4 rounded-xl bg-white border border-slate-100"
-                            >
-                                <div className="w-2 h-2 rounded-full bg-sky-400"></div>
-                                <span className="text-slate-600">
-                                    {feature}
-                                </span>
-                            </div>
+            {/* Mission */}
+            <section className="px-4 py-8 sm:px-6">
+                <div className="mx-auto max-w-3xl rounded-3xl border border-sky-100 bg-linear-to-br from-sky-50 to-cyan-50 p-8 text-center md:p-12 dark:border-sky-900 dark:from-sky-950/50 dark:to-cyan-950/30">
+                    <h2 className="text-2xl font-bold text-balance text-slate-900 dark:text-white">{a.missionTitle}</h2>
+                    <div className={`mt-4 space-y-4 text-lg leading-relaxed text-balance ${body}`}>
+                        {a.mission.map((p) => (
+                            <p key={p}>{p}</p>
                         ))}
                     </div>
                 </div>
             </section>
 
-            {/* Team Section - Clean Cards */}
-            <section className="py-16 px-6 bg-slate-50/50">
-                <div className="container mx-auto max-w-4xl">
-                    <h2 className="text-2xl font-semibold text-slate-700 text-center mb-3">
-                        Đội ngũ
-                    </h2>
-                    <p className="text-slate-500 text-center mb-10">
-                        Các bạn sinh viên VKU đam mê mã nguồn mở
-                    </p>
-                    <div className="grid md:grid-cols-3 gap-6">
-                        {teamMembers.map((member, idx) => (
-                            <div
-                                key={idx}
-                                className="bg-white rounded-xl p-6 text-center border border-slate-100"
-                            >
-                                <div className="w-20 h-20 mx-auto mb-4 rounded-full overflow-hidden bg-gradient-to-br from-sky-100 to-sky-200 flex items-center justify-center">
-                                    {member.avatar ? (
-                                        <img
-                                            src={member.avatar}
-                                            alt={member.name}
-                                            className="w-full h-full object-cover"
-                                            onError={(e) => {
-                                                (
-                                                    e.target as HTMLImageElement
-                                                ).style.display = "none";
-                                                (
-                                                    e.target as HTMLImageElement
-                                                ).parentElement!.innerHTML = `<span class="text-2xl font-medium text-sky-400">${
-                                                    member.name
-                                                        .split(" ")
-                                                        .pop()
-                                                        ?.charAt(0) || "?"
-                                                }</span>`;
-                                            }}
-                                        />
-                                    ) : (
-                                        <span className="text-2xl font-medium text-sky-400">
-                                            {member.name
-                                                .split(" ")
-                                                .pop()
-                                                ?.charAt(0) || "?"}
-                                        </span>
-                                    )}
+            {/* Features */}
+            <section className="px-4 py-16 sm:px-6">
+                <div className="mx-auto max-w-5xl">
+                    <h2 className={`${sectionTitle} text-center`}>{a.featuresTitle}</h2>
+                    <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                        {a.features.map((f, i) => {
+                            const style = FEATURE_STYLES[i % FEATURE_STYLES.length];
+                            const Icon = style.icon;
+                            return (
+                                <div
+                                    key={f.title}
+                                    className={`group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 transition duration-300 hover:-translate-y-1 hover:shadow-xl dark:border-slate-800 dark:bg-slate-900 ${style.hover}`}
+                                >
+                                    <span className="pointer-events-none absolute -top-3 right-4 font-mono text-6xl font-bold text-slate-100 transition group-hover:text-slate-200 dark:text-slate-800 dark:group-hover:text-slate-700">
+                                        {String(i + 1).padStart(2, "0")}
+                                    </span>
+                                    <span className={`relative flex h-12 w-12 items-center justify-center rounded-xl bg-linear-to-br ${style.tile} text-white shadow-md transition group-hover:scale-110`}>
+                                        <Icon className="h-6 w-6" />
+                                    </span>
+                                    <h3 className="relative mt-5 text-lg font-semibold text-balance text-slate-900 dark:text-white">{f.title}</h3>
+                                    <p className={`relative mt-2 text-sm leading-relaxed text-pretty ${body}`}>{f.text}</p>
                                 </div>
-                                <h3 className="font-medium text-slate-700">
-                                    {member.name}
-                                </h3>
+                            );
+                        })}
+                    </div>
+                </div>
+            </section>
+
+            {/* Platform */}
+            <section className="bg-slate-50 px-4 py-16 sm:px-6 dark:bg-slate-900/50">
+                <div className="mx-auto max-w-4xl">
+                    <div className="text-center">
+                        <h2 className={sectionTitle}>{a.platformTitle}</h2>
+                        <p className={sectionLead}>{a.platformLead}</p>
+                    </div>
+                    <div className="mt-10 space-y-3">
+                        {a.tiers.map((t, i) => {
+                            const style = TIER_STYLES[i];
+                            return (
+                                <div key={t.name} className={`flex flex-col gap-3 rounded-2xl border p-5 sm:flex-row sm:items-center sm:gap-6 ${style.ring}`}>
+                                    <div className="flex items-center gap-3 sm:w-64 sm:shrink-0">
+                                        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-linear-to-br ${style.dot} text-white`}>
+                                            <Layers className="h-5 w-5" />
+                                        </span>
+                                        <div>
+                                            {style.href ? (
+                                                <a href={style.href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-slate-900 hover:text-sky-600 dark:text-white dark:hover:text-sky-400">
+                                                    {t.name} <ExternalLink className="h-3.5 w-3.5" />
+                                                </a>
+                                            ) : (
+                                                <p className="font-semibold text-sky-700 dark:text-sky-300">{t.name}</p>
+                                            )}
+                                            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{t.level}</p>
+                                        </div>
+                                    </div>
+                                    <p className={`text-sm ${body}`}>{t.text}</p>
+                                </div>
+                            );
+                        })}
+                    </div>
+                    <p className="mt-4 text-center text-sm text-slate-500 dark:text-slate-400">{a.tiersNote}</p>
+                </div>
+            </section>
+
+            {/* Team */}
+            <section className="px-4 py-16 sm:px-6">
+                <div className="mx-auto max-w-4xl text-center">
+                    <h2 className={sectionTitle}>{a.teamTitle}</h2>
+                    <p className={sectionLead}>{a.teamLead}</p>
+                    <div className="mt-10 grid gap-6 sm:grid-cols-3">
+                        {teamMembers.map((member) => (
+                            <div
+                                key={member.name}
+                                className="flex flex-col items-center rounded-2xl border border-slate-200 bg-white p-7 transition hover:-translate-y-1 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900"
+                            >
+                                <Avatar member={member} />
+                                <h3 className="mt-4 font-semibold text-slate-900 dark:text-white">{member.name}</h3>
                             </div>
                         ))}
                     </div>
                 </div>
             </section>
 
-            {/* Sponsors - Simple */}
-            <section className="py-16 px-6">
-                <div className="container mx-auto max-w-4xl">
-                    <h2 className="text-2xl font-semibold text-slate-700 text-center mb-3">
-                        Đơn vị đồng hành
-                    </h2>
-                    <p className="text-slate-500 text-center mb-10">
-                        Nhận được sự ủng hộ từ các tổ chức tin tưởng vào mã nguồn mở
-                    </p>
-                    <div className="flex flex-wrap justify-center items-center gap-8 md:gap-16">
-                        <a
-                            href="https://vku.udn.vn"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex flex-col items-center group"
-                        >
-                            <div className="bg-white rounded-xl p-6 border border-slate-100 hover:border-sky-200 transition-colors">
-                                <img
-                                    src="/vku-logo.svg"
-                                    alt="VKU"
-                                    className="h-16 w-auto object-contain opacity-80 group-hover:opacity-100 transition-opacity"
-                                />
-                            </div>
-                            <span className="mt-3 text-sm text-slate-400">
-                                Đại học VKU
-                            </span>
-                        </a>
-
-                        <a
-                            href="https://www.facebook.com/vaboratory"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex flex-col items-center group"
-                        >
-                            <div className="bg-white rounded-xl p-6 border border-slate-100 hover:border-sky-200 transition-colors">
-                                <img
-                                    src="/vic-logo.svg"
-                                    alt="VIC"
-                                    className="h-16 w-auto object-contain opacity-80 group-hover:opacity-100 transition-opacity"
-                                />
-                            </div>
-                            <span className="mt-3 text-sm text-slate-400">
-                                CLB IT VKU
-                            </span>
-                        </a>
+            {/* Partners */}
+            <section className="bg-slate-50 px-4 py-16 sm:px-6 dark:bg-slate-900/50">
+                <div className="mx-auto max-w-4xl text-center">
+                    <h2 className={sectionTitle}>{a.partnersTitle}</h2>
+                    <p className={sectionLead}>{a.partnersLead}</p>
+                    <div className="mt-8 flex flex-wrap justify-center gap-4">
+                        {[
+                            { href: LINKS.vku, logo: "/vku-logo.svg", label: a.partners.vku },
+                            { href: LINKS.vic, logo: "/vic-logo.svg", label: a.partners.vic },
+                        ].map((p) => (
+                            <a
+                                key={p.href}
+                                href={p.href}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white px-6 py-4 transition hover:border-sky-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-sky-800"
+                            >
+                                <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-white p-1.5 dark:bg-white">
+                                    <img src={p.logo} alt="" className="max-h-full max-w-full object-contain" />
+                                </span>
+                                <span className="font-semibold text-slate-800 dark:text-slate-100">{p.label}</span>
+                            </a>
+                        ))}
                     </div>
                 </div>
             </section>
 
-            {/* CTA - Minimal */}
-            <section className="py-12 px-6">
-                <div className="container mx-auto max-w-2xl text-center">
-                    <p className="text-slate-500 mb-6">
-                        SynapseCity là dự án mở. Mọi đóng góp đều được trân trọng!
-                    </p>
-                    <div className="flex flex-wrap justify-center gap-3">
+            {/* Licences and source */}
+            <section id="license" className="scroll-mt-28 px-4 py-16 sm:px-6">
+                <div className="mx-auto max-w-4xl">
+                    <div className="text-center">
+                        <h2 className={sectionTitle}>{a.licenseTitle}</h2>
+                        <p className={sectionLead}>{a.licenseLead}</p>
+                    </div>
+                    <dl className="mt-8 divide-y divide-slate-200 overflow-hidden rounded-2xl border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
+                        {licenseRows.map((row) => (
+                            <div key={row.label} className="grid gap-1 bg-white px-5 py-3.5 sm:grid-cols-[13rem_1fr] sm:gap-6 dark:bg-slate-900">
+                                <dt className="text-sm font-semibold text-slate-900 dark:text-slate-100">{row.label}</dt>
+                                <dd>
+                                    <a href={row.href} target="_blank" rel="noopener noreferrer" className="text-sm text-sky-700 hover:underline dark:text-sky-400">
+                                        {row.value}
+                                    </a>
+                                </dd>
+                            </div>
+                        ))}
+                    </dl>
+                </div>
+            </section>
+
+            {/* Contribute */}
+            <section className="px-4 pb-20 sm:px-6">
+                <div className="relative mx-auto max-w-4xl overflow-hidden rounded-3xl bg-linear-to-r from-cyan-500 to-blue-600 px-6 py-12 text-center text-white shadow-xl">
+                    <div className="pointer-events-none absolute -top-20 -right-20 h-56 w-56 rounded-full bg-white/10" />
+                    <h2 className="relative text-2xl font-bold md:text-3xl">{a.contributeTitle}</h2>
+                    <p className="relative mx-auto mt-3 max-w-xl text-lg text-white/90">{a.contributeText}</p>
+                    <div className="relative mt-7 flex flex-wrap justify-center gap-3">
                         <a
-                            href="https://github.com/vku-open-source-2026/SynapseCity"
+                            href={LINKS.repo}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 bg-slate-800 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-700 transition-colors"
+                            className="inline-flex items-center whitespace-nowrap rounded-full bg-white px-6 py-2.5 font-semibold text-blue-700 hover:bg-sky-50 dark:bg-white dark:text-blue-700"
                         >
-                            <svg
-                                className="w-4 h-4"
-                                fill="currentColor"
-                                viewBox="0 0 24 24"
-                            >
-                                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
-                            </svg>
-                            GitHub
+                            {a.contributeRepo}
+                        </a>
+                        <a
+                            href={LINKS.dataContribution}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center whitespace-nowrap rounded-full border-2 border-white/80 px-6 py-2.5 font-semibold text-white hover:bg-white/10"
+                        >
+                            {a.contributeData}
                         </a>
                         <Link
                             to="/docs"
-                            className="inline-flex items-center gap-2 bg-sky-500 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-sky-600 transition-colors"
+                            className="inline-flex items-center whitespace-nowrap rounded-full border-2 border-white/80 px-6 py-2.5 font-semibold text-white hover:bg-white/10"
                         >
-                            Tài liệu API
+                            {m.nav.docs}
                         </Link>
-                        {/* <Link
-                            to="/map"
-                            className="inline-flex items-center gap-2 bg-white text-slate-600 px-5 py-2.5 rounded-lg text-sm font-medium border border-slate-200 hover:bg-slate-50 transition-colors"
-                        >
-                            View Map
-                        </Link> */}
                     </div>
-                </div>
-            </section>
-
-            {/* License - Subtle */}
-            <section className="py-6 px-6 border-t border-slate-100">
-                <div className="container mx-auto max-w-4xl text-center">
-                    <p className="text-slate-400 text-xs">
-                        Mã nguồn theo giấy phép{" "}
-                        <a
-                            href="https://www.apache.org/licenses/LICENSE-2.0"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sky-500 hover:underline"
-                        >
-                            Apache 2.0
-                        </a>{" "}
-                        · Dữ liệu theo giấy phép{" "}
-                        <a
-                            href="https://opendatacommons.org/licenses/pddl/1-0/"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sky-500 hover:underline"
-                        >
-                            PDDL 1.0 (Public Domain Dedication and License)
-                        </a>
-                    </p>
                 </div>
             </section>
 

@@ -2,186 +2,147 @@
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 import { Link } from "@tanstack/react-router";
 import { useState, useCallback } from "react";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faBars, faXmark } from "@fortawesome/free-solid-svg-icons";
-import { CircleAlert, LogIn, Siren } from "lucide-react";
+import { CircleAlert, LogIn, Menu, Monitor, Moon, Siren, Sun, X } from "lucide-react";
+import { useI18n } from "../lib/i18n-context";
+import { useTheme } from "../lib/theme-context";
+import { LINKS } from "../lib/site";
+import { StableLabel } from "./StableLabel";
 
-interface NavigationItem {
-    label: string;
-    to: string;
-    search?: Record<string, unknown>;
-    isButton?: boolean;
-    isLogin?: boolean;
-    isEmergency?: boolean;
-    isCitizen?: boolean;
-    external?: boolean;
-}
+const linkBase =
+    "whitespace-nowrap text-[15px] transition-colors max-lg:text-lg max-lg:py-2 flex items-center gap-1.5";
 
-const navigationItems: NavigationItem[] = [
-    {
-        label: "Về chúng tôi",
-        to: "/about",
-    },
-    {
-        label: "Tài liệu API",
-        to: "/docs",
-    },
-    {
-        label: "Báo sự cố",
-        to: "/public/report",
-        isCitizen: true,
-    },
-    {
-        label: "Điều hành khẩn cấp (SOS)",
-        to: "https://sos.synapsecity.sbs/",
-        isEmergency: true,
-        external: true,
-    },
-    {
-        label: "Đăng nhập",
-        to: "/login",
-        isLogin: true,
-    },
-    {
-        label: "Bắt đầu ngay",
-        to: "/map",
-        isButton: true,
-    },
-];
-
-const Header: React.FC = () => {
-    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-    const toggleMobileMenu = useCallback(() => {
-        setIsMobileMenuOpen((prev) => !prev);
-    }, []);
-
-    const closeMobileMenu = useCallback(() => {
-        setIsMobileMenuOpen(false);
-    }, []);
+/** Language + theme switches. Shown in the top bar on desktop and inside the drawer on mobile. */
+export function SiteToggles({ className = "" }: { className?: string }) {
+    const { m, toggle: toggleLang } = useI18n();
+    const { choice, cycle } = useTheme();
+    const ThemeIcon = choice === "dark" ? Moon : choice === "light" ? Sun : Monitor;
+    const themeLabel = m.nav.theme[choice];
 
     return (
-        <header className="fixed z-[1001] top-0 left-0 h-20 w-full bg-white shadow-sm pointer-events-auto">
-            <div className="flex items-center justify-between h-full px-4 mx-auto max-w-7xl">
-                {/* Logo */}
-                <div className="flex items-center">
-                    <Link to="/" onClick={closeMobileMenu}>
-                        <div className="ml-2">
-                            <h1 className="text-xl font-bold font-montserrat text-[#087f83]">SynapseCity</h1>
-                            <span className="text-[10px] font-semibold tracking-[0.18em] text-slate-500">INFRASTRUCTURE OPERATIONS</span>
-                        </div>
-                    </Link>
-                </div>
+        <div className={`flex items-center gap-1 ${className}`}>
+            <button
+                type="button"
+                onClick={toggleLang}
+                title={m.nav.switchLang}
+                aria-label={m.nav.switchLang}
+                className="h-9 w-9 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+            >
+                {m.nav.langShort}
+            </button>
+            <button
+                type="button"
+                onClick={cycle}
+                title={themeLabel}
+                aria-label={themeLabel}
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+            >
+                <ThemeIcon className="h-[18px] w-[18px]" />
+            </button>
+        </div>
+    );
+}
 
-                {/* Mobile Menu Toggle Button */}
-                <button
-                    type="button"
-                    className="text-xl hidden max-lg:block absolute right-4 text-[#6C7580] cursor-pointer hover:text-[#4FACFE] transition-colors"
-                    onClick={toggleMobileMenu}
-                    aria-label="Chuyển đổi menu trên di động"
-                    aria-expanded={isMobileMenuOpen}
-                >
-                    <FontAwesomeIcon icon={faBars} />
-                </button>
+const Header: React.FC = () => {
+    const { m } = useI18n();
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-                {/* Navigation */}
-                <nav
-                    className={`flex items-center max-lg:flex-col max-lg:absolute max-lg:top-0 max-lg:right-0 max-lg:bg-white max-lg:w-4/5 max-lg:h-screen max-lg:pt-20 max-lg:transition-transform max-lg:duration-500 max-lg:ease-in-out max-lg:z-[1002] ${
-                        isMobileMenuOpen
-                            ? "max-lg:translate-x-0"
-                            : "max-lg:translate-x-full"
-                    }`}
-                >
-                    {/* Mobile Menu Close Button */}
+    const toggleMobileMenu = useCallback(() => setIsMobileMenuOpen((prev) => !prev), []);
+    const closeMobileMenu = useCallback(() => setIsMobileMenuOpen(false), []);
+
+    return (
+        <header className="fixed top-0 left-0 z-[1001] h-20 w-full border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
+            <div className="mx-auto flex h-full max-w-7xl items-center justify-between gap-8 px-4">
+                <Link to="/" onClick={closeMobileMenu} className="flex shrink-0 flex-col leading-tight">
+                    <span className="font-montserrat text-xl font-bold text-[#087f83] dark:text-teal-400">SynapseCity</span>
+                    <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">{m.nav.tagline}</span>
+                </Link>
+
+                <div className="flex items-center gap-1 lg:hidden">
+                    <SiteToggles />
                     <button
                         type="button"
-                        className="absolute top-6 right-6 text-3xl text-[#6C7580] hidden max-lg:block cursor-pointer hover:text-[#4FACFE] transition-colors"
-                        onClick={closeMobileMenu}
-                        aria-label="Đóng menu trên di động"
+                        className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                        onClick={toggleMobileMenu}
+                        aria-label={m.nav.openMenu}
+                        aria-expanded={isMobileMenuOpen}
                     >
-                        <FontAwesomeIcon icon={faXmark} />
+                        <Menu className="h-5 w-5" />
+                    </button>
+                </div>
+
+                <nav
+                    className={`flex items-center gap-4 xl:gap-6 max-lg:fixed max-lg:top-0 max-lg:right-0 max-lg:z-[1002] max-lg:h-screen max-lg:w-4/5 max-lg:max-w-sm max-lg:flex-col max-lg:items-start max-lg:gap-1 max-lg:bg-white max-lg:px-6 max-lg:pt-20 max-lg:shadow-2xl max-lg:transition-transform max-lg:duration-300 dark:max-lg:bg-slate-950 ${
+                        isMobileMenuOpen ? "max-lg:translate-x-0" : "max-lg:translate-x-full"
+                    }`}
+                >
+                    <button
+                        type="button"
+                        className="absolute top-4 right-4 hidden h-10 w-10 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 max-lg:flex dark:text-slate-300 dark:hover:bg-slate-800"
+                        onClick={closeMobileMenu}
+                        aria-label={m.nav.closeMenu}
+                    >
+                        <X className="h-6 w-6" />
                     </button>
 
-                    {/* Navigation Links */}
-                    {navigationItems.map((item) => {
-                        if (item.isButton) {
-                            return (
-                                <Link
-                                    key={item.to}
-                                    to={item.to}
-                                    search={item.search}
-                                    onClick={closeMobileMenu}
-                                    className="ml-8 
-                                    text-base 
-                                    h-10 bg-linear-to-r
-                                    from-[#00F2FE] from-21% to-[#4FACFE] 
-                                    px-6 flex items-center rounded-full 
-                                    max-lg:mx-2 max-lg:w-4/5 max-lg:text-xl 
-                                    max-lg:flex-col max-lg:justify-center 
-                                    hover:shadow-lg transition-shadow
-                                    z-70"
-                                >
-                                    <span className="text-white font-semibold text-center">
-                                        {item.label}
-                                    </span>
-                                </Link>
-                            );
-                        }
+                    <Link
+                        to="/about"
+                        onClick={closeMobileMenu}
+                        className={`${linkBase} text-slate-600 hover:text-sky-600 dark:text-slate-300 dark:hover:text-sky-400`}
+                    >
+                        <StableLabel pick={(d) => d.nav.about} />
+                    </Link>
+                    <Link
+                        to="/docs"
+                        onClick={closeMobileMenu}
+                        className={`${linkBase} text-slate-600 hover:text-sky-600 dark:text-slate-300 dark:hover:text-sky-400`}
+                    >
+                        <StableLabel pick={(d) => d.nav.docs} />
+                    </Link>
+                    <Link
+                        to="/public/report"
+                        onClick={closeMobileMenu}
+                        className={`${linkBase} font-medium text-amber-700 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300`}
+                    >
+                        <CircleAlert className="h-4 w-4" />
+                        <StableLabel pick={(d) => d.nav.report} />
+                    </Link>
+                    <a
+                        href={LINKS.sos}
+                        onClick={closeMobileMenu}
+                        className={`${linkBase} font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300`}
+                    >
+                        <Siren className="h-4 w-4" />
+                        <StableLabel pick={(d) => d.nav.sos} />
+                    </a>
+                    <Link
+                        to="/login"
+                        onClick={closeMobileMenu}
+                        className={`${linkBase} text-slate-600 hover:text-sky-600 dark:text-slate-300 dark:hover:text-sky-400`}
+                    >
+                        <LogIn className="h-4 w-4" />
+                        <StableLabel pick={(d) => d.nav.login} />
+                    </Link>
 
-                        if (item.isLogin) {
-                            return (
-                                <Link
-                                    key={item.to}
-                                    to={item.to}
-                                    onClick={closeMobileMenu}
-                                    className="ml-8 text-base text-[#6C7580] max-lg:text-lg max-lg:ml-2 max-lg:my-2 hover:text-[#4FACFE] transition-colors flex items-center gap-1.5"
-                                >
-                                    <LogIn className="w-4 h-4" />
-                                    {item.label}
-                                </Link>
-                            );
-                        }
+                    <SiteToggles className="max-lg:hidden" />
 
-                        if (item.isEmergency) {
-                            return (
-                                <a
-                                    key={item.to}
-                                    href={item.to}
-                                    onClick={closeMobileMenu}
-                                    className="ml-8 text-red-500 max-lg:text-lg max-lg:ml-2 max-lg:my-2 hover:text-red-600 transition-colors flex items-center gap-1.5 font-medium"
-                                >
-                                    <Siren className="w-4 h-4" />
-                                    {item.label}
-                                </a>
-                            );
-                        }
-
-                        if (item.isCitizen) {
-                            return (
-                                <Link
-                                    key={item.to}
-                                    to={item.to}
-                                    onClick={closeMobileMenu}
-                                    className="ml-8 text-base text-amber-600 max-lg:text-lg max-lg:ml-2 max-lg:my-2 hover:text-amber-700 transition-colors flex items-center gap-1.5 font-medium"
-                                >
-                                    <CircleAlert className="w-4 h-4" />
-                                    {item.label}
-                                </Link>
-                            );
-                        }
-
-                        return (
-                            <Link
-                                key={item.to}
-                                to={item.to}
-                                onClick={closeMobileMenu}
-                                className="ml-8 text-base text-[#6C7580] max-lg:text-lg max-lg:ml-2 max-lg:my-2 hover:text-[#4FACFE] transition-colors"
-                            >
-                                {item.label}
-                            </Link>
-                        );
-                    })}
+                    <Link
+                        to="/map"
+                        search={{ assetId: undefined }}
+                        onClick={closeMobileMenu}
+                        className="flex h-10 items-center whitespace-nowrap rounded-full bg-linear-to-r from-cyan-500 to-blue-500 px-6 text-[15px] font-semibold text-white shadow-md shadow-cyan-500/25 transition hover:shadow-lg max-lg:mt-4 max-lg:w-full max-lg:justify-center"
+                    >
+                        <StableLabel pick={(d) => d.nav.start} />
+                    </Link>
                 </nav>
+
+                {isMobileMenuOpen && (
+                    <button
+                        type="button"
+                        aria-label={m.nav.closeMenu}
+                        onClick={closeMobileMenu}
+                        className="fixed inset-0 z-[1001] bg-black/40 lg:hidden"
+                    />
+                )}
             </div>
         </header>
     );

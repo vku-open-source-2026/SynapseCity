@@ -1,121 +1,77 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 import { Link } from "@tanstack/react-router";
+import type { ReactNode } from "react";
+import { useI18n } from "../lib/i18n-context";
+import { LINKS } from "../lib/site";
 
-const Footer = () => {
+const linkClass =
+    "text-sm text-slate-600 hover:text-sky-600 hover:underline dark:text-slate-400 dark:hover:text-sky-400";
+
+function Ext({ href, children }: { href: string; children: ReactNode }) {
     return (
-        <footer className="mx-0 my-0 h-64 mt-10 flex flex-col items-center justify-center max-lg:h-auto bg-white">
-            <hr className="border-t border-[#bdbac0] w-full max-w-5xl mx-auto" />
-            <div className="flex h-44 items-center justify-between px-10 w-full max-w-4xl mx-auto max-lg:flex-col max-lg:h-auto max-lg:items-start max-lg:my-6">
-                <div className="flex flex-col items-start max-lg:my-2">
-                    <p className="mb-4 text-sm font-semibold uppercase text-[#4c5664]">
-                        Khám phá
-                    </p>
-                    <div className="flex flex-col space-y-3">
-                        <Link
-                            to="/map"
-                            search={{ assetId: undefined }}
-                            className="text-sm text-[#6C7580] flex w-fit items-center space-x-2 capitalize hover:underline"
-                        >
-                            Bản đồ hạ tầng
-                        </Link>
-                        <Link
-                            to="/docs"
-                            className="text-sm text-[#6C7580] flex w-fit items-center space-x-2 capitalize hover:underline"
-                        >
-                            Tài liệu API
-                        </Link>
-                    </div>
+        <a href={href} target="_blank" rel="noopener noreferrer" className={linkClass}>
+            {children}
+        </a>
+    );
+}
+
+function Column({ title, children }: { title: string; children: ReactNode }) {
+    return (
+        <div>
+            <p className="mb-3 text-sm font-semibold text-slate-900 dark:text-slate-100">{title}</p>
+            <div className="flex flex-col gap-2">{children}</div>
+        </div>
+    );
+}
+
+/**
+ * Site footer. Besides navigation it links to the source, releases, changelog,
+ * build guide, bug tracker, contribution guide and the code / data / third-party
+ * licences.
+ */
+const Footer = () => {
+    const { m } = useI18n();
+    const l = m.footer.links;
+
+    return (
+        <footer className="border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
+            <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-[1.4fr_repeat(4,1fr)] lg:px-8">
+                <div>
+                    <p className="font-montserrat text-lg font-bold text-[#087f83] dark:text-teal-400">SynapseCity</p>
+                    <p className="mt-2 max-w-xs text-sm text-slate-600 dark:text-slate-400">{m.footer.tagline}</p>
                 </div>
-                <div className="flex flex-col items-start max-lg:my-2">
-                    <p className="mb-4 text-sm font-semibold uppercase text-[#4c5664]">
-                        Dự án
-                    </p>
-                    <div className="flex flex-col space-y-3">
-                        <a
-                            href="#about-us"
-                            className="text-sm text-[#6C7580] flex w-fit items-center space-x-2 capitalize hover:underline"
-                        >
-                            Giới thiệu
-                        </a>
-                        <a
-                            href="https://github.com/vku-open-source-2026/SynapseCity"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm text-[#6C7580] flex w-fit items-center space-x-2 capitalize hover:underline"
-                        >
-                            GitHub
-                        </a>
-                    </div>
-                </div>
-                <div className="flex flex-col items-start max-lg:my-2">
-                    <p className="mb-4 text-sm font-semibold uppercase text-[#4c5664]">
-                        Đóng góp
-                    </p>
-                    <div className="flex flex-col space-y-3">
-                        <a
-                            href="https://contribution.synapsecity.sbs/"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm text-[#6C7580] flex w-fit items-center space-x-2 capitalize hover:underline"
-                        >
-                            Gửi dữ liệu
-                        </a>
-                        <a
-                            href="https://github.com/vku-open-source-2026/SynapseCity/issues"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm text-[#6C7580] flex w-fit items-center space-x-2 capitalize hover:underline"
-                        >
-                            Báo lỗi
-                        </a>
-                    </div>
-                </div>
-                <div className="flex flex-col items-start max-lg:my-2">
-                    <p className="mb-4 text-sm font-semibold uppercase text-[#4c5664]">
-                        Giấy phép
-                    </p>
-                    <div className="flex flex-col space-y-3">
-                        <a
-                            href="https://github.com/vku-open-source-2026/SynapseCity/blob/main/LICENSE"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm text-[#6C7580] flex w-fit items-center space-x-2 capitalize hover:underline"
-                        >
-                            Apache 2.0 (Mã nguồn)
-                        </a>
-                        <a
-                            href="https://opendatacommons.org/licenses/pddl/1-0/"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm text-[#6C7580] flex w-fit items-center space-x-2 capitalize hover:underline"
-                        >
-                            PDDL 1.0 (Dữ liệu)
-                        </a>
-                    </div>
-                </div>
+
+                <Column title={m.footer.product}>
+                    <Link to="/map" search={{ assetId: undefined }} className={linkClass}>{l.map}</Link>
+                    <Link to="/public/report" className={linkClass}>{l.report}</Link>
+                    <Link to="/docs" className={linkClass}>{l.docs}</Link>
+                    <a href={LINKS.sos} className={linkClass}>{l.sos}</a>
+                </Column>
+
+                <Column title={m.footer.project}>
+                    <Link to="/about" className={linkClass}>{l.about}</Link>
+                    <Ext href={LINKS.repo}>{l.repo}</Ext>
+                    <Ext href={LINKS.releases}>{l.releases}</Ext>
+                    <Ext href={LINKS.changelog}>{l.changelog}</Ext>
+                </Column>
+
+                <Column title={m.footer.support}>
+                    <Ext href={LINKS.buildFromSource}>{l.build}</Ext>
+                    <Ext href={LINKS.issues}>{l.issues}</Ext>
+                    <Ext href={LINKS.contributing}>{l.contributing}</Ext>
+                    <Ext href={LINKS.dataContribution}>{l.data}</Ext>
+                </Column>
+
+                <Column title={m.footer.licenses}>
+                    <Ext href={LINKS.sourceLicense}>{l.source}</Ext>
+                    <Ext href={LINKS.dataLicense}>{l.dataLicense}</Ext>
+                    <Ext href={LINKS.thirdParty}>{l.thirdParty}</Ext>
+                </Column>
             </div>
-            <div className="flex flex-col items-center mb-6">
-                <p className="text-sm text-[#6C7580]">
-                    © SynapseCity 2025. Mã nguồn theo giấy phép{" "}
-                    <a
-                        href="https://github.com/vku-open-source-2026/SynapseCity/blob/main/LICENSE"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-500 hover:underline"
-                    >
-                        Apache 2.0
-                    </a>
-                    . Dữ liệu theo giấy phép{" "}
-                    <a
-                        href="https://opendatacommons.org/licenses/pddl/1-0/"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-500 hover:underline"
-                    >
-                        PDDL 1.0
-                    </a>
-                    .
+            <div className="border-t border-slate-200 dark:border-slate-800">
+                <p className="mx-auto max-w-7xl px-4 py-5 text-xs text-slate-500 sm:px-6 lg:px-8 dark:text-slate-500">
+                    {m.footer.bottom}
                 </p>
             </div>
         </footer>

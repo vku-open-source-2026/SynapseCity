@@ -3,6 +3,61 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
+/* Dark mode follows the `.dark` class set by src/lib/theme.tsx (light / dark / system). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Beats the `html[data-product="city"] body` brand rule further down. */
+html.dark[data-product] body,
+html.dark body {
+  background: #0b1220;
+  color: #e2e8f0;
+}
+
+/*
+ * Dark fallback for screens that have not been given explicit `dark:` classes
+ * yet (map, admin console, report form). Elements that declare their own
+ * `dark:` utility for the same property are skipped, so rewritten pages keep
+ * their own palette.
+ */
+html.dark :is(.bg-white, .bg-gray-50, .bg-slate-50):not([class*="dark:bg-"]) {
+  background-color: #111a2e;
+}
+html.dark :is(.bg-gray-100, .bg-slate-100):not([class*="dark:bg-"]) {
+  background-color: #1a2540;
+}
+html.dark :is(.text-slate-900, .text-gray-900, .text-slate-800, .text-gray-800, .text-gray-heading):not([class*="dark:text-"]) {
+  color: #f1f5f9;
+}
+html.dark :is(.text-slate-700, .text-gray-700, .text-slate-600, .text-gray-600):not([class*="dark:text-"]) {
+  color: #cbd5e1;
+}
+html.dark :is(.text-slate-500, .text-gray-500, .text-\[\#6C7580\], .text-\[\#4c5664\]):not([class*="dark:text-"]) {
+  color: #94a3b8;
+}
+html.dark :is(.border-slate-100, .border-slate-200, .border-gray-100, .border-gray-200, .border-border):not([class*="dark:border-"]) {
+  border-color: #24314d;
+}
+/* Light tinted panels (info / warning / error boxes) become a faint tint on dark. */
+html.dark .bg-blue-50:not([class*="dark:bg-"]) { background-color: rgb(59 130 246 / 0.12); }
+html.dark .bg-sky-50:not([class*="dark:bg-"]) { background-color: rgb(14 165 233 / 0.12); }
+html.dark .bg-teal-50:not([class*="dark:bg-"]) { background-color: rgb(20 184 166 / 0.12); }
+html.dark :is(.bg-green-50, .bg-emerald-50):not([class*="dark:bg-"]) { background-color: rgb(16 185 129 / 0.12); }
+html.dark :is(.bg-amber-50, .bg-yellow-50, .bg-orange-50):not([class*="dark:bg-"]) { background-color: rgb(245 158 11 / 0.12); }
+html.dark .bg-red-50:not([class*="dark:bg-"]) { background-color: rgb(239 68 68 / 0.12); }
+html.dark .bg-purple-50:not([class*="dark:bg-"]) { background-color: rgb(168 85 247 / 0.12); }
+html.dark :is(.border-blue-200, .border-green-200, .border-amber-200, .border-yellow-200, .border-red-200, .border-purple-200):not([class*="dark:border-"]) {
+  border-color: rgb(148 163 184 / 0.25);
+}
+html.dark :is(input, textarea, select):not([class*="dark:bg-"]) {
+  background-color: #0f172a;
+  color: #e2e8f0;
+}
+html.dark .leaflet-popup-content-wrapper,
+html.dark .leaflet-popup-tip {
+  background-color: #111a2e;
+  color: #e2e8f0;
+}
+
 @layer utilities {
   .custom-marker-icon {
     background: transparent !important;

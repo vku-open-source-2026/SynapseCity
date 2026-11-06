@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
-import { useState, useRef, useEffect, useCallback, useId } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { MessageCircle, X, Send, Loader2, Bot, User, Code, Database, AlertCircle, Copy, Check, Play, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
 import { type Asset, getAssetId } from '../api';
+import { httpClient } from '../lib/httpClient';
 
 interface Message {
   id: string;
@@ -36,14 +37,6 @@ interface ApiParam {
   required?: boolean;
 }
 
-interface StreamChunk {
-  type: 'token' | 'tool_start' | 'tool_end' | 'final' | 'error' | 'done' | 'pong';
-  content?: string;
-  tool?: string;
-  input?: string;
-  output?: string;
-}
-
 interface ApiCardResultPreview {
   url?: string;
   status?: number;
@@ -64,15 +57,6 @@ interface ApiCardPayload {
   params?: Record<string, ApiCardParamMeta>;
   last_result?: ApiCardResultPreview;
 }
-
-type WebSocketWithPing = WebSocket & { pingInterval?: ReturnType<typeof setInterval> };
-
-const clearWebSocketPingInterval = (socket: WebSocket | null) => {
-  const ws = socket as WebSocketWithPing | null;
-  if (!ws?.pingInterval) return;
-  clearInterval(ws.pingInterval);
-  ws.pingInterval = undefined;
-};
 
 const getFeatureCount = (value: unknown): number | null => {
   if (!value || typeof value !== 'object') return null;
@@ -116,10 +100,9 @@ const API_DEFINITIONS: Record<string, ApiCardData> = {
   },
 };
 
-// The City service exposes no AI transport. The widget talks to the REST
-// endpoint only and reports the capability error; it never opens a WebSocket to
-// a route that does not exist.
-const WEBSOCKET_URL: string = '';
+// The assistant talks to the City service, which proxies the Tier-2
+// AI capability (→ Tier-1 inference). No WebSocket: the REST route is the
+// published contract.
 const API_BASE_URL = import.meta.env.VITE_BASE_API_URL?.replace('/v1', '') || '';
 
 // API Card Component
@@ -329,6 +312,22 @@ interface AIChatWidgetProps {
   addAssetToContext?: Asset | null;
 }
 
+/** Welcome copy mirrors the live Tier-2 status probe. */
+const welcomeFor = (status: AiStatus): string => {
+  switch (status) {
+    case 'ready':
+      return 'Xin chào! Tôi là trợ lý AI của SynapseCity. Bạn có thể hỏi về dữ liệu tài sản, cảm biến và sự cố hạ tầng của bạn.';
+    case 'degraded':
+      return 'Xin chào! Trợ lý AI đang ở chế độ suy giảm hiệu năng (upstream không ổn định). Bạn vẫn có thể thử đặt câu hỏi.';
+    case 'unavailable':
+      return 'Trợ lý AI chưa khả dụng: dịch vụ suy luận ở Tier-2 chưa sẵn sàng hoặc chưa được cấu hình. Bạn vẫn có thể dùng công cụ kiểm thử API bên dưới và xem dữ liệu tài sản trực tiếp.';
+    default:
+      return 'Đang kiểm tra kết nối tới trợ lý AI…';
+  }
+};
+
+type AiStatus = 'checking' | 'ready' | 'degraded' | 'unavailable';
+
 export default function AIChatWidget({ 
   selectedAsset, 
   onOpenChange,
@@ -338,26 +337,15 @@ export default function AIChatWidget({
   const [internalIsOpen, setInternalIsOpen] = useState(false);
   const isOpen = openChat ?? internalIsOpen;
   const [assetInContext, setAssetInContext] = useState<Asset | null>(null);
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 'welcome',
-      role: 'assistant',
-      content: 'Trợ lý AI của SynapseCity chưa khả dụng: nền tảng chưa công bố capability suy luận ở Tier-2 (SynapseDX #11). Bạn vẫn có thể dùng công cụ kiểm thử API bên dưới và xem dữ liệu tài sản trực tiếp.',
-      timestamp: new Date(),
-    }
-  ]);
+  const [aiStatus, setAiStatus] = useState<AiStatus>('checking');
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [welcomeAt] = useState(() => new Date());
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isConnected, setIsConnected] = useState(false);
-  const [currentToolInfo, setCurrentToolInfo] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
-  const reactClientId = useId();
-  const wsRef = useRef<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const clientIdRef = useRef<string>(`client_${reactClientId.replace(/:/g, '_')}`);
   const streamingMessageRef = useRef<string>('');
-  const connectWebSocketRef = useRef<() => void>(() => {});
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -366,6 +354,20 @@ export default function AIChatWidget({
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    let cancelled = false;
+    httpClient.get('/ai/status')
+      .then((response) => {
+        if (cancelled) return;
+        const status = String((response.data as { status?: string } | null)?.status || '').toLowerCase();
+        setAiStatus(status === 'ready' ? 'ready' : status === 'degraded' ? 'degraded' : 'unavailable');
+      })
+      .catch(() => {
+        if (!cancelled) setAiStatus('unavailable');
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   const addAssetToContext = useCallback((asset: Asset) => {
     setAssetInContext(asset);
@@ -437,193 +439,6 @@ export default function AIChatWidget({
     });
   }, []);
 
-  const handleStreamChunk = useCallback((chunk: StreamChunk) => {
-    switch (chunk.type) {
-      case 'token':
-        streamingMessageRef.current += chunk.content || '';
-        updateStreamingMessage(streamingMessageRef.current);
-        break;
-
-      case 'tool_start':
-        setCurrentToolInfo(`🔧 Đang thực thi: ${chunk.tool}`);
-        break;
-
-      case 'tool_end':
-        setCurrentToolInfo(null);
-        break;
-
-      case 'final':
-        // Final response, update the message
-        if (chunk.content) {
-          updateStreamingMessage(chunk.content);
-        }
-        break;
-
-      case 'error':
-        setMessages(prev => [...prev.slice(0, -1), {
-          id: Date.now().toString(),
-          role: 'system',
-          content: `❌ Lỗi: ${chunk.content}`,
-          timestamp: new Date(),
-        }]);
-        setIsLoading(false);
-        break;
-
-      case 'done':
-        setIsLoading(false);
-        setCurrentToolInfo(null);
-        streamingMessageRef.current = '';
-        break;
-    }
-  }, [updateStreamingMessage]);
-
-  const connectWebSocket = useCallback(() => {
-    if (!WEBSOCKET_URL) {
-      setIsConnected(false);
-      return;
-    }
-    // Don't connect if already connected or connecting
-    if (wsRef.current?.readyState === WebSocket.OPEN || 
-        wsRef.current?.readyState === WebSocket.CONNECTING) {
-      console.log('WebSocket already connected or connecting');
-      return;
-    }
-    
-    // Close existing connection if any (but not connecting)
-    if (wsRef.current && wsRef.current.readyState !== WebSocket.CONNECTING) {
-      const oldWs = wsRef.current;
-      clearWebSocketPingInterval(oldWs);
-      if (oldWs.readyState === WebSocket.OPEN) {
-        oldWs.close();
-      }
-      wsRef.current = null;
-    }
-
-    const wsUrl = `${WEBSOCKET_URL}/${clientIdRef.current}`;
-    console.log('Connecting to WebSocket:', wsUrl);
-
-    try {
-      const ws = new WebSocket(wsUrl);
-      
-      // Set connection state immediately
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        console.log('WebSocket connected');
-        setIsConnected(true);
-        
-        // Send ping to keep connection alive
-        const pingInterval = setInterval(() => {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'ping' }));
-          } else {
-            clearInterval(pingInterval);
-          }
-        }, 30000); // Ping every 30 seconds
-        
-        // Store interval ID for cleanup
-        (ws as WebSocketWithPing).pingInterval = pingInterval;
-      };
-
-      ws.onclose = (event) => {
-        console.log('WebSocket disconnected', event.code, event.reason);
-        setIsConnected(false);
-        
-        // Clear ping interval
-        clearWebSocketPingInterval(ws);
-        
-        // Don't reconnect if component is unmounting or chat is closed
-        if (!isOpen) {
-          return;
-        }
-        
-        // Try to reconnect after 3 seconds if not a normal closure
-        // Code 1006 = abnormal closure (no close frame)
-        // Code 1000 = normal closure
-        if (event.code !== 1000 && isOpen) {
-          setTimeout(() => {
-            if (isOpen && wsRef.current?.readyState !== WebSocket.OPEN && wsRef.current?.readyState !== WebSocket.CONNECTING) {
-              console.log('Attempting to reconnect WebSocket...');
-              connectWebSocketRef.current();
-            }
-          }, 3000);
-        }
-      };
-
-      ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        setIsConnected(false);
-        // Don't try to reconnect immediately on error, let onclose handle it
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const chunk: StreamChunk = JSON.parse(event.data);
-          
-          // Handle pong response
-          if (chunk.type === 'pong') {
-            return; // Just acknowledge, don't process
-          }
-          
-          handleStreamChunk(chunk);
-        } catch (e) {
-          console.error('Failed to parse message:', e);
-        }
-      };
-
-      // wsRef.current is already set above
-    } catch (error) {
-      console.error('Failed to create WebSocket:', error);
-      setIsConnected(false);
-      wsRef.current = null;
-    }
-  }, [handleStreamChunk, isOpen]);
-
-  useEffect(() => {
-    connectWebSocketRef.current = connectWebSocket;
-  }, [connectWebSocket]);
-
-  useEffect(() => {
-    if (isOpen) {
-      // Small delay to ensure component is fully mounted
-      const timeoutId = setTimeout(() => {
-        connectWebSocket();
-      }, 100);
-      
-      return () => {
-        clearTimeout(timeoutId);
-      };
-    } else {
-      // Close connection when chat is closed
-      if (wsRef.current) {
-        const ws = wsRef.current;
-        // Clear ping interval
-        clearWebSocketPingInterval(ws);
-        // Only close if connection is open or connecting
-        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-          ws.close(1000, 'Chat closed');
-        }
-        wsRef.current = null;
-      }
-    }
-  }, [isOpen, connectWebSocket]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (wsRef.current) {
-        const ws = wsRef.current;
-        // Clear ping interval
-        clearWebSocketPingInterval(ws);
-        // Only close if connection is open
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.close(1000, 'Component unmounted');
-        }
-        wsRef.current = null;
-      }
-    };
-  }, []);
-
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
 
@@ -648,7 +463,7 @@ export default function AIChatWidget({
     };
     setMessages(prev => [...prev, assistantMessage]);
 
-    // Build chat history (last 10 messages)
+    // Build chat history (last 10 messages, excluding the synthetic welcome)
     const history = messages
       .filter(m => m.role !== 'system')
       .slice(-10)
@@ -662,47 +477,35 @@ export default function AIChatWidget({
       geometry: assetInContext.geometry,
     } : null;
 
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: 'chat',
+    try {
+      // Authenticated via the shared axios client (Bearer). City proxies the
+      // Tier-2 AI capability; upstream failures surface as typed 503s.
+      const response = await httpClient.post('/ai/chat', {
         message: userMessage.content,
         history,
         asset_context: assetContext,
-      }));
-    } else {
-      // Fallback to REST API
-      try {
-        // Include asset context if available
-        const assetContext = assetInContext ? {
-          asset_id: getAssetId(assetInContext),
-          feature_type: assetInContext.feature_type,
-          feature_code: assetInContext.feature_code,
-          geometry: assetInContext.geometry,
-        } : null;
-
-        const response = await fetch(`${import.meta.env.VITE_BASE_API_URL}/ai/chat`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message: userMessage.content,
-            history,
-            asset_context: assetContext,
-          }),
-        });
-
-        const data = (await response.json()) as { response?: string; error?: string; detail?: string; dependency?: string };
-        if (!response.ok) {
-          updateStreamingMessage(`❌ Trợ lý AI chưa khả dụng (HTTP ${response.status}): ${data.detail || data.error || 'ai_capability_unavailable'}${data.dependency ? `\n${data.dependency}` : ''}`);
-          setIsLoading(false);
-          return;
-        }
-        updateStreamingMessage(data.response ?? '✅ Đã nhận phản hồi nhưng không có nội dung phản hồi.');
-        setIsLoading(false);
-      } catch (error) {
+      });
+      const data = (response.data ?? {}) as {
+        message?: string;
+        model?: string;
+        error?: string;
+        detail?: string;
+        dependency?: string;
+      };
+      const reply = String(data.message || '').trim();
+      updateStreamingMessage(reply || '⚠️ Phản hồi rỗng từ dịch vụ AI. Vui lòng thử lại.');
+    } catch (error) {
+      const axiosError = error as { response?: { status?: number; data?: { error?: string; detail?: string; dependency?: string } } };
+      const status = axiosError?.response?.status;
+      const body = axiosError?.response?.data;
+      if (status) {
+        updateStreamingMessage(`❌ Trợ lý AI chưa khả dụng (HTTP ${status}): ${body?.detail || body?.error || 'ai_capability_unavailable'}${body?.dependency ? `\n${body.dependency}` : ''}`);
+      } else {
         console.error('Chat error:', error);
         updateStreamingMessage('❌ Không thể kết nối. Vui lòng thử lại.');
-        setIsLoading(false);
       }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -894,8 +697,12 @@ export default function AIChatWidget({
               <Bot size={20} />
               <div>
                 <span className="font-semibold">SynapseCity AI</span>
-                <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${isConnected ? 'bg-green-500/30' : 'bg-red-500/30'}`}>
-                  {isConnected ? 'Đang kết nối' : 'AI chưa khả dụng'}
+                <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
+                  aiStatus === 'ready' ? 'bg-green-500/30' :
+                  aiStatus === 'degraded' ? 'bg-amber-400/40 text-amber-950' :
+                  aiStatus === 'checking' ? 'bg-white/20' : 'bg-red-500/30'
+                }`}>
+                  {aiStatus === 'ready' ? 'AI sẵn sàng' : aiStatus === 'degraded' ? 'AI suy giảm' : aiStatus === 'checking' ? 'Đang kết nối…' : 'AI chưa khả dụng'}
                 </span>
               </div>
             </div>
@@ -946,7 +753,7 @@ export default function AIChatWidget({
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gradient-to-b from-blue-50/30 to-white">
-            {messages.map((msg) => (
+            {[{ id: 'welcome', role: 'assistant' as const, content: welcomeFor(aiStatus), timestamp: welcomeAt }, ...messages].map((msg) => (
               <div
                 key={msg.id}
                 className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
@@ -976,14 +783,6 @@ export default function AIChatWidget({
                 </div>
               </div>
             ))}
-
-            {/* Tool execution indicator */}
-            {currentToolInfo && (
-              <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 rounded-lg px-3 py-2 border border-blue-200">
-                <Database size={14} className="animate-pulse" />
-                {currentToolInfo}
-              </div>
-            )}
 
             <div ref={messagesEndRef} />
           </div>

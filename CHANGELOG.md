@@ -3,7 +3,29 @@
 All notable changes to SynapseCity are documented here. Entries follow the
 Keep a Changelog format and version tags use Semantic Versioning.
 
-## [Unreleased] - 2026-11-04
+## [Unreleased] - 2026-11-06
+
+### Fixed
+
+- AI assistant works end-to-end through the published Tier-2 inference
+  capability: the console probes `/v1/ai/status` and reflects ready /
+  degraded / unavailable in the header pill and welcome message, sends
+  authenticated requests through the shared axios client (the previous fetch
+  never carried the Bearer token, so even signed-in users got 401), reads the
+  `message` field the City service returns, and renders typed upstream errors
+  with their dependency link. The dead WebSocket path is removed; the REST
+  route is the published contract.
+
+## [Unreleased] - 2026-11-05
+
+### Changed
+
+- Header links and buttons keep their place when the language changes, so a
+  click lands on the intended item.
+- Public website (home, about, open API docs, header, footer) is bilingual
+  (Vietnamese / English) and supports light, dark and system themes. The
+  home page no longer hotlinks a stock photo or shows a placeholder asset
+  count when the API is unreachable.
 
 ### Added
 
