@@ -138,12 +138,19 @@ app.use((req, res, next) => {
   return rawUpload(req, res, next);
 });
 app.use(express.json({ limit: '10mb' }));
+const CORRELATION_ID_RE = /^[A-Za-z0-9_.:-]{1,128}$/;
 app.use((req, res, next) => {
   res.setHeader('access-control-allow-origin', process.env.CORS_ORIGIN || 'https://synapsecity.sbs');
   res.setHeader('access-control-allow-headers', 'authorization,content-type,x-api-key,x-correlation-id');
   res.setHeader('access-control-allow-methods', 'GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS');
+  res.setHeader('x-content-type-options', 'nosniff');
+  res.setHeader('referrer-policy', 'no-referrer');
+  res.setHeader('x-frame-options', 'DENY');
+  res.setHeader('strict-transport-security', 'max-age=31536000; includeSubDomains');
   if (req.method === 'OPTIONS') return res.status(204).end();
-  res.setHeader('x-correlation-id', req.header('x-correlation-id') || randomUUID());
+  // Never echo an unsanitized client correlation id into response headers/logs.
+  const incoming = req.header('x-correlation-id');
+  res.setHeader('x-correlation-id', incoming && CORRELATION_ID_RE.test(incoming) ? incoming : randomUUID());
   next();
 });
 

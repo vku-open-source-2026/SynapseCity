@@ -5,6 +5,19 @@ Keep a Changelog format and version tags use Semantic Versioning.
 
 ## [Unreleased] - 2026-11-06
 
+### Security
+- `AUTH_SECRET` must be set in production: the service now fails fast instead
+  of silently generating an ephemeral session secret (which would invalidate
+  every session on restart).
+- Rate limiting trusts the last `X-Forwarded-For` hop appended by the edge,
+  not the client-controlled first entry.
+- The console ships a Content-Security-Policy (self + Turnstile + map tiles)
+  plus HSTS/nosniff/frame/referrer headers; the gateway adds the same security
+  headers and sanitizes echoed correlation IDs.
+- Public gateway ports are bound to 127.0.0.1; the public edge is the TLS
+  nginx only.
+
+
 ### Fixed
 
 - AI assistant works end-to-end through the published Tier-2 inference

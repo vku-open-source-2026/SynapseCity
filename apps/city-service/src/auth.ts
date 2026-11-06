@@ -67,7 +67,15 @@ const REFRESH_TTL_SECONDS = Math.max(ACCESS_TTL_SECONDS, Number(process.env.AUTH
 
 function resolveSecret(): string {
   const configured = (process.env.AUTH_SECRET || '').trim();
-  if (configured) return configured;
+  if (configured) {
+    if (configured.length < 32) {
+      console.warn('[synapsecity] AUTH_SECRET is shorter than 32 characters; use a strong secret in production.');
+    }
+    return configured;
+  }
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('[synapsecity] AUTH_SECRET must be set in production (an ephemeral secret would invalidate every session on restart)');
+  }
   console.warn('[synapsecity] AUTH_SECRET is not set; using an ephemeral session secret. Existing sessions are invalid after a restart. Production identity must be delegated to Tier-1 IAM.');
   return randomBytes(32).toString('hex');
 }
