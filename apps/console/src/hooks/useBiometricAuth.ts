@@ -16,6 +16,20 @@ const BIOMETRIC_USER_KEY = 'biometric_user_data';
 // Session tokens are scoped to the tab and never persisted in localStorage.
 const BIOMETRIC_TOKENS_KEY = 'biometric_session_tokens';
 
+/**
+ * Biometrics are a mobile/tablet convenience. Desktop browsers often expose a
+ * platform authenticator (Windows Hello/Touch ID) and would otherwise show a
+ * setup prompt after every password login; the product requirement is to keep
+ * desktop sign-in password-only.
+ */
+export function isBiometricDevice(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  const mobile = /Android|iPhone|iPad|iPod|Windows Phone|Mobile/i.test(ua);
+  const tablet = /iPad|Macintosh/i.test(ua) && Number(navigator.maxTouchPoints || 0) > 1;
+  return mobile || tablet;
+}
+
 interface BiometricState {
   isAvailable: boolean;
   isEnabled: boolean;
@@ -74,11 +88,12 @@ export function useBiometricAuth() {
           // Check if platform authenticator (fingerprint/face) is available
           const platformAvailable = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
           const enabled = localStorage.getItem(BIOMETRIC_ENABLED_KEY) === 'true';
+          const supportedDevice = isBiometricDevice();
           
           setState(prev => ({
             ...prev,
-            isAvailable: platformAvailable,
-            isEnabled: enabled && platformAvailable,
+            isAvailable: platformAvailable && supportedDevice,
+            isEnabled: enabled && platformAvailable && supportedDevice,
           }));
         }
       } catch (error) {

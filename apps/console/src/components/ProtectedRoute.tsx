@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 import { Navigate, useNavigate } from '@tanstack/react-router';
 import { useAuthStore } from '../stores/authStore';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { authApi } from '../api/auth';
 
 interface ProtectedRouteProps {
@@ -19,6 +19,9 @@ export function ProtectedRoute({
   const { isAuthenticated, user, refreshToken, setTokens } = useAuthStore();
   const [isChecking, setIsChecking] = useState(true);
   const navigate = useNavigate();
+  // Refresh at most once per mount. setTokens() changes refreshToken, which
+  // would otherwise re-run this effect and rotate the token forever.
+  const refreshAttempted = useRef(false);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -41,8 +44,10 @@ export function ProtectedRoute({
         return;
       }
 
-      // Try to refresh token if expired (simplified - in production, check token expiry)
-      if (refreshToken) {
+      // Refresh at most once per mount; a rotating refresh token must not
+      // retrigger this effect. A real 401 is handled by httpClient.
+      if (refreshToken && !refreshAttempted.current) {
+        refreshAttempted.current = true;
         try {
           const response = await authApi.refreshToken(refreshToken);
           setTokens(response.access_token, response.refresh_token);
