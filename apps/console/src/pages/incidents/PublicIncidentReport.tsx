@@ -227,7 +227,9 @@ const PublicIncidentReport: React.FC = () => {
       severity,
       location: {
         address: address.trim(),
-        geometry: { type: "Point", coordinates: hasCoords ? [longitude, latitude] : [0, 0] },
+        ...(hasCoords
+          ? { geometry: { type: "Point", coordinates: [longitude, latitude] } }
+          : {}),
       },
       ...(photoIds.length ? { photos: photoIds } : {}),
       ...(contact ? { contact_info: contact } : {}),

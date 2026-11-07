@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 import { useState, lazy, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useParams, useNavigate } from "@tanstack/react-router";
+import { useParams, useNavigate, useSearch } from "@tanstack/react-router";
 import { assetsApi } from "../../api/assets";
 import {
     Tabs,
@@ -55,7 +55,8 @@ const AssetSensorsTab = lazy(
 const AssetDetail: React.FC = () => {
     const { id } = useParams({ from: "/admin/assets/$id" });
     const navigate = useNavigate();
-    const [activeTab, setActiveTab] = useState("overview");
+    const search = useSearch({ from: "/admin/assets/$id" });
+    const [activeTab, setActiveTab] = useState(search.tab || "overview");
 
     const {
         data: asset,

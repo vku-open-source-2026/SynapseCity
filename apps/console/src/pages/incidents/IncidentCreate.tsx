@@ -23,12 +23,10 @@ const IncidentCreate: React.FC = () => {
     severity: "medium",
     location: {
       address: "",
-      coordinates: {
-        longitude: 0,
-        latitude: 0,
-      },
     },
   })
+  const [latitude, setLatitude] = useState("")
+  const [longitude, setLongitude] = useState("")
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [assetSearch, setAssetSearch] = useState("")
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null)
@@ -90,18 +88,24 @@ const IncidentCreate: React.FC = () => {
       return
     }
 
+    const parsedLatitude = parseFloat(latitude)
+    const parsedLongitude = parseFloat(longitude)
+    const hasCoordinates =
+      Number.isFinite(parsedLatitude) && Number.isFinite(parsedLongitude)
+
     const submitData = {
       ...formData,
       asset_id: selectedAssetId || undefined,
       location: {
         address: formData.location?.address,
-        geometry: {
-          type: "Point",
-          coordinates: [
-            formData.location?.coordinates?.longitude || 0,
-            formData.location?.coordinates?.latitude || 0,
-          ],
-        },
+        ...(hasCoordinates
+          ? {
+              geometry: {
+                type: "Point",
+                coordinates: [parsedLongitude, parsedLatitude],
+              },
+            }
+          : {}),
       },
     }
 
@@ -114,16 +118,8 @@ const IncidentCreate: React.FC = () => {
     if (asset) {
       // Auto-fill location from asset if available
       if (asset.geometry?.type === "Point" && asset.geometry?.coordinates) {
-        setFormData(prev => ({
-          ...prev,
-          location: {
-            ...prev.location!,
-            coordinates: {
-              longitude: asset.geometry.coordinates[0] as number,
-              latitude: asset.geometry.coordinates[1] as number,
-            },
-          },
-        }))
+        setLongitude(String(asset.geometry.coordinates[0]))
+        setLatitude(String(asset.geometry.coordinates[1]))
       }
     }
     setAssetSearch("")
@@ -275,19 +271,8 @@ const IncidentCreate: React.FC = () => {
               <Input
                 type="number"
                 step="any"
-                value={formData.location?.coordinates?.latitude || ""}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    location: {
-                      ...formData.location!,
-                      coordinates: {
-                        ...formData.location!.coordinates!,
-                        latitude: parseFloat(e.target.value) || 0,
-                      },
-                    },
-                  })
-                }
+                value={latitude}
+                onChange={(e) => setLatitude(e.target.value)}
                 placeholder="21.0278"
               />
             </FormField>
@@ -297,19 +282,8 @@ const IncidentCreate: React.FC = () => {
               <Input
                 type="number"
                 step="any"
-                value={formData.location?.coordinates?.longitude || ""}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    location: {
-                      ...formData.location!,
-                      coordinates: {
-                        ...formData.location!.coordinates!,
-                        longitude: parseFloat(e.target.value) || 0,
-                      },
-                    },
-                  })
-                }
+                value={longitude}
+                onChange={(e) => setLongitude(e.target.value)}
                 placeholder="105.8342"
               />
             </FormField>

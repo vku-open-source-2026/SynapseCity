@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import type { Map as LeafletMap } from "leaflet";
 import { useQuery } from "@tanstack/react-query";
 import { useSearch, useNavigate } from "@tanstack/react-router";
 import { getAssetId, type Asset } from "../api";
@@ -44,7 +45,14 @@ function toMapAsset(asset: PublicAssetInfo): Asset {
 
 const PublicMap: React.FC = () => {
     const navigate = useNavigate();
-    const searchParams = useSearch({ from: "/map" }) as { assetId?: string };
+    const searchParams = useSearch({ from: "/map" }) as {
+        assetId?: string;
+        lat?: number;
+        lng?: number;
+        zoom?: number;
+    };
+    const [leafletMap, setLeafletMap] = useState<LeafletMap | null>(null);
+    const focusedFromUrl = useRef(false);
     const {
         data: initialAssets,
         isLoading,
@@ -86,6 +94,20 @@ const PublicMap: React.FC = () => {
             }
         }
     }, [displayAssets, selectedAsset]);
+
+    // Honour a location link from incident/asset details. Without this, the
+    // lat/lng query params were validated away and the map stayed on the
+    // default view.
+    useEffect(() => {
+        if (!leafletMap || focusedFromUrl.current) return;
+        if (searchParams.lat === undefined || searchParams.lng === undefined) return;
+        leafletMap.flyTo(
+            [searchParams.lat, searchParams.lng],
+            searchParams.zoom ?? 16,
+            { animate: true, duration: 1.2 }
+        );
+        focusedFromUrl.current = true;
+    }, [leafletMap, searchParams.lat, searchParams.lng, searchParams.zoom]);
 
     const handleAssetSelect = (asset: Asset | null) => {
         setSelectedAsset(asset);
@@ -140,6 +162,7 @@ const PublicMap: React.FC = () => {
                         assets={displayAssets}
                         onAssetSelect={handleAssetSelect}
                         onFilterByShape={setFilteredAssets}
+                        onMapReady={setLeafletMap}
                         routePoints={routePoints}
                         selectedAsset={selectedAsset}
                         className="h-full w-full"

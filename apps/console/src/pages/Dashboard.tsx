@@ -30,17 +30,6 @@ import {
 
 type TabType = "overview" | "calendar";
 
-const getPointLatitude = (asset: Asset): number | null => {
-    if (
-        asset.geometry.type !== "Point" ||
-        !Array.isArray(asset.geometry.coordinates) ||
-        typeof asset.geometry.coordinates[1] !== "number"
-    ) {
-        return null;
-    }
-    return asset.geometry.coordinates[1];
-};
-
 const Dashboard: React.FC = () => {
     const [activeTab, setActiveTab] = useState<TabType>("overview");
     const navigate = useNavigate();
@@ -65,25 +54,10 @@ const Dashboard: React.FC = () => {
 
     const { assetsWithStatus } = useIoT(initialAssets);
     const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
-    const [routePoints, setRoutePoints] = useState<Asset[]>([]);
     const [showQRModal, setShowQRModal] = useState(false);
     const [showNFCModal, setShowNFCModal] = useState(false);
 
     const displayAssets = assetsWithStatus || [];
-
-    const handleRouteOptimization = () => {
-        if (!displayAssets.length) return;
-        const points = [...displayAssets]
-            .filter((a) => getPointLatitude(a) !== null)
-            .slice(0, 5)
-            .sort(
-                (a, b) =>
-                    (getPointLatitude(b) ?? Number.NEGATIVE_INFINITY) -
-                    (getPointLatitude(a) ?? Number.NEGATIVE_INFINITY)
-            );
-        setRoutePoints(points);
-        alert(`Tối ưu tuyến cho ${points.length} điểm dừng!`);
-    };
 
     const calendarLogs = useMemo(() => (upcomingMaintenance ?? []).map((order) => {
         const status = String(order.status || "scheduled");
@@ -124,8 +98,11 @@ const Dashboard: React.FC = () => {
     const assetCount = displayAssets.length;
     const activeAlerts = openAlerts?.length ?? 0;
     const maintenanceDue = upcomingMaintenance?.length ?? 0;
-    const operationalRate = assetCount > 0 
-        ? (((assetCount - Math.min(assetCount, activeAlerts)) / assetCount) * 100).toFixed(1)
+    const operationalAssets = displayAssets.filter((asset) =>
+        ["active", "operational", "online"].includes(String(asset.status ?? "").toLowerCase())
+    ).length;
+    const operationalRate = assetCount > 0
+        ? ((operationalAssets / assetCount) * 100).toFixed(1)
         : "0.0";
 
     return (
@@ -243,17 +220,9 @@ const Dashboard: React.FC = () => {
                                         <MapComponent
                                             assets={displayAssets}
                                             onAssetSelect={setSelectedAsset}
-                                            routePoints={routePoints}
                                             selectedAsset={selectedAsset}
                                             className="h-full"
                                         />
-                                        <button
-                                            onClick={handleRouteOptimization}
-                                            className="absolute bottom-4 right-4 px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2 shadow-sm"
-                                        >
-                                            <Activity size={14} />
-                                            Tối ưu lộ trình
-                                        </button>
                                     </div>
 
                                     {/* Asset Table */}
@@ -383,7 +352,17 @@ const Dashboard: React.FC = () => {
                                                         Write NFC
                                                     </button>
                                                 </div>
-                                                <button className="w-full py-2 bg-blue-600 border border-transparent rounded-lg text-sm font-medium text-white hover:bg-blue-700 shadow-sm">
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        navigate({
+                                                            to: "/admin/assets/$id",
+                                                            params: { id: getAssetId(selectedAsset) },
+                                                            search: { tab: "preventive" },
+                                                        })
+                                                    }
+                                                    className="w-full py-2 bg-blue-600 border border-transparent rounded-lg text-sm font-medium text-white hover:bg-blue-700 shadow-sm"
+                                                >
                                                     Lên lịch bảo trì
                                                 </button>
                                             </div>

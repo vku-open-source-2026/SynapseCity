@@ -133,6 +133,38 @@ interface MapProps {
 
 const toLatLng = (coord: number[]): [number, number] => [coord[1], coord[0]];
 
+const HTML_ESCAPE: Record<string, string> = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+};
+
+/** Leaflet treats bindPopup() strings as HTML; never interpolate raw API text. */
+function escapeHtml(value: unknown): string {
+    return String(value ?? "").replace(/[&<>"']/g, (char) => HTML_ESCAPE[char] ?? char);
+}
+
+function assetStatusBadge(status: unknown): { label: string; className: string } | null {
+    const value = String(status ?? "").trim().toLowerCase();
+    if (!value) return null;
+
+    if (["active", "operational", "online"].includes(value)) {
+        return { label: "Đang hoạt động", className: "bg-green-100 text-green-700" };
+    }
+    if (["maintenance", "under_repair", "maintaining"].includes(value)) {
+        return { label: "Đang bảo trì", className: "bg-amber-100 text-amber-700" };
+    }
+    if (["damaged", "offline", "error"].includes(value)) {
+        return { label: "Có sự cố", className: "bg-red-100 text-red-700" };
+    }
+    if (["inactive", "decommissioned", "retired"].includes(value)) {
+        return { label: "Ngừng hoạt động", className: "bg-slate-100 text-slate-600" };
+    }
+    return { label: String(status), className: "bg-slate-100 text-slate-600" };
+}
+
 const geometryToLatLngs = (geometry: Asset["geometry"]): [number, number][] => {
     if (!geometry || !geometry.coordinates) return [];
 
@@ -420,7 +452,7 @@ const MapComponent: React.FC<MapProps> = ({
                     .slice(0, 6)
                     .map(
                         (a) =>
-                            `<div style="font-size:11px;padding:1px 0">${a.feature_type}</div>`
+                            `<div style="font-size:11px;padding:1px 0">${escapeHtml(a.feature_type)}</div>`
                     )
                     .join("");
                 const more =
@@ -431,7 +463,7 @@ const MapComponent: React.FC<MapProps> = ({
                 const marker = L.marker([entry.lat, entry.lng], { icon })
                     .addTo(map)
                     .bindPopup(
-                        `<div style="min-width:160px"><div style="font-weight:700;margin-bottom:4px">${entry.featureCode} (${entry.count})</div>${popupLines}${more}</div>`,
+                        `<div style="min-width:160px"><div style="font-weight:700;margin-bottom:4px">${escapeHtml(entry.featureCode)} (${entry.count})</div>${popupLines}${more}</div>`,
                         { className: "custom-popup" }
                     );
                 markerRefs.current[clusterKey] = marker;
@@ -448,28 +480,17 @@ const MapComponent: React.FC<MapProps> = ({
                     ? getAssetId(selectedAsset) === assetId
                     : false;
 
-                // Create popup content
-                const hash = Array.from(assetId).reduce(
-                    (h, c) => (h * 31 + c.charCodeAt(0)) | 0,
-                    0
+                // Create popup content from persisted fields only.
+                const statusBadge = assetStatusBadge(
+                    (asset as Asset & { status?: string }).status
                 );
-                const isOnline = Math.abs(hash) % 100 > 10; // ~90% online
+                const statusMarkup = statusBadge
+                    ? `<div class="mt-2 text-xs"><span class="px-2 py-0.5 rounded-full ${statusBadge.className}">${escapeHtml(statusBadge.label)}</span></div>`
+                    : "";
                 const popupContent = `
-                    <div class="font-semibold text-slate-900">${
-                        asset.feature_type
-                    }</div>
-                    <div class="text-xs text-slate-500">${
-                        asset.feature_code
-                    }</div>
-                    <div class="mt-2 text-xs">
-                        <span class="px-2 py-0.5 rounded-full ${
-                            isOnline
-                                ? "bg-green-100 text-green-700"
-                                : "bg-red-100 text-red-700"
-                        }">
-                            ${isOnline ? "Trực tuyến" : "Ngoại tuyến"}
-                        </span>
-                    </div>
+                    <div class="font-semibold text-slate-900">${escapeHtml(asset.feature_type)}</div>
+                    <div class="text-xs text-slate-500">${escapeHtml(asset.feature_code)}</div>
+                    ${statusMarkup}
                 `;
 
                 const marker = L.marker(position, {
@@ -501,8 +522,8 @@ const MapComponent: React.FC<MapProps> = ({
                 const assetId = getAssetId(asset);
 
                 const popupContent = `
-                    <div class="font-semibold text-slate-900">${asset.feature_type}</div>
-                    <div class="text-xs text-slate-500">${asset.feature_code}</div>
+                    <div class="font-semibold text-slate-900">${escapeHtml(asset.feature_type)}</div>
+                    <div class="text-xs text-slate-500">${escapeHtml(asset.feature_code)}</div>
                 `;
 
                 const polyline = L.polyline(positions, {

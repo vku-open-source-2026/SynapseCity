@@ -24,10 +24,10 @@ const UserList: React.FC = () => {
   const [search, setSearch] = useState<string>("")
   const limit = 20
 
-  const { data: users, isLoading } = useQuery({
+  const { data: userPage, isLoading } = useQuery({
     queryKey: ["users", page, role, status],
     queryFn: () =>
-      usersApi.list({
+      usersApi.listPage({
         skip: (page - 1) * limit,
         limit,
         role: role || undefined,
@@ -35,6 +35,7 @@ const UserList: React.FC = () => {
       }),
     enabled: currentUser?.role === "admin",
   })
+  const users = userPage?.items ?? []
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => usersApi.delete(id),
@@ -53,7 +54,7 @@ const UserList: React.FC = () => {
     )
   })
 
-  const totalPages = users ? Math.ceil(users.length / limit) : 1
+  const totalPages = userPage ? Math.max(1, Math.ceil(userPage.total / limit)) : 1
 
   if (currentUser?.role !== "admin") {
     return (

@@ -87,7 +87,7 @@ const UserCreate: React.FC = () => {
 
         <p className="text-sm text-slate-600 mb-4">
           Mật khẩu không được tạo ở đây. Tài khoản đăng nhập do dịch vụ định danh
-          (Tier-1 IAM) quản lý; City không lưu hoặc trả về mật khẩu.
+          quản lý; hệ thống không lưu hoặc trả về mật khẩu.
         </p>
 
         <Form onSubmit={handleSubmit}>
