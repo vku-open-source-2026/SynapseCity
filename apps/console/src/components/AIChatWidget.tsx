@@ -312,7 +312,7 @@ interface AIChatWidgetProps {
   addAssetToContext?: Asset | null;
 }
 
-/** Welcome copy mirrors the live Tier-2 status probe. */
+/** Welcome copy mirrors the live AI status probe. */
 const welcomeFor = (status: AiStatus): string => {
   switch (status) {
     case 'ready':
@@ -320,7 +320,7 @@ const welcomeFor = (status: AiStatus): string => {
     case 'degraded':
       return 'Xin chào! Trợ lý AI đang ở chế độ suy giảm hiệu năng (upstream không ổn định). Bạn vẫn có thể thử đặt câu hỏi.';
     case 'unavailable':
-      return 'Trợ lý AI chưa khả dụng: dịch vụ suy luận ở Tier-2 chưa sẵn sàng hoặc chưa được cấu hình. Bạn vẫn có thể dùng công cụ kiểm thử API bên dưới và xem dữ liệu tài sản trực tiếp.';
+      return 'Trợ lý AI chưa khả dụng: dịch vụ suy luận chưa sẵn sàng hoặc chưa được cấu hình. Bạn vẫn có thể dùng công cụ kiểm thử API bên dưới và xem dữ liệu tài sản trực tiếp.';
     default:
       return 'Đang kiểm tra kết nối tới trợ lý AI…';
   }

@@ -18,15 +18,17 @@ const AlertList: React.FC = () => {
   const [severity, setSeverity] = useState<string>("")
   const limit = 20
 
-  const { data: alerts, isLoading } = useQuery({
-    queryKey: ["alerts", "list", page, severity],
+  const { data: alertPage, isLoading } = useQuery({
+    queryKey: ["alerts", "list", page, status, severity],
     queryFn: () =>
-      alertsApi.list({
+      alertsApi.listPage({
         skip: (page - 1) * limit,
         limit,
+        status: status || undefined,
         severity: severity || undefined,
       }),
   })
+  const alerts = alertPage?.items ?? []
 
   const acknowledgeMutation = useMutation({
     mutationFn: (id: string) => alertsApi.acknowledge(id),
@@ -51,7 +53,7 @@ const AlertList: React.FC = () => {
   })
 
   const canManage = user?.role === "admin" || user?.role === "manager" || user?.role === "technician"
-  const totalPages = alerts ? Math.ceil(alerts.length / limit) : 1
+  const totalPages = alertPage ? Math.max(1, Math.ceil(alertPage.total / limit)) : 1
 
   if (isLoading) {
     return (

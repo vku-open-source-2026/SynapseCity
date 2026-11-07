@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
-import { asList, httpClient } from "../lib/httpClient";
+import { asList, asListPage, httpClient } from "../lib/httpClient";
 import type { Alert, AlertResolveRequest } from "../types/alert";
 
 export interface AlertListParams {
@@ -15,6 +15,11 @@ export const alertsApi = {
     list: async (params?: AlertListParams): Promise<Alert[]> => {
         const response = await httpClient.get<Alert[]>("/alerts", { params });
         return asList<Alert>(response.data);
+    },
+
+    listPage: async (params?: AlertListParams) => {
+        const response = await httpClient.get<Alert[]>("/alerts", { params });
+        return asListPage<Alert>(response.data, response.headers["x-total-count"]);
     },
 
     getById: async (id: string): Promise<Alert> => {

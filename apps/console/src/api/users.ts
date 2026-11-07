@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
-import { asList, httpClient } from '../lib/httpClient';
+import { asList, asListPage, httpClient } from '../lib/httpClient';
 import type { User, UserCreateRequest, UserUpdateRequest, ProfileUpdateRequest } from '../types/user';
 
 export interface UserListParams {
@@ -14,6 +14,11 @@ export const usersApi = {
   list: async (params?: UserListParams): Promise<User[]> => {
     const response = await httpClient.get<User[]>('/users', { params });
     return asList<User>(response.data);
+  },
+
+  listPage: async (params?: UserListParams) => {
+    const response = await httpClient.get<User[]>('/users', { params });
+    return asListPage<User>(response.data, response.headers['x-total-count']);
   },
 
   listTechnicians: async (status?: string): Promise<User[]> => {

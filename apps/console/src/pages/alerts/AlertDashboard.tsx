@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 import { useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { alertsApi } from "../../api/alerts";
 import { AlertCard } from "../../components/alerts/AlertCard";
@@ -93,17 +94,23 @@ const AlertDashboard: React.FC = () => {
                         Giám sát và quản lý cảnh báo hệ thống
                     </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2">
+                    <Link
+                        to="/admin/alerts/list"
+                        className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                        Tất cả cảnh báo
+                    </Link>
                     <Select
                         value={selectedSeverity}
                         onChange={(e) => setSelectedSeverity(e.target.value)}
-                        placeholder="All Severities"
+                        placeholder="Tất cả mức độ"
                     >
-                        <option value="">All Severities</option>
-                        <option value="critical">Critical</option>
-                        <option value="high">High</option>
-                        <option value="medium">Medium</option>
-                        <option value="low">Low</option>
+                        <option value="">Tất cả mức độ</option>
+                        <option value="critical">Nguy kịch</option>
+                        <option value="high">Cao</option>
+                        <option value="medium">Trung bình</option>
+                        <option value="low">Thấp</option>
                     </Select>
                 </div>
             </div>

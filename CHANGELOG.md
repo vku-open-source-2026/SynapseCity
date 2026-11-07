@@ -3,6 +3,16 @@
 All notable changes to SynapseCity are documented here. Entries follow the
 Keep a Changelog format and version tags use Semantic Versioning.
 
+## [Unreleased] - 2026-11-07
+
+### Fixed
+- Console UI audit: removed fabricated map online/offline status, escaped
+  Leaflet popup text, removed the fake VNeID flow, wired the incident/alert
+  filters, fixed list pagination via `x-total-count`, added the report-create
+  action and query polling, replaced placeholder dashboard actions and the
+  incorrect operational-rate KPI, preserved incident coordinates/map links,
+  and removed internal tier/architecture copy from operator screens.
+
 ## [Unreleased] - 2026-11-06
 
 ### Fixed

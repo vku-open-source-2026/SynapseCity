@@ -24,6 +24,24 @@ export function asList<T>(value: unknown): T[] {
     return [];
 }
 
+export interface ListPage<T> {
+    items: T[];
+    total: number;
+}
+
+/**
+ * Build a page result from a list response and the server's x-total-count
+ * header. Falls back to the current page length when the header is absent.
+ */
+export function asListPage<T>(value: unknown, totalHeader: unknown): ListPage<T> {
+    const items = asList<T>(value);
+    const total = Number(totalHeader);
+    return {
+        items,
+        total: Number.isFinite(total) && total >= 0 ? total : items.length,
+    };
+}
+
 // Create main API instance
 // Force HTTPS in production
 const getApiBaseUrl = () => {

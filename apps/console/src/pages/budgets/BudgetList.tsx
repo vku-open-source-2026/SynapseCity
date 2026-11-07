@@ -20,10 +20,10 @@ const BudgetList: React.FC = () => {
   const [category, setCategory] = useState<string>("")
   const limit = 20
 
-  const { data: budgets, isLoading } = useQuery({
+  const { data: budgetPage, isLoading } = useQuery({
     queryKey: ["budgets", page, fiscalYear, status, category],
     queryFn: () =>
-      budgetsApi.list({
+      budgetsApi.listPage({
         skip: (page - 1) * limit,
         limit,
         fiscal_year: fiscalYear ? parseInt(fiscalYear) : undefined,
@@ -31,8 +31,9 @@ const BudgetList: React.FC = () => {
         category: category || undefined,
       }),
   })
+  const budgets = budgetPage?.items ?? []
 
-  const totalPages = budgets ? Math.ceil(budgets.length / limit) : 1
+  const totalPages = budgetPage ? Math.max(1, Math.ceil(budgetPage.total / limit)) : 1
 
   return (
     <div className="p-6 space-y-6">
