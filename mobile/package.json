@@ -48,7 +48,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "verify": "node scripts/verify-production.mjs",
-    "build:android": "powershell -ExecutionPolicy Bypass -File scripts/build-android.ps1"
+    "build:android": "powershell -ExecutionPolicy Bypass -File scripts/build-android.ps1",
+    "publish:release": "node scripts/publish-release.mjs"
   },
   "private": true,
   "allowScripts": {

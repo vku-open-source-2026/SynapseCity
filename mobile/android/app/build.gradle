@@ -125,9 +125,12 @@ android {
         }
         release {
             // Local release signing. The keystore and keystore.properties are
-            // git-ignored; a clean checkout falls back to the debug key so the
-            // APK can still be built for verification.
-            signingConfig keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug
+            // git-ignored. CI builds an unsigned APK (`-Pexpo.signing.skip=true`);
+            // the protected release job signs it on the production host.
+            def skipSigning = (findProperty('expo.signing.skip') ?: 'false').toBoolean()
+            signingConfig skipSigning
+                ? null
+                : (keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug)
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds

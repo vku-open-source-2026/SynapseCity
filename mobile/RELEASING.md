@@ -1,0 +1,86 @@
+# Releasing the Android app
+
+The release path is deliberately split so the Android signing key never enters
+GitHub Actions:
+
+```text
+GitHub Actions (public CI)
+  verify -> typecheck/test/contract
+  build  -> unsigned arm64-v8a + x86_64 APK artifact
+
+Production release host (protected)
+  download artifact -> zipalign -> apksigner (local keystore)
+  -> Tier-2 files capability -> Tier-1 SynapseOCS
+  -> public stable download URL + checksum
+```
+
+This follows the tier boundary: the release job calls **Tier-2**
+`/v1/capabilities/files`; Tier-2 stores bytes in **Tier-1** SynapseOCS. The job
+never receives S3 credentials.
+
+## Trigger a build
+
+- Workflow: **Actions → Mobile build → Run workflow**.
+- Or push a tag:
+
+```bash
+git tag mobile-v0.1.0
+git push origin mobile-v0.1.0
+```
+
+The workflow uploads:
+
+```text
+SynapseCity-<version>-unsigned.apk
+SHA256SUMS.txt
+```
+
+## Sign and publish on the production host
+
+Prerequisites (already provisioned on the production release host):
+
+```text
+~/release-secrets/synapsecity-release.keystore
+~/release-secrets/tier2-release.key
+```
+
+`tier2-release.key` is a scoped Tier-1 API key with `files:write` and
+`files:publish`; it is not a platform-admin key.
+
+```bash
+export SYNAPSEDX_RELEASE_API_KEY="$(cat ~/release-secrets/tier2-release.key)"
+export KEYSTORE_PATH="$HOME/release-secrets/synapsecity-release.keystore"
+export KEYSTORE_PASSWORD='...'
+export KEY_ALIAS='synapsecity'
+export KEY_PASSWORD='...'
+
+bash mobile/scripts/sign-release.sh \
+  /tmp/SynapseCity-0.1.0-unsigned.apk /tmp/SynapseCity-0.1.0-release.apk
+
+node mobile/scripts/publish-release.mjs \
+  --product synapsecity \
+  --version 0.1.0 \
+  --arch arm64-x86_64 \
+  --apk /tmp/SynapseCity-0.1.0-release.apk
+```
+
+The publish script creates a public file record, asks Tier-2 for a short-lived
+presigned OCS upload URL, uploads the APK, completes the checksum/size
+verification, downloads it again anonymously, and prints:
+
+```json
+{
+  "publicUrl": "https://synapsedx.sbs/v1/capabilities/public/files/synapsecity-android-0.1.0-arm64-x86_64/content",
+  "sha256": "...",
+  "size": 66861954
+}
+```
+
+Use that URL as the release download link. Keep the checksum in the release
+notes and in `docs/MOBILE_AUDIT.md`.
+
+## Rollback
+
+Publish a new versioned file id for the previous build or point the download
+page at the previous `publicUrl`. Never reuse a version id for different bytes;
+the script verifies checksum and replaces an incomplete record only.
