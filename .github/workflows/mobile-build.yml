@@ -112,7 +112,7 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="$(node -p "require('./mobile/app.json').expo.version")"
-          LINK="$(grep -o 'https://synapsedx.sbs/v1/capabilities/public/files/synapsecity-android-[^ )]*' README.md | head -1)"
+          LINK="$(grep -o 'https://synapsedx.sbs/v1/capabilities/public/files/synapsecity-android-[^ )>]*' README.md | head -1)"
           SHA="$(grep -o '[a-f0-9]\{64\}' docs/MOBILE_AUDIT.md | head -1)"
           test -n "$LINK"
           test -n "$SHA"
