@@ -75,8 +75,8 @@ nginx 1.31.8).
   `https://synapsedx.sbs`, and `notOwned` includes hazards/emergency/EOP.
 - `GET /v1/public/assets?limit=200` → 200 assets; detail lookup matches.
 - `GET /v1/public/incidents` → 64 public incidents; unknown reference → 404.
-- `GET /v1/emergency` and `/v1/hazards` on the City host → `404 not_found`
-  (boundary enforced at the gateway).
+- `GET /v1/emergency` and `/v1/hazards` on the City host -> `404 not_found` (boundary enforced at the gateway).
+- Tier-1 edge: `/v1/auth/verify` is exempt from the brute-force bucket, and `/v1/ocs/` accepts signed release uploads up to 128 MiB.
 - Native requests send no browser `Origin`; no nginx/CORS change was needed for
   the app. The existing City console CORS allow-list is unchanged.
 
