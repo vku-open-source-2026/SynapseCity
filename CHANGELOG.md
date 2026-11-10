@@ -3,6 +3,39 @@
 All notable changes to SynapseCity are documented here. Entries follow the
 Keep a Changelog format and version tags use Semantic Versioning.
 
+## [Unreleased] - 2026-11-09
+
+### Added
+
+- `npm run import:openinfra` migrates the legacy JSON export through the Tier-2
+  capabilities API. It imports assets, sensors and every master record in full,
+  samples the unbounded readings/alerts collections, keeps reporter PII in the
+  private incident sidecar, never writes password hashes, and resumes from a
+  checkpoint. SOS-owned collections are explicitly skipped.
+
+### Fixed
+
+- Incident sidecars now use `internal-<incidentId>` because Tier-2 record ids
+  are unique across datasets; the operator view still merges the sidecar and
+  reads the legacy id as a fallback.
+- IoT reading endpoints query Tier-2 by sensor/asset instead of loading the
+  first 5000 records, so every sensor keeps its history after a large import.
+- The public gateway forwards `x-total-count`, `etag`, `x-dataset-version` and
+  `content-disposition`, restoring console pagination and download metadata.
+- The public map and admin map load the complete asset inventory instead of the
+  first 100/500 rows. The public projection accepts `include_inactive=true`
+  (and still hides deleted/explicitly private records), so retired assets stay
+  addressable by code and appear on the full map.
+- Map markers use the real `feature_code`; the public projection previously
+  assigned `asset_code` to that field, which made every marker fall back to one
+  generic icon.
+- Both the City map and the contribution portal cluster by screen cell at low
+  zoom, show the total plus per-type counts, and reveal individual type icons
+  at zoom 17+. Cluster/icon HTML is cached and the City map computes clusters
+  from projected coordinates, so panning does not rebuild them.
+- The admin map route now uses the shared `MapComponent` and the complete
+  `getAssets` query instead of a duplicate renderer capped at 100 records.
+
 ## [Unreleased] - 2026-11-07
 
 ### Fixed

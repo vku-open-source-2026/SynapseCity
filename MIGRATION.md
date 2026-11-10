@@ -35,3 +35,12 @@ records remain behind authenticated Tier-2 routes.
 The runtime split is `apps/gateway` (public edge), `apps/city-service` (domain
 backend) and `apps/console` (frontend). The domain backend only imports the
 Tier-2 SDK; the gateway and console have no platform credentials.
+
+## Loading the legacy export
+
+`npm run import:openinfra` reads the JSON export and writes the `city-*`
+datasets through the Tier-2 capabilities API. It preserves the public/private
+incident split, never imports password hashes, keeps assets and sensors
+complete, and samples the unbounded telemetry collections. The run is
+resumable (`--dry-run` counts first; reruns skip existing ids). SOS-owned
+collections are skipped because they belong to the sibling product.

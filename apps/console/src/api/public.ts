@@ -9,6 +9,7 @@ export interface PublicAssetInfo {
   asset_code: string;
   name: string;
   feature_type: string;
+  feature_code: string;
   category: string;
   status: 'active' | 'inactive' | 'maintenance' | 'decommissioned';
   location: {
@@ -36,9 +37,34 @@ export const publicApi = {
    * List published public assets.
    * GET /public/assets
    */
-  listPublicAssets: async (params?: { limit?: number; offset?: number }): Promise<PublicAssetInfo[]> => {
+  listPublicAssets: async (params?: { limit?: number; offset?: number; include_inactive?: boolean }): Promise<PublicAssetInfo[]> => {
     const response = await httpClient.get<PublicAssetInfo[]>('/public/assets', { params });
     return Array.isArray(response.data) ? response.data : [];
+  },
+
+  /**
+   * Read every page of the public projection. The map needs the complete
+   * inventory, not just the first 500-row page.
+   */
+  listAllPublicAssets: async (params?: { include_inactive?: boolean }): Promise<PublicAssetInfo[]> => {
+    const pageSize = 500;
+    const all: PublicAssetInfo[] = [];
+    let offset = 0;
+    for (;;) {
+      const response = await httpClient.get<PublicAssetInfo[]>('/public/assets', {
+        params: {
+          limit: pageSize,
+          offset,
+          ...(params?.include_inactive ? { include_inactive: true } : {}),
+        },
+      });
+      const items = Array.isArray(response.data) ? response.data : [];
+      all.push(...items);
+      const total = Number(response.headers['x-total-count']);
+      if (!Number.isFinite(total) || items.length < pageSize || all.length >= total) break;
+      offset += items.length;
+    }
+    return all;
   },
 
   /**
@@ -46,8 +72,10 @@ export const publicApi = {
    * anonymous visitors do not need the operator-only /assets endpoint.
    * GET /public/assets?limit=1
    */
-  countPublicAssets: async (): Promise<number> => {
-    const response = await httpClient.get<PublicAssetInfo[]>('/public/assets', { params: { limit: 1 } });
+  countPublicAssets: async (params?: { include_inactive?: boolean }): Promise<number> => {
+    const response = await httpClient.get<PublicAssetInfo[]>('/public/assets', {
+      params: { limit: 1, ...(params?.include_inactive ? { include_inactive: true } : {}) },
+    });
     const total = Number(response.headers['x-total-count']);
     if (Number.isFinite(total)) return total;
     return Array.isArray(response.data) ? response.data.length : 0;

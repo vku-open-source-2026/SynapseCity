@@ -62,7 +62,7 @@ const HomePage = () => {
     useEffect(() => {
         let cancelled = false;
         publicApi
-            .countPublicAssets()
+            .countPublicAssets({ include_inactive: true })
             .then((count) => {
                 // Hide the badge rather than advertise an empty map.
                 if (!cancelled) setAssetCount(count > 0 ? count : null);

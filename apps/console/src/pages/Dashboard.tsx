@@ -38,7 +38,7 @@ const Dashboard: React.FC = () => {
         isLoading,
         error,
     } = useQuery({
-        queryKey: ["assets"],
+        queryKey: ["assets", "all"],
         queryFn: getAssets,
     });
 

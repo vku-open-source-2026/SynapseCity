@@ -22,6 +22,7 @@ before(async () => {
     for await (const chunk of req) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
     const body = Buffer.concat(chunks);
     res.setHeader('content-type', 'application/json');
+    if ((req.url || '').startsWith('/v1/assets')) res.setHeader('x-total-count', '3');
     if ((req.url || '').startsWith('/v1/files/upload')) {
       res.end(JSON.stringify({
         service: 'fake-city-service',
@@ -228,6 +229,12 @@ test('operator namespaces require an Authorization header at the gateway', async
   // An authenticated operator request is proxied.
   const proxied = await fetch(`${baseUrl}/v1/assets`, { headers: { authorization: 'Bearer session' } });
   assert.equal(proxied.status, 200);
+});
+
+test('pagination headers survive the public edge', async () => {
+  const response = await fetch(`${baseUrl}/v1/assets?limit=1`, { headers: { authorization: 'Bearer session' } });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('x-total-count'), '3');
 });
 
 test('CORS advertises PUT and DELETE for the City API', async () => {

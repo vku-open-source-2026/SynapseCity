@@ -50,8 +50,22 @@ export interface MaintenanceLog {
 }
 
 export const getAssets = async () => {
-    const response = await httpClient.get<Asset[]>("/assets/");
-    return asList<Asset>(response.data);
+    // The maps need the complete inventory. The City API pages at 500 records
+    // and exposes the total through x-total-count (forwarded by the gateway).
+    const pageSize = 500;
+    const all: Asset[] = [];
+    let offset = 0;
+    for (;;) {
+        const response = await httpClient.get<Asset[]>("/assets", {
+            params: { limit: pageSize, offset },
+        });
+        const items = asList<Asset>(response.data);
+        all.push(...items);
+        const total = Number(response.headers["x-total-count"]);
+        if (!Number.isFinite(total) || items.length < pageSize || all.length >= total) break;
+        offset += items.length;
+    }
+    return all;
 };
 
 export const loginAdmin = async (username: string, password: string) => {

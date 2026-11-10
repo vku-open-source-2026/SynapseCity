@@ -92,6 +92,65 @@ function sha256(bytes: Uint8Array): string {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
+type MockWhere = Record<string, unknown>;
+
+function mockCompare(actual: unknown, op: string, expected: unknown): boolean {
+  switch (op) {
+    case 'eq': return String(actual ?? '') === String(expected ?? '');
+    case 'ne': return String(actual ?? '') !== String(expected ?? '');
+    case 'in': return Array.isArray(expected) && expected.map(String).includes(String(actual ?? ''));
+    case 'nin': return Array.isArray(expected) && !expected.map(String).includes(String(actual ?? ''));
+    case 'gt': return actual !== undefined && String(actual) > String(expected);
+    case 'gte': return actual !== undefined && String(actual) >= String(expected);
+    case 'lt': return actual !== undefined && String(actual) < String(expected);
+    case 'lte': return actual !== undefined && String(actual) <= String(expected);
+    case 'exists': return (actual !== undefined) === Boolean(expected);
+    case 'contains': return String(actual ?? '').includes(String(expected ?? ''));
+    case 'startsWith': return String(actual ?? '').startsWith(String(expected ?? ''));
+    case 'endsWith': return String(actual ?? '').endsWith(String(expected ?? ''));
+    default: return false;
+  }
+}
+
+function matchesMockWhere(data: Record<string, unknown>, where: unknown): boolean {
+  if (!where || typeof where !== 'object') return true;
+  const node = where as MockWhere;
+  if (Array.isArray(node.and)) return (node.and as unknown[]).every((entry) => matchesMockWhere(data, entry));
+  if (Array.isArray(node.or)) return (node.or as unknown[]).some((entry) => matchesMockWhere(data, entry));
+  if (node.not !== undefined) return !matchesMockWhere(data, node.not);
+  if (node.field !== undefined) {
+    return mockCompare(data[String(node.field)], String(node.op || 'eq'), node.value);
+  }
+  for (const [key, expected] of Object.entries(node)) {
+    const actual = data[key];
+    if (expected && typeof expected === 'object' && !Array.isArray(expected)) {
+      for (const [op, value] of Object.entries(expected as Record<string, unknown>)) {
+        if (!mockCompare(actual, op, value)) return false;
+      }
+    } else if (!mockCompare(actual, 'eq', expected)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function mockOrder(items: Array<{ id: string; data: Record<string, unknown> }>, orderBy: unknown): Array<{ id: string; data: Record<string, unknown> }> {
+  if (!orderBy) return items;
+  const parsed = typeof orderBy === 'string'
+    ? (() => {
+        const [field, direction] = orderBy.split(':');
+        return { field, direction: direction || 'asc' };
+      })()
+    : orderBy as { field?: string; direction?: string };
+  if (!parsed?.field) return items;
+  const direction = String(parsed.direction || 'asc').toLowerCase() === 'desc' ? -1 : 1;
+  return [...items].sort((left, right) => {
+    const a = String(left.data[parsed.field!] ?? '');
+    const b = String(right.data[parsed.field!] ?? '');
+    return a < b ? -direction : a > b ? direction : 0;
+  });
+}
+
 export async function startMockTier2(): Promise<MockTier2> {
   const datasets = new Map<string, Record<string, unknown>>();
   const records = new Map<string, Map<string, Record<string, unknown>>>();
@@ -430,6 +489,16 @@ export async function startMockTier2(): Promise<MockTier2> {
         const limit = Number(url.searchParams.get('limit') || 100);
         const offset = Number(url.searchParams.get('offset') || 0);
         return send(res, 200, { items: items.slice(offset, offset + limit), total: items.length, limit, offset });
+      }
+      if (parts.length === 6 && parts[4] === 'records' && parts[5] === 'query' && req.method === 'POST') {
+        const input = (body || {}) as { where?: unknown; orderBy?: unknown; limit?: number; offset?: number };
+        const filtered = Array.from(recordsFor(datasetId).entries())
+          .map(([id, data]) => ({ id, data }))
+          .filter(({ data }) => matchesMockWhere(data, input.where));
+        const ordered = mockOrder(filtered, input.orderBy);
+        const limit = Number(input.limit || 100);
+        const offset = Number(input.offset || 0);
+        return send(res, 200, { items: ordered.slice(offset, offset + limit), total: ordered.length, limit, offset });
       }
       if (parts.length === 5 && parts[4] === 'records' && req.method === 'POST') {
         const input = (body || {}) as { id?: string; data?: Record<string, unknown>; publish?: boolean };

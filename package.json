@@ -14,6 +14,7 @@
     "start:service": "npm run start --workspace=@synapsecity/city-service",
     "check:release": "node scripts/check-release.cjs",
     "demo:seed": "node scripts/demo-seed.mjs",
-    "demo:reset": "node scripts/demo-reset.mjs"
+    "demo:reset": "node scripts/demo-reset.mjs",
+    "import:openinfra": "node scripts/import-openinfra.mjs"
   }
 }

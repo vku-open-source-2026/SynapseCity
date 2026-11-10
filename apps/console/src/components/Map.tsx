@@ -8,7 +8,7 @@ import React, {
     useCallback,
 } from "react";
 import { type Asset, getAssetId } from "../api";
-import { getIconForAsset, getColorForFeatureCode } from "../utils/mapIcons";
+import { getIconForAsset, getColorForFeatureCode, featureLabel } from "../utils/mapIcons";
 import HeatmapLayer from "./HeatmapLayer";
 import AssetLayerFilter from "./AssetLayerFilter";
 import { AddressSearch } from "./geo/AddressSearch";
@@ -31,93 +31,154 @@ L.Icon.Default.mergeOptions({
 });
 
 // ---------------------------------------------------------------------------
-// Simple grid-based marker clustering (no extra library required)
-// Groups Point assets of the same feature_code that fall in the same screen
-// tile at the current zoom level.  Returns either individual assets (cluster
-// size 1) or a synthetic cluster object.
+// Screen-space marker clustering.
+//
+// Assets are grouped into a pixel grid at the current zoom, across all types,
+// so a distant view shows one bubble per area with a per-type breakdown. At
+// zoom 17+ the bubbles open into the individual asset icons. The grid is
+// computed from projected coordinates (independent of the map centre), which
+// lets the cluster set stay stable while the user pans.
 // ---------------------------------------------------------------------------
+interface ClusterTypeCount {
+    featureCode: string;
+    label: string;
+    color: string;
+    count: number;
+}
+
 interface ClusterItem {
     type: "single";
     asset: Asset;
 }
 interface ClusterGroup {
     type: "cluster";
-    featureCode: string;
-    count: number;
+    key: string;
     lat: number;
     lng: number;
+    count: number;
+    types: ClusterTypeCount[];
     assets: Asset[];
 }
 type ClusterEntry = ClusterItem | ClusterGroup;
 
-/** Pixel grid cell size used for clustering (screen pixels). */
-const CLUSTER_GRID_PX = 60;
+const MAX_CLUSTER_ZOOM = 17;
+
+function clusterGridPx(zoom: number): number {
+    if (zoom <= 11) return 96;
+    if (zoom <= 13) return 72;
+    if (zoom <= 15) return 56;
+    return 44;
+}
 
 function clusterAssets(
     assets: Asset[],
     map: L.Map,
     zoom: number
 ): ClusterEntry[] {
-    const pointAssets = assets.filter((a) => a.geometry.type === "Point");
-    // Group by feature_code then cluster within each group
-    const byCode = new Map<string, Asset[]>();
-    for (const a of pointAssets) {
-        const list = byCode.get(a.feature_code) ?? [];
-        list.push(a);
-        byCode.set(a.feature_code, list);
+    const pointAssets = assets.filter(
+        (asset) =>
+            asset.geometry?.type === "Point" &&
+            Array.isArray(asset.geometry.coordinates) &&
+            typeof asset.geometry.coordinates[0] === "number" &&
+            typeof asset.geometry.coordinates[1] === "number"
+    );
+
+    if (zoom >= MAX_CLUSTER_ZOOM) {
+        return pointAssets.map((asset) => ({ type: "single", asset }));
     }
 
-    const result: ClusterEntry[] = [];
+    const grid = clusterGridPx(zoom);
+    const cells = new Map<string, Asset[]>();
+    for (const asset of pointAssets) {
+        const [lng, lat] = asset.geometry.coordinates as number[];
+        const point = map.project([lat, lng], zoom);
+        const key = `${Math.floor(point.x / grid)}:${Math.floor(point.y / grid)}`;
+        const bucket = cells.get(key) ?? [];
+        bucket.push(asset);
+        cells.set(key, bucket);
+    }
 
-    byCode.forEach((group) => {
-        if (group.length <= 1) {
-            group.forEach((a) => result.push({ type: "single", asset: a }));
+    const entries: ClusterEntry[] = [];
+    cells.forEach((bucket, cellKey) => {
+        if (bucket.length === 1) {
+            entries.push({ type: "single", asset: bucket[0] });
             return;
         }
-
-        // Only cluster when zoom < 17 (enough resolution to see individual items)
-        if (zoom >= 17) {
-            group.forEach((a) => result.push({ type: "single", asset: a }));
-            return;
+        let sumLat = 0;
+        let sumLng = 0;
+        const counts = new Map<string, number>();
+        for (const asset of bucket) {
+            const [lng, lat] = asset.geometry.coordinates as number[];
+            sumLat += lat;
+            sumLng += lng;
+            const code = asset.feature_code || "infrastructure";
+            counts.set(code, (counts.get(code) || 0) + 1);
         }
-
-        // Assign each asset to a grid cell using Leaflet's project()
-        const cells = new Map<string, Asset[]>();
-        for (const a of group) {
-            const coords = a.geometry.coordinates as number[];
-            const pt = map.project([coords[1], coords[0]], zoom);
-            const cx = Math.floor(pt.x / CLUSTER_GRID_PX);
-            const cy = Math.floor(pt.y / CLUSTER_GRID_PX);
-            const key = `${cx}:${cy}`;
-            const list = cells.get(key) ?? [];
-            list.push(a);
-            cells.set(key, list);
-        }
-
-        cells.forEach((cellAssets) => {
-            if (cellAssets.length === 1) {
-                result.push({ type: "single", asset: cellAssets[0] });
-            } else {
-                // Centroid
-                let sumLat = 0, sumLng = 0;
-                cellAssets.forEach((a) => {
-                    const c = a.geometry.coordinates as number[];
-                    sumLng += c[0];
-                    sumLat += c[1];
-                });
-                result.push({
-                    type: "cluster",
-                    featureCode: cellAssets[0].feature_code,
-                    count: cellAssets.length,
-                    lat: sumLat / cellAssets.length,
-                    lng: sumLng / cellAssets.length,
-                    assets: cellAssets,
-                });
-            }
+        const types = [...counts.entries()]
+            .map(([featureCode, count]) => ({
+                featureCode,
+                label: featureLabel(featureCode),
+                color: getColorForFeatureCode(featureCode),
+                count,
+            }))
+            .sort((left, right) => right.count - left.count);
+        entries.push({
+            type: "cluster",
+            key: `cluster:${zoom}:${cellKey}:${types.map((entry) => `${entry.featureCode}=${entry.count}`).join(",")}`,
+            lat: sumLat / bucket.length,
+            lng: sumLng / bucket.length,
+            count: bucket.length,
+            types,
+            assets: bucket,
         });
     });
+    return entries;
+}
 
-    return result;
+const clusterIconCache = new Map<string, L.DivIcon>();
+
+function getClusterIcon(entry: ClusterGroup): L.DivIcon {
+    const cached = clusterIconCache.get(entry.key);
+    if (cached) return cached;
+    const dominant = entry.types[0];
+    const border = dominant?.color || "#2563eb";
+    const breakdown = entry.types
+        .slice(0, 4)
+        .map(
+            (type) => `<span style="display:inline-flex;align-items:center;gap:2px;font-size:9px;font-weight:700;color:#475569">`
+                + `<span style="width:7px;height:7px;border-radius:50%;background:${type.color};display:inline-block"></span>`
+                + `${type.count}</span>`
+        )
+        .join("");
+    const html = `
+        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+            <div style="min-width:42px;padding:3px 7px 4px;border-radius:14px;background:#ffffff;border:2px solid ${border};box-shadow:0 4px 14px rgba(15,23,42,0.22);text-align:center;">
+                <div style="font-size:14px;font-weight:800;line-height:1.1;color:#0f172a;">${entry.count}</div>
+                <div style="display:flex;align-items:center;justify-content:center;gap:4px;margin-top:1px;">${breakdown}</div>
+            </div>
+        </div>
+    `;
+    const icon = L.divIcon({
+        html,
+        className: "asset-cluster-icon",
+        iconSize: [64, 42],
+        iconAnchor: [32, 24],
+        popupAnchor: [0, -22],
+    });
+    clusterIconCache.set(entry.key, icon);
+    return icon;
+}
+
+function clusterPopup(entry: ClusterGroup): string {
+    const rows = entry.types
+        .map(
+            (type) => `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:2px 0;font-size:12px">`
+                + `<span style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:${type.color};display:inline-block"></span>${escapeHtml(type.label)}</span>`
+                + `<strong>${type.count}</strong></div>`
+        )
+        .join("");
+    return `<div style="min-width:190px"><div style="font-weight:800;margin-bottom:4px">${entry.count} tài sản</div>${rows}`
+        + `<div style="margin-top:6px;font-size:11px;color:#64748b">Phóng to để xem từng tài sản</div></div>`;
 }
 
 interface MapProps {
@@ -129,6 +190,9 @@ interface MapProps {
     className?: string;
     enableGeoSearches?: boolean;
     onMapReady?: (map: L.Map) => void;
+    initialZoom?: number;
+    /** Fit the viewport to the loaded asset extent on first load. */
+    fitToAssets?: boolean;
 }
 
 const toLatLng = (coord: number[]): [number, number] => [coord[1], coord[0]];
@@ -240,16 +304,19 @@ const MapComponent: React.FC<MapProps> = ({
     onMapReady,
     onFilterByShape,
     enableGeoSearches,
+    initialZoom = 16,
+    fitToAssets = true,
 }) => {
     const [mapMode, setMapMode] = useState<"markers" | "heatmap">("markers");
     const mapRef = useRef<L.Map | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const markerRefs = useRef<{ [key: string]: L.Marker | null }>({});
+    const didFitAssets = useRef(false);
     const polylineRefs = useRef<{ [key: string]: L.Polyline | null }>({});
     const routePolylineRef = useRef<L.Polyline | null>(null);
     const tileLayerRef = useRef<L.TileLayer | null>(null);
     const [mapBounds, setMapBounds] = useState<L.LatLngBounds | null>(null);
-    const [mapZoom, setMapZoom] = useState<number>(16);
+    const [mapZoom, setMapZoom] = useState<number>(initialZoom);
     const [filteredAssets, setFilteredAssets] = useState<Asset[]>(assets);
     const [heatmapMap, setHeatmapMap] = useState<L.Map | null>(null);
     const filterCallbackRef = useRef(onFilterByShape);
@@ -318,15 +385,38 @@ const MapComponent: React.FC<MapProps> = ({
         return filtered;
     }, [filteredAssets, assetIntersectsBounds, mapBounds, selectedAsset]);
 
+    // Cluster markers across all asset types. Computing this from projected
+    // coordinates (not the viewport) keeps the result stable while panning.
+    const clusterEntries = useMemo(() => {
+        if (!heatmapMap) return [] as ClusterEntry[];
+        return clusterAssets(filteredAssets, heatmapMap, mapZoom);
+    }, [filteredAssets, heatmapMap, mapZoom]);
+
+    const visibleClusterEntries = useMemo(() => {
+        if (!mapBounds) return clusterEntries;
+        return clusterEntries.filter((entry) => {
+            if (entry.type === "single") {
+                const coordinates = entry.asset.geometry.coordinates as number[];
+                const inBounds = mapBounds.contains([coordinates[1], coordinates[0]]);
+                const isSelected = selectedAsset
+                    ? getAssetId(selectedAsset) === getAssetId(entry.asset)
+                    : false;
+                return inBounds || isSelected;
+            }
+            return mapBounds.contains([entry.lat, entry.lng]);
+        });
+    }, [clusterEntries, mapBounds, selectedAsset]);
+
     // Initialize map
     useEffect(() => {
         if (!containerRef.current || mapRef.current) return;
 
         const map = L.map(containerRef.current, {
             center: DEFAULT_MAP_CENTER,
-            zoom: 16,
+            zoom: initialZoom,
             maxZoom: 20,
             scrollWheelZoom: true,
+            preferCanvas: true,
         });
 
         // Add tile layer (fetched from backend)
@@ -368,7 +458,20 @@ const MapComponent: React.FC<MapProps> = ({
             mapRef.current = null;
             setHeatmapMap(null);
         };
-    }, [onMapReady]);
+    }, [onMapReady, initialZoom]);
+
+    // Show the complete inventory on first load instead of a fixed city-centre
+    // viewport that may clip the outer districts.
+    useEffect(() => {
+        if (!fitToAssets || didFitAssets.current) return;
+        const map = mapRef.current;
+        if (!map || !assets.length || selectedAsset) return;
+        const allLatLngs = assets.flatMap((asset) => geometryToLatLngs(asset.geometry));
+        const bounds = latLngsToBounds(allLatLngs);
+        if (!bounds || !bounds.isValid()) return;
+        map.fitBounds(bounds, { padding: [48, 48], maxZoom: 15 });
+        didFitAssets.current = true;
+    }, [assets, fitToAssets, selectedAsset]);
 
     // Handle selected asset changes - fly to or fit bounds
     useEffect(() => {
@@ -425,48 +528,13 @@ const MapComponent: React.FC<MapProps> = ({
         markerRefs.current = {};
         polylineRefs.current = {};
 
-        // Cluster Point assets by category, then render
-        const clusters = clusterAssets(visibleAssets, map, mapZoom);
-
-        clusters.forEach((entry) => {
+        // Render the clustered/individual markers selected for this zoom.
+        visibleClusterEntries.forEach((entry) => {
             if (entry.type === "cluster") {
-                // Render a cluster bubble
-                const color = getColorForFeatureCode(entry.featureCode);
-                const icon = L.divIcon({
-                    html: `<div style="
-                        background:${color};
-                        color:#fff;
-                        border-radius:50%;
-                        width:36px;height:36px;
-                        display:flex;align-items:center;justify-content:center;
-                        font-size:13px;font-weight:700;
-                        border:2px solid rgba(255,255,255,0.8);
-                        box-shadow:0 2px 6px rgba(0,0,0,0.35);
-                        cursor:pointer;
-                    ">${entry.count}</div>`,
-                    className: "",
-                    iconSize: [36, 36],
-                    iconAnchor: [18, 18],
-                });
-                const popupLines = entry.assets
-                    .slice(0, 6)
-                    .map(
-                        (a) =>
-                            `<div style="font-size:11px;padding:1px 0">${escapeHtml(a.feature_type)}</div>`
-                    )
-                    .join("");
-                const more =
-                    entry.assets.length > 6
-                        ? `<div style="font-size:11px;color:#888">… và ${entry.assets.length - 6} cái nữa</div>`
-                        : "";
-                const clusterKey = `cluster:${entry.featureCode}:${entry.lat.toFixed(6)}:${entry.lng.toFixed(6)}`;
-                const marker = L.marker([entry.lat, entry.lng], { icon })
+                const marker = L.marker([entry.lat, entry.lng], { icon: getClusterIcon(entry) })
                     .addTo(map)
-                    .bindPopup(
-                        `<div style="min-width:160px"><div style="font-weight:700;margin-bottom:4px">${escapeHtml(entry.featureCode)} (${entry.count})</div>${popupLines}${more}</div>`,
-                        { className: "custom-popup" }
-                    );
-                markerRefs.current[clusterKey] = marker;
+                    .bindPopup(clusterPopup(entry), { className: "custom-popup" });
+                markerRefs.current[entry.key] = marker;
                 return;
             }
 
@@ -488,7 +556,7 @@ const MapComponent: React.FC<MapProps> = ({
                     ? `<div class="mt-2 text-xs"><span class="px-2 py-0.5 rounded-full ${statusBadge.className}">${escapeHtml(statusBadge.label)}</span></div>`
                     : "";
                 const popupContent = `
-                    <div class="font-semibold text-slate-900">${escapeHtml(asset.feature_type)}</div>
+                    <div class="font-semibold text-slate-900">${escapeHtml(featureLabel(asset.feature_code, asset.feature_type))}</div>
                     <div class="text-xs text-slate-500">${escapeHtml(asset.feature_code)}</div>
                     ${statusMarkup}
                 `;
@@ -522,7 +590,7 @@ const MapComponent: React.FC<MapProps> = ({
                 const assetId = getAssetId(asset);
 
                 const popupContent = `
-                    <div class="font-semibold text-slate-900">${escapeHtml(asset.feature_type)}</div>
+                    <div class="font-semibold text-slate-900">${escapeHtml(featureLabel(asset.feature_code, asset.feature_type))}</div>
                     <div class="text-xs text-slate-500">${escapeHtml(asset.feature_code)}</div>
                 `;
 
@@ -542,7 +610,7 @@ const MapComponent: React.FC<MapProps> = ({
                 polylineRefs.current[assetId] = polyline;
             }
         });
-    }, [visibleAssets, mapMode, mapZoom, selectedAsset, onAssetSelect]);
+    }, [visibleClusterEntries, visibleAssets, mapMode, selectedAsset, onAssetSelect]);
 
     // Render route polyline
     useEffect(() => {

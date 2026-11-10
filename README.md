@@ -122,6 +122,37 @@ npm run dev --workspace=@synapsecity/console
 The production stack is reproducible with `docker compose up -d --build`; the
 Docker build installs the published npm package and needs no sibling repository.
 
+### Legacy OpenInfra data migration
+
+`npm run import:openinfra` loads the legacy JSON export into the City datasets
+through the Tier-2 capabilities API. It never opens a database connection and
+never calls SynapseOne directly.
+
+```bash
+# Validate the mapping and count the selected rows without writing.
+npm run import:openinfra -- --dry-run
+
+# Full master data plus a compact seven-day time-series sample.
+npm run import:openinfra
+
+# Re-run safely: existing record ids are skipped.
+npm run import:openinfra
+
+# Optional: import every reading/alert instead of the compact sample.
+npm run import:openinfra -- --readings=all --alerts=all
+```
+
+The default data pack is `../nhan_tmp_data/openinfra_data_2026-11-09`; override
+it with `--data-dir`. Assets, sensors, incidents, work orders, budgets, users,
+reports and notifications are imported in full. `sensor_readings` and `alerts`
+are compacted (one reading per sensor per two hours inside the densest history
+window, plus the latest reading per sensor; meaningful alerts plus the latest
+offline alert per sensor). Use `--readings-interval-hours` and
+`--readings-window-hours` to change that sample. The run stores a resumable
+checkpoint in `.notes/import-openinfra.state.json`. Emergency, hazard, EOP,
+dispatch, SITREP, AAR and resource-unit collections are owned by
+SynapseCitySOS and are deliberately skipped.
+
 ## API
 
 ### Public open API (documented at `/docs`)

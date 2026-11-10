@@ -185,10 +185,14 @@ async function proxy(req: Request, res: Response): Promise<void> {
         : JSON.stringify(req.body ?? {}),
   });
   const type = response.headers.get('content-type');
-  const cacheControl = response.headers.get('cache-control');
   res.status(response.status);
   if (type) res.setHeader('content-type', type);
-  if (cacheControl) res.setHeader('cache-control', cacheControl);
+  // Pagination and download metadata are part of the City contract. Forward the
+  // upstream headers instead of dropping them at the public edge.
+  for (const name of ['cache-control', 'x-total-count', 'etag', 'x-dataset-version', 'content-disposition']) {
+    const value = response.headers.get(name);
+    if (value) res.setHeader(name, value);
+  }
   if (response.status === 204 || response.status === 304) {
     res.end();
     return;

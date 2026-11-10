@@ -317,9 +317,12 @@ const PUBLIC_ASSET_FIELDS = [
   'geometry',
 ] as const;
 
-function assetIsPublic(asset: Record<string, unknown>): boolean {
+function assetIsPublic(asset: Record<string, unknown>, options: { includeInactive?: boolean } = {}): boolean {
   if (asset.deleted_at) return false;
   if (asset.public_visible === false) return false;
+  // The public map can ask for the complete infrastructure inventory; the
+  // default projection still keeps retired/decommissioned assets out.
+  if (options.includeInactive === true) return true;
   const status = String(asset.status || '').toLowerCase();
   const lifecycle = String(asset.lifecycle_stage || (asset.lifecycle as Record<string, unknown> | undefined)?.lifecycle_status || '').toLowerCase();
   return !['decommissioned', 'deleted', 'purged', 'retired'].includes(status)
@@ -381,6 +384,52 @@ async function listAllRecords(client: CapabilitiesClient, datasetId: string, max
     offset += pageSize;
     if (Number.isFinite(page.total) && offset >= page.total) return items;
   }
+}
+
+/**
+ * Ask Tier-2 for a filtered page instead of downloading a whole dataset. IoT
+ * readings grow without bound, so the old `list`-and-filter path hit its 5000
+ * record ceiling and hid every sensor after the first few thousand rows.
+ */
+async function queryRecords(
+  client: CapabilitiesClient,
+  datasetId: string,
+  where: Record<string, unknown>,
+  options: { limit?: number; offset?: number; orderBy?: { field: string; direction: 'asc' | 'desc' } } = {},
+): Promise<{ items: Array<Record<string, unknown>>; total: number }> {
+  const limit = Math.min(Math.max(options.limit ?? 500, 1), 1000);
+  const offset = Math.max(options.offset ?? 0, 0);
+  const page = await client.records.query<Record<string, unknown>>(datasetId, {
+    where,
+    // Tier-2 accepts the `field:asc|desc` string form; an object is rejected by
+    // its request validator even though the SDK type is wider.
+    ...(options.orderBy ? { orderBy: `${options.orderBy.field}:${options.orderBy.direction}` } : {}),
+    limit,
+    offset,
+  });
+  return { items: page.items.map((item) => recordData(item)), total: page.total };
+}
+
+async function queryAllRecords(
+  client: CapabilitiesClient,
+  datasetId: string,
+  where: Record<string, unknown>,
+  options: { maxRecords?: number; orderBy?: { field: string; direction: 'asc' | 'desc' } } = {},
+): Promise<Array<Record<string, unknown>>> {
+  const maxRecords = Math.min(Math.max(options.maxRecords ?? 5000, 1), 5000);
+  const items: Array<Record<string, unknown>> = [];
+  let offset = 0;
+  while (items.length < maxRecords) {
+    const page = await queryRecords(client, datasetId, where, {
+      limit: Math.min(500, maxRecords - items.length),
+      offset,
+      ...(options.orderBy ? { orderBy: options.orderBy } : {}),
+    });
+    items.push(...page.items);
+    if (page.items.length < 500 || items.length >= page.total) break;
+    offset += page.items.length;
+  }
+  return items;
 }
 
 const FILTER_IGNORED = new Set([
@@ -483,14 +532,26 @@ async function updateAsset(req: Request, id: string, patch: Record<string, unkno
   return assetView(updated);
 }
 
+/**
+ * Tier-2 record ids are unique across datasets. The public incident and its
+ * private sidecar therefore use different ids; `incident_id` ties them
+ * together. The legacy id is still read as a fallback so an older sidecar can
+ * be merged without a migration.
+ */
+function incidentInternalRecordId(incidentId: string): string {
+  return `internal-${incidentId}`;
+}
+
 async function findIncidentInternal(client: CapabilitiesClient, incidentId: string): Promise<Record<string, unknown> | null> {
-  try {
-    const dataset = await ensureDataset(client, DATASETS.incidentInternal);
-    return recordData(await client.records.get(dataset.id, incidentId));
-  } catch (error) {
-    if (error instanceof CapabilitiesError && error.status === 404) return null;
-    throw error;
+  const dataset = await ensureDataset(client, DATASETS.incidentInternal);
+  for (const id of [incidentInternalRecordId(incidentId), incidentId]) {
+    try {
+      return recordData(await client.records.get(dataset.id, id));
+    } catch (error) {
+      if (!(error instanceof CapabilitiesError) || error.status !== 404) throw error;
+    }
   }
+  return null;
 }
 
 async function writeIncidentInternal(req: Request, incidentId: string, record: Record<string, unknown>): Promise<void> {
@@ -498,12 +559,13 @@ async function writeIncidentInternal(req: Request, incidentId: string, record: R
   if (!internal) return;
   const client = capabilitiesFromRequest(req);
   const dataset = await ensureDataset(client, DATASETS.incidentInternal);
-  const payload = { ...internal, id: incidentId, incident_id: incidentId };
+  const internalId = incidentInternalRecordId(incidentId);
+  const payload = { ...internal, id: internalId, incident_id: incidentId };
   try {
-    await client.records.update(dataset.id, incidentId, payload);
+    await client.records.update(dataset.id, internalId, payload);
   } catch (error) {
     if (!(error instanceof CapabilitiesError) || error.status !== 404) throw error;
-    await client.records.create(dataset.id, payload, { id: incidentId, publish: false });
+    await client.records.create(dataset.id, payload, { id: internalId, publish: false });
   }
 }
 
@@ -2673,11 +2735,6 @@ app.post('/v1/maintenance/:id/photos', async (req, res, next) => {
 });
 
 // IoT metadata and readings share two Tier-2 datasets.
-function readingTimestamp(reading: Record<string, unknown>): number {
-  const parsed = Date.parse(String(reading.timestamp || reading.recorded_at || reading.created_at || ''));
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
 function readingValue(reading: Record<string, unknown>, metric?: string): number | null {
   if (metric) {
     const readings = reading.readings && typeof reading.readings === 'object' ? reading.readings as Record<string, unknown> : {};
@@ -2697,12 +2754,11 @@ function readingValue(reading: Record<string, unknown>, metric?: string): number
   return null;
 }
 
-function scopedReadings(readings: Array<Record<string, unknown>>, sensorId: string, hours?: number): Array<Record<string, unknown>> {
-  const threshold = hours && hours > 0 ? Date.now() - hours * 3_600_000 : null;
-  return readings
-    .filter((reading) => String(reading.sensor_id || reading.sensorId || '') === sensorId)
-    .filter((reading) => threshold === null || readingTimestamp(reading) >= threshold)
-    .sort((a, b) => readingTimestamp(b) - readingTimestamp(a));
+function readingWhere(sensorId: string, hours?: number): Record<string, unknown> {
+  return {
+    sensor_id: sensorId,
+    ...(hours ? { timestamp: { gte: new Date(Date.now() - hours * 3_600_000).toISOString() } } : {}),
+  };
 }
 
 function sensorStatus(sensor: Record<string, unknown>, latestReading?: Record<string, unknown>): string {
@@ -2720,18 +2776,30 @@ app.delete('/v1/iot/sensors/:id', async (req, res, next) => { try { await generi
 app.get('/v1/iot/sensors/:id/data', async (req, res, next) => {
   try {
     const hours = req.query.hours !== undefined ? numberParam(req.query.hours, 24, 24 * 365) : undefined;
-    const readings = scopedReadings(await genericList(req, 'sensorData'), req.params.id, hours);
-    sendPage(res, readings, req);
+    const client = capabilitiesFromRequest(req);
+    const dataset = await ensureDataset(client, DATASETS.sensorData);
+    const page = await queryRecords(client, dataset.id, readingWhere(req.params.id, hours), {
+      limit: numberParam(req.query.limit, 100, 500),
+      offset: numberParam(req.query.offset ?? req.query.skip, 0, 1_000_000),
+      orderBy: { field: 'timestamp', direction: 'desc' },
+    });
+    res.setHeader('x-total-count', String(page.total));
+    res.json(page.items);
   } catch (error) { next(error); }
 });
 // Console alias: the chart client requests /readings.
 app.get('/v1/iot/sensors/:id/readings', async (req, res, next) => {
   try {
     const hours = req.query.hours !== undefined ? numberParam(req.query.hours, 24, 24 * 365) : undefined;
-    const readings = scopedReadings(await genericList(req, 'sensorData'), req.params.id, hours);
-    const paged = readings.slice(numberParam(req.query.offset ?? req.query.skip, 0, 1_000_000), numberParam(req.query.offset ?? req.query.skip, 0, 1_000_000) + numberParam(req.query.limit, 100, 500));
-    res.setHeader('x-total-count', String(readings.length));
-    res.json({ readings: paged, total: readings.length, sensor_id: req.params.id });
+    const client = capabilitiesFromRequest(req);
+    const dataset = await ensureDataset(client, DATASETS.sensorData);
+    const page = await queryRecords(client, dataset.id, readingWhere(req.params.id, hours), {
+      limit: numberParam(req.query.limit, 100, 500),
+      offset: numberParam(req.query.offset ?? req.query.skip, 0, 1_000_000),
+      orderBy: { field: 'timestamp', direction: 'desc' },
+    });
+    res.setHeader('x-total-count', String(page.total));
+    res.json({ readings: page.items, total: page.total, sensor_id: req.params.id });
   } catch (error) { next(error); }
 });
 app.post('/v1/iot/sensors/:id/data', async (req, res, next) => { try { res.status(201).json(await genericWrite(req, 'sensorData', { ...genericBody(req), sensor_id: req.params.id })); } catch (error) { next(error); } });
@@ -2739,8 +2807,13 @@ app.post('/v1/iot/sensors/batch-ingest', async (req, res, next) => { try { const
 app.get('/v1/iot/sensors/:id/status', async (req, res, next) => {
   try {
     const sensor = await genericGet(req, 'sensors', req.params.id);
-    const readings = scopedReadings(await genericList(req, 'sensorData'), req.params.id);
-    res.json({ ...sensor, status: sensorStatus(sensor, readings[0]), last_reading_at: readings[0]?.timestamp || null });
+    const client = capabilitiesFromRequest(req);
+    const dataset = await ensureDataset(client, DATASETS.sensorData);
+    const page = await queryRecords(client, dataset.id, { sensor_id: req.params.id }, {
+      limit: 1,
+      orderBy: { field: 'timestamp', direction: 'desc' },
+    });
+    res.json({ ...sensor, status: sensorStatus(sensor, page.items[0]), last_reading_at: page.items[0]?.timestamp || null });
   } catch (error) { next(error); }
 });
 app.get('/v1/iot/sensors/:id/statistics', async (req, res, next) => {
@@ -2748,7 +2821,12 @@ app.get('/v1/iot/sensors/:id/statistics', async (req, res, next) => {
     const sensor = await genericGet(req, 'sensors', req.params.id);
     const metric = req.query.metric ? String(req.query.metric) : undefined;
     const hours = req.query.hours !== undefined ? numberParam(req.query.hours, 24, 24 * 365) : undefined;
-    const readings = scopedReadings(await genericList(req, 'sensorData'), req.params.id, hours);
+    const client = capabilitiesFromRequest(req);
+    const dataset = await ensureDataset(client, DATASETS.sensorData);
+    const readings = await queryAllRecords(client, dataset.id, readingWhere(req.params.id, hours), {
+      maxRecords: 5000,
+      orderBy: { field: 'timestamp', direction: 'desc' },
+    });
     const values = readings.map((reading) => readingValue(reading, metric)).filter((value): value is number => value !== null);
     const sum = values.reduce((total, value) => total + value, 0);
     res.json({
@@ -2768,14 +2846,26 @@ app.get('/v1/iot/assets/:assetId/iot-data', async (req, res, next) => {
   try {
     const assetId = req.params.assetId;
     const hours = numberParam(req.query.hours, 24, 24 * 365);
-    const sensors = (await genericList(req, 'sensors')).filter((sensor) => String(sensor.asset_id || sensor.assetId || '') === assetId);
-    const sensorIds = new Set(sensors.map((sensor) => String(sensor.id)));
-    const readings = (await genericList(req, 'sensorData'))
-      .filter((reading) => sensorIds.has(String(reading.sensor_id || reading.sensorId || '')))
-      .filter((reading) => readingTimestamp(reading) >= Date.now() - hours * 3_600_000)
-      .sort((a, b) => readingTimestamp(b) - readingTimestamp(a));
-    const activeAlerts = (await genericList(req, 'alerts'))
-      .filter((alert) => String(alert.asset_id || alert.assetId || '') === assetId)
+    const client = capabilitiesFromRequest(req);
+    const sensorsDataset = await ensureDataset(client, DATASETS.sensors);
+    const readingsDataset = await ensureDataset(client, DATASETS.sensorData);
+    const alertsDataset = await ensureDataset(client, DATASETS.alerts);
+    const sensors = (await queryRecords(client, sensorsDataset.id, { asset_id: assetId }, { limit: 500 })).items;
+    const sensorIds = sensors.map((sensor) => String(sensor.id));
+    let readings: Array<Record<string, unknown>> = [];
+    let totalReadings = 0;
+    if (sensorIds.length > 0) {
+      const page = await queryRecords(client, readingsDataset.id, {
+        sensor_id: { in: sensorIds },
+        timestamp: { gte: new Date(Date.now() - hours * 3_600_000).toISOString() },
+      }, {
+        limit: 500,
+        orderBy: { field: 'timestamp', direction: 'desc' },
+      });
+      readings = page.items;
+      totalReadings = page.total;
+    }
+    const activeAlerts = (await queryRecords(client, alertsDataset.id, { asset_id: assetId }, { limit: 500 })).items
       .filter((alert) => !['resolved', 'dismissed', 'closed'].includes(String(alert.status || '').toLowerCase()));
     res.json({
       asset_id: assetId,
@@ -2785,7 +2875,7 @@ app.get('/v1/iot/assets/:assetId/iot-data', async (req, res, next) => {
       alerts: activeAlerts,
       summary: {
         total_sensors: sensors.length,
-        total_readings: readings.length,
+        total_readings: totalReadings,
         active_alerts: activeAlerts.length,
         offline_sensors: sensors.filter((sensor) => sensorStatus(sensor, readings.find((reading) => String(reading.sensor_id) === String(sensor.id))) === 'offline').length,
       },
@@ -3537,9 +3627,10 @@ app.get('/v1/public/assets', async (req, res, next) => {
   try {
     const client = capabilitiesFromRequest(req);
     const dataset = await ensureDataset(client, DATASETS.assets);
+    const includeInactive = ['true', '1'].includes(String(req.query.include_inactive || '').toLowerCase());
     const rows = (await listAllRecords(client, dataset.id))
       .map((record) => record.data)
-      .filter(assetIsPublic)
+      .filter((asset) => assetIsPublic(asset, { includeInactive }))
       .map(publicAssetView);
     sendPage(res, rows, req);
   } catch (error) { next(error); }
@@ -3550,7 +3641,7 @@ app.get('/v1/public/assets/:code/qr-code', async (req, res, next) => {
     const client = capabilitiesFromRequest(req);
     const dataset = await ensureDataset(client, DATASETS.assets);
     const asset = await findRecord(client, dataset.id, req.params.code, ['asset_code', 'feature_code', 'assetId', 'id']);
-    if (!asset || !assetIsPublic(asset)) return res.status(404).json({ error: 'asset_not_found' });
+    if (!asset || !assetIsPublic(asset, { includeInactive: true })) return res.status(404).json({ error: 'asset_not_found' });
     const view = publicAssetView(asset);
     res.json({ asset_code: view.asset_code, qr_code: view.qr_code, url: view.public_url });
   } catch (error) { next(error); }
@@ -3561,7 +3652,7 @@ app.get('/v1/public/assets/:code/maintenance-summary', async (req, res, next) =>
     const client = capabilitiesFromRequest(req);
     const assetDataset = await ensureDataset(client, DATASETS.assets);
     const asset = await findRecord(client, assetDataset.id, req.params.code, ['asset_code', 'feature_code', 'assetId', 'id']);
-    if (!asset || !assetIsPublic(asset)) return res.status(404).json({ error: 'asset_not_found' });
+    if (!asset || !assetIsPublic(asset, { includeInactive: true })) return res.status(404).json({ error: 'asset_not_found' });
     const maintenanceDataset = await ensureDataset(client, DATASETS.maintenance);
     const assetIds = new Set([String(asset.id), String(asset.asset_code || '')].filter(Boolean));
     const orders = (await listAllRecords(client, maintenanceDataset.id))
@@ -3585,7 +3676,7 @@ app.get('/v1/public/assets/:code', async (req, res, next) => {
     const client = capabilitiesFromRequest(req);
     const dataset = await ensureDataset(client, DATASETS.assets);
     const asset = await findRecord(client, dataset.id, req.params.code, ['asset_code', 'feature_code', 'assetId', 'id']);
-    if (!asset || !assetIsPublic(asset)) return res.status(404).json({ error: 'asset_not_found' });
+    if (!asset || !assetIsPublic(asset, { includeInactive: true })) return res.status(404).json({ error: 'asset_not_found' });
     res.json(publicAssetView(asset));
   } catch (error) { next(error); }
 });

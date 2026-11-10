@@ -34,7 +34,7 @@ function toMapAsset(asset: PublicAssetInfo): Asset {
         id: asset.id || asset.asset_code,
         _id: asset.id || asset.asset_code,
         feature_type: asset.feature_type,
-        feature_code: asset.asset_code,
+        feature_code: asset.feature_code,
         geometry: (asset.location.geometry || {
             type: "Point",
             coordinates: [asset.location.coordinates.longitude, asset.location.coordinates.latitude],
@@ -58,9 +58,9 @@ const PublicMap: React.FC = () => {
         isLoading,
         error,
     } = useQuery({
-        queryKey: ["assets"],
+        queryKey: ["public", "assets"],
         // The public map reads the published projection only.
-        queryFn: async () => (await publicApi.listPublicAssets({ limit: 500 })).map(toMapAsset),
+        queryFn: async () => (await publicApi.listAllPublicAssets({ include_inactive: true })).map(toMapAsset),
         staleTime: 5 * 60 * 1000, // 5 minutes - prevent refetch on navigation
         refetchOnWindowFocus: false,
     });
@@ -167,6 +167,8 @@ const PublicMap: React.FC = () => {
                         selectedAsset={selectedAsset}
                         className="h-full w-full"
                         enableGeoSearches={true}
+                        initialZoom={13}
+                        fitToAssets={searchParams.lat === undefined && searchParams.lng === undefined}
                     />
                 </div>
 
