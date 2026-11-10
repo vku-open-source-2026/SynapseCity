@@ -13,8 +13,8 @@ finding.**
 | --- | --- |
 | React Native/Expo app | `mobile/` |
 | Native Android widget | `mobile/android/app/src/main/java/sbs/synapsecity/mobile/widget/` |
-| Release APK (signed) | `mobile/dist/SynapseCity-0.1.0-release.apk` |
-| APK SHA-256 | `D7A78EE4C50B79F0D871ED90B713159B25D9BE0660F58B5FDE78F3534C68D3C7` |
+| Release APK (signed, public) | <https://synapsedx.sbs/v1/capabilities/public/files/synapsecity-android-0.1.0-arm64-x86_64/content> |
+| APK SHA-256 | `eb26a79413149e4e4c41bd379339e679e80237c1c49cc92d9b3a70ba6014f4d6` |
 | Evidence screenshots | `docs/evidence/` |
 | Plan | `docs/MOBILE_APP_PLAN.md` |
 
@@ -129,7 +129,7 @@ Nẵng cannot show a far-away asset as “nearest”.
 | C3 | Medium | No positive operator login test (no production credentials were used). | Login UI, validation, SecureStore path and server error handling present; anonymous path fully tested. |
 | C4 | Medium | Anonymous incident POST was not executed to avoid polluting production data. | Payload/validation/UI checked; endpoint contract exists; server enforces Turnstile/rate limits. |
 | C5 | Low | Widget refresh period is 30 min minimum; Doze can delay it. | Manual refresh + app foreground sync; stale label. |
-| C6 | Low | APK contains arm64-v8a + x86_64 (64 MB). | Can use ABI splits for store distribution. |
+| C6 | Low | APK contains arm64-v8a + x86_64 (66.9 MB). | Can use ABI splits for store distribution. |
 | C7 | Low | Windows MAX_PATH can break native codegen in a long checkout. | `scripts/build-android.ps1` mirrors to a short path; documented. |
 | C8 | Low | Map needs network for tiles and the Leaflet CDN; radar fallback is provided. | Explicit “map unavailable” state, never fake data. |
 | C9 | Low | Duplicate security headers observed on the wire (`nosniff,nosniff`) from edge + gateway. | Harmless; edge config cleanup recommended. |

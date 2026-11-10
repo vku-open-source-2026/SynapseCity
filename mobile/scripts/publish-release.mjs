@@ -40,7 +40,7 @@ if (!product || !version || !file) {
 }
 if (!/^[a-z0-9][a-z0-9-]{1,40}$/.test(product)) throw new Error('product must be lowercase kebab-case');
 if (!/^[0-9A-Za-z._-]{1,30}$/.test(version)) throw new Error('version contains unsupported characters');
-if (!/^[a-z0-9-]{1,20}$/.test(arch)) throw new Error('arch must be lowercase kebab-case');
+if (!/^[a-z0-9_-]{1,30}$/.test(arch)) throw new Error('arch must be lowercase kebab/ABI name');
 
 const bytes = await readFile(file);
 const info = await stat(file);

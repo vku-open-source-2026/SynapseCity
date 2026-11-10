@@ -86,7 +86,14 @@ npm run verify
 npm run build:android
 ```
 
-Release APK: `mobile/dist/SynapseCity-0.1.0-release.apk`.
+Release APK (public, served from Tier-1 SynapseOCS through Tier-2):
+<https://synapsedx.sbs/v1/capabilities/public/files/synapsecity-android-0.1.0-arm64-x86_64/content>
+
+SHA-256: `eb26a79413149e4e4c41bd379339e679e80237c1c49cc92d9b3a70ba6014f4d6`
+
+CI builds an unsigned APK; the production release job signs it with the
+protected keystore and publishes it through the Tier-2 files capability. See
+[`mobile/RELEASING.md`](mobile/RELEASING.md).
 
 ## Run
 

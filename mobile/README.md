@@ -50,12 +50,12 @@ otherwise the debug key):
 npm run build:android
 ```
 
-Current release artefact:
+Current release artefact (public, served from Tier-1 SynapseOCS through
+Tier-2; CI builds unsigned and the production release job signs it):
 
 ```text
-mobile/dist/SynapseCity-0.1.0-release.apk
-SHA-256 D7A78EE4C50B79F0D871ED90B713159B25D9BE0660F58B5FDE78F3534C68D3C7
-adb install -r mobile/dist/SynapseCity-0.1.0-release.apk
+https://synapsedx.sbs/v1/capabilities/public/files/synapsecity-android-0.1.0-arm64-x86_64/content
+SHA-256 eb26a79413149e4e4c41bd379339e679e80237c1c49cc92d9b3a70ba6014f4d6
 ```
 
 On Windows, generated CMake object paths can exceed `MAX_PATH` when the checkout
