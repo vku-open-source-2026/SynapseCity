@@ -34,7 +34,7 @@ export const en: Messages = {
         lead: "See where street lights, drains, sensor stations and other public assets are and what state they are in. Spot something broken? Report it on the map and follow it until it is fixed.",
         ctaMap: "Try it now",
         ctaReport: "Report an issue",
-        install: "Install the app",
+        install: "Download Android APK",
         mapAlt: "Screenshot of the SynapseCity infrastructure asset map",
         mapHover: "Open the map",
         assetCount: (n: string) => `${n} assets published on the map`,

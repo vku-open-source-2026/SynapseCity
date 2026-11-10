@@ -32,7 +32,7 @@ export const vi = {
         lead: "Xem vị trí và tình trạng đèn đường, cống thoát nước, trạm cảm biến và các công trình công cộng khác. Thấy hư hỏng, bạn báo ngay trên bản đồ và theo dõi đến khi được xử lý.",
         ctaMap: "Trải nghiệm ngay",
         ctaReport: "Báo sự cố",
-        install: "Cài ứng dụng",
+        install: "Tải APK Android",
         mapAlt: "Ảnh chụp bản đồ tài sản hạ tầng của SynapseCity",
         mapHover: "Mở bản đồ",
         assetCount: (n: string) => `${n} tài sản đang công khai trên bản đồ`,

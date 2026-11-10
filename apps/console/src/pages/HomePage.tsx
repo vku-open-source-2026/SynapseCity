@@ -22,7 +22,6 @@ import AIChatWidget from "../components/AIChatWidget";
 import Footer from "../components/Footer";
 import Header from "../components/Header";
 import mapImage from "../assets/map.png";
-import { usePWA } from "../hooks/usePWA";
 import { useI18n } from "../lib/i18n-context";
 import { LINKS } from "../lib/site";
 
@@ -57,7 +56,6 @@ function SectionHeader({ kick, title, lead }: { kick: string; title: string; lea
 const HomePage = () => {
     const { m, lang } = useI18n();
     const h = m.home;
-    const { canShowInstallButton, promptInstall } = usePWA();
     const [assetCount, setAssetCount] = useState<number | null>(null);
     const [loadingAssets, setLoadingAssets] = useState(true);
 
@@ -115,16 +113,15 @@ const HomePage = () => {
                                     <ClipboardList className="mr-2 h-4 w-4" />
                                     {h.ctaReport}
                                 </Link>
-                                {canShowInstallButton && (
-                                    <button
-                                        type="button"
-                                        onClick={promptInstall}
-                                        className="inline-flex items-center justify-center whitespace-nowrap rounded-full border border-slate-300 px-5 py-3 text-[15px] font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-                                    >
-                                        <Download className="mr-2 h-4 w-4" />
-                                        {h.install}
-                                    </button>
-                                )}
+                                <a
+                                    href={LINKS.androidApk}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center justify-center whitespace-nowrap rounded-full border border-slate-300 px-5 py-3 text-[15px] font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                                >
+                                    <Download className="mr-2 h-4 w-4" />
+                                    {h.install}
+                                </a>
                             </div>
                         </div>
                         <div className="relative mx-auto w-full max-w-2xl lg:max-w-none">

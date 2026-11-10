@@ -20,6 +20,7 @@ export const LINKS = {
     basemap: "https://vietmap.vn/",
     dataContribution: "https://contribution.synapsecity.sbs/",
     sos: "https://sos.synapsecity.sbs/",
+    androidApk: "https://synapsedx.sbs/v1/capabilities/public/files/synapsecity-android-0.1.0-arm64-x86_64/content",
     synapseDX: "https://synapsedx.sbs/",
     synapseOne: "https://synapseone.space/",
     vku: "https://vku.udn.vn",
