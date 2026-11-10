@@ -1,6 +1,6 @@
 # SynapseCity Android app + widget — audit
 
-Date: 2026-11-10 22:25 (Asia/Ho_Chi_Minh)
+Date: 2026-11-11 00:25 (Asia/Ho_Chi_Minh)
 Scope: `mobile/` in this repository, its production integration and the native
 home-screen widget. This revision switches the app and widget to a light-first
 theme and re-audits the widget end to end.
