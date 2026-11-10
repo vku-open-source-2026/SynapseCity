@@ -1,0 +1,58 @@
+{
+  "name": "synapsecity-mobile",
+  "version": "0.1.0",
+  "main": "index.ts",
+  "dependencies": {
+    "@expo/vector-icons": "^15.0.2",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@tanstack/react-query": "^5.107.1",
+    "expo": "~58.0.23",
+    "expo-background-task": "~58.0.12",
+    "expo-build-properties": "~58.0.12",
+    "expo-camera": "~58.0.14",
+    "expo-constants": "~58.0.15",
+    "expo-device": "~58.0.5",
+    "expo-font": "~58.0.11",
+    "expo-haptics": "~58.0.7",
+    "expo-image": "~58.0.18",
+    "expo-linear-gradient": "~58.0.3",
+    "expo-linking": "~58.0.16",
+    "expo-location": "~58.0.20",
+    "expo-notifications": "~58.1.8",
+    "expo-secure-store": "~58.0.2",
+    "expo-splash-screen": "~58.0.13",
+    "expo-status-bar": "~58.0.4",
+    "expo-system-ui": "~58.0.7",
+    "expo-task-manager": "~58.0.13",
+    "qrcode": "^1.5.4",
+    "react": "19.3.0",
+    "react-native": "0.88.1",
+    "react-native-nfc-manager": "^4.2.0",
+    "react-native-sse": "^1.2.1",
+    "react-native-webview": "14.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "~19.3.0",
+    "sharp": "^0.35.5",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.3",
+    "vitest": "^5.1.0"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "verify": "node scripts/verify-production.mjs",
+    "build:android": "powershell -ExecutionPolicy Bypass -File scripts/build-android.ps1"
+  },
+  "private": true,
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "sharp@0.35.5": true
+  }
+}

@@ -1,0 +1,84 @@
+{
+  "expo": {
+    "name": "SynapseCity",
+    "slug": "synapsecity",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "synapsecity",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F4FBFB"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "sbs.synapsecity.mobile"
+    },
+    "android": {
+      "package": "sbs.synapsecity.mobile",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#F4FBFB",
+        "monochromeImage": "./assets/adaptive-icon.png"
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "CAMERA",
+        "NFC",
+        "POST_NOTIFICATIONS",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
+      ],
+      "predictiveBackGestureEnabled": true,
+      "softwareKeyboardLayoutMode": "resize"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "SynapseCity dùng vị trí của bạn để chỉ ra tài sản hạ tầng gần nhất và khoảng cách tới bạn."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "SynapseCity dùng camera để quét mã QR gắn trên tài sản hạ tầng.",
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": true
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#22D3EE",
+          "defaultChannel": "city-updates"
+        }
+      ],
+      "expo-secure-store",
+      "expo-background-task",
+      "expo-image",
+      "react-native-nfc-manager",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 37,
+            "targetSdkVersion": 37,
+            "minSdkVersion": 24
+          }
+        }
+      ],
+      "expo-splash-screen",
+      "expo-font"
+    ],
+    "extra": {
+      "productUrl": "https://synapsecity.sbs"
+    }
+  }
+}

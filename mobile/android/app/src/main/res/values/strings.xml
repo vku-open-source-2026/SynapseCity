@@ -1,0 +1,21 @@
+<resources>
+  <string name="app_name">SynapseCity</string>
+  <string name="expo_system_ui_user_interface_style" translatable="false">dark</string>
+  <string name="widget_name">SynapseCity · Tài sản gần bạn</string>
+  <string name="widget_description">Tài sản hạ tầng gần nhất, trạng thái và radar mini. Chạm để quét QR/NFC.</string>
+  <string name="widget_brand">SYNAPSE CITY</string>
+  <string name="widget_location_default">Đà Nẵng · vị trí mặc định</string>
+  <string name="widget_location_gps">GPS · vị trí hiện tại</string>
+  <string name="widget_no_data">Đang tải dữ liệu…</string>
+  <string name="widget_no_data_hint">Mở app một lần để lưu vị trí</string>
+  <string name="widget_no_nearby">Không có tài sản trong 5 km</string>
+  <string name="widget_waiting">Widget sẽ tự cập nhật</string>
+  <string name="widget_refresh">↻ Làm mới</string>
+  <string name="widget_scan">⌁ Quét</string>
+  <string name="widget_stale">Dữ liệu cũ</string>
+  <string name="widget_never">chưa từng cập nhật</string>
+  <string name="widget_ago">%1$d phút trước</string>
+  <string name="widget_updated">Cập nhật %1$d phút trước · synapsecity.sbs</string>
+  <string name="widget_stale_footer">Dữ liệu cũ · %1$s · chạm làm mới</string>
+  <string name="widget_map_description">Radar tài sản hạ tầng gần vị trí của bạn</string>
+</resources>

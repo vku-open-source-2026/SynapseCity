@@ -68,6 +68,26 @@ dispatch, emergency resource units, SITREP, AAR, live hazard streaming, the
 emergency command centre and the public hazard map. Those are SynapseCitySOS
 features.
 
+## Android app and home-screen widget
+
+The `mobile/` directory contains the SynapseCity Android client and a native
+4×3 home-screen widget. It talks directly to `https://synapsecity.sbs/v1`:
+nearby asset radar/map (GPS), QR/NFC asset lookup, public incident reporting,
+optional operator alerts, and a widget with nearest asset, status, mini-map,
+scan and refresh actions. The UI is light-first, using the production web
+console's teal/white palette. See [`mobile/README.md`](mobile/README.md) and the
+verification record in [`docs/MOBILE_AUDIT.md`](docs/MOBILE_AUDIT.md).
+
+```bash
+cd mobile
+npm ci
+npm run typecheck && npm test
+npm run verify
+npm run build:android
+```
+
+Release APK: `mobile/dist/SynapseCity-0.1.0-release.apk`.
+
 ## Run
 
 The Tier-2 client is published on npm as
