@@ -55,7 +55,7 @@ Tier-2; CI builds unsigned and the production release job signs it):
 
 ```text
 https://synapsedx.sbs/v1/capabilities/public/files/synapsecity-android-0.1.0-arm64-x86_64/content
-SHA-256 eb26a79413149e4e4c41bd379339e679e80237c1c49cc92d9b3a70ba6014f4d6
+SHA-256 c423be659bed055a2fd2811946ad5d5264635743db8897685978f8b3d7be26c4
 ```
 
 On Windows, generated CMake object paths can exceed `MAX_PATH` when the checkout

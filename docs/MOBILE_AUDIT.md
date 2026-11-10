@@ -14,7 +14,7 @@ finding.**
 | React Native/Expo app | `mobile/` |
 | Native Android widget | `mobile/android/app/src/main/java/sbs/synapsecity/mobile/widget/` |
 | Release APK (signed, public) | <https://synapsedx.sbs/v1/capabilities/public/files/synapsecity-android-0.1.0-arm64-x86_64/content> |
-| APK SHA-256 | `eb26a79413149e4e4c41bd379339e679e80237c1c49cc92d9b3a70ba6014f4d6` |
+| APK SHA-256 | `c423be659bed055a2fd2811946ad5d5264635743db8897685978f8b3d7be26c4` |
 | Evidence screenshots | `docs/evidence/` |
 | Plan | `docs/MOBILE_APP_PLAN.md` |
 
@@ -48,6 +48,8 @@ theme is enabled in this build.
 | `npx vitest run` | 11/11 pass |
 | `node scripts/verify-production.mjs` | pass: 200 assets, 64 incidents, VIETMAP, SOS namespace 404 |
 | `assembleRelease` | pass |
+| GitHub Actions `mobile-build.yml` | pass: unsigned arm64-v8a + x86_64 artifact |
+| Production signing/publish | pass: `zipalign` + `apksigner` + Tier-2 files → Tier-1 SynapseOCS |
 | APK signature | V2, CN=SynapseCity, local upload key |
 | APK integrity | SHA-256 above |
 | Boundary grep | no SOS API/namespace in `mobile/src`; SOS link is `Linking.openURL` navigation only |
