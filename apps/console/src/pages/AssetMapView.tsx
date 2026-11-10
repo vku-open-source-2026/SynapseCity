@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { getAssets, getAssetId, type Asset } from "../api";
@@ -31,12 +31,16 @@ const AssetMapView: React.FC = () => {
         queryFn: getAssets,
     });
 
-    const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
-    const [isModalOpen, setIsModalOpen] = useState(false);
     const [openChatbot, setOpenChatbot] = useState(false);
     const [assetToAddToChat, setAssetToAddToChat] = useState<Asset | null>(null);
+    // The URL is the source of truth for the open asset panel, so map clicks,
+    // deep links and the browser back button all behave the same way.
+    const selectedAsset =
+        (searchParams?.assetId &&
+            assets?.find((asset) => getAssetId(asset) === searchParams.assetId)) ||
+        null;
     const selectedAssetId = selectedAsset ? getAssetId(selectedAsset) : null;
-    const isUpdatingFromUrl = useRef(false);
+    const isModalOpen = Boolean(selectedAsset);
 
     // Fetch the full detail record when the panel opens.
     const { data: fullAssetDetails, isLoading: isLoadingAssetDetails } =
@@ -46,44 +50,19 @@ const AssetMapView: React.FC = () => {
                 if (!selectedAssetId) throw new Error("Asset ID is required");
                 return assetsApi.getById(selectedAssetId);
             },
-            enabled: !!selectedAssetId && isModalOpen,
+            enabled: !!selectedAssetId,
         });
-
-    // Keep the URL and the selected asset in sync.
-    useEffect(() => {
-        if (isUpdatingFromUrl.current) {
-            isUpdatingFromUrl.current = false;
-            return;
-        }
-        const assetId = searchParams?.assetId;
-        const currentId = selectedAsset ? getAssetId(selectedAsset) : null;
-        if (assetId && assets && assets.length > 0) {
-            if (currentId !== assetId) {
-                const found = assets.find((asset) => getAssetId(asset) === assetId);
-                if (found) {
-                    setSelectedAsset(found);
-                    setIsModalOpen(true);
-                }
-            }
-        } else if (!assetId && currentId) {
-            setSelectedAsset(null);
-            setIsModalOpen(false);
-        }
-    }, [searchParams?.assetId, assets, selectedAsset]);
 
     const handleAssetSelect = useCallback(
         (asset: Asset | null) => {
             if (!asset) {
-                setIsModalOpen(false);
-                setSelectedAsset(null);
+                setOpenChatbot(false);
+                setAssetToAddToChat(null);
                 navigate({ to: "/admin/map", search: { assetId: undefined } });
                 return;
             }
             const assetId = getAssetId(asset);
             if (!assetId) return;
-            isUpdatingFromUrl.current = true;
-            setSelectedAsset(asset);
-            setIsModalOpen(true);
             setOpenChatbot(false);
             setAssetToAddToChat(null);
             navigate({ to: "/admin/map", search: { assetId } });
@@ -92,9 +71,6 @@ const AssetMapView: React.FC = () => {
     );
 
     const handleModalClose = useCallback(() => {
-        isUpdatingFromUrl.current = true;
-        setIsModalOpen(false);
-        setSelectedAsset(null);
         navigate({ to: "/admin/map", search: { assetId: undefined } });
     }, [navigate]);
 
@@ -109,8 +85,6 @@ const AssetMapView: React.FC = () => {
         (asset: Asset) => {
             setAssetToAddToChat(asset);
             setOpenChatbot(true);
-            setIsModalOpen(false);
-            setSelectedAsset(null);
             navigate({ to: "/admin/map", search: { assetId: undefined } });
         },
         [navigate]
@@ -166,9 +140,6 @@ const AssetMapView: React.FC = () => {
                 onOpenChange={(isOpen) => {
                     setOpenChatbot(isOpen);
                     if (isOpen) {
-                        isUpdatingFromUrl.current = true;
-                        setIsModalOpen(false);
-                        setSelectedAsset(null);
                         navigate({ to: "/admin/map", search: { assetId: undefined } });
                     } else {
                         setAssetToAddToChat(null);
