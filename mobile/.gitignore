@@ -46,4 +46,3 @@ yarn-error.*
 
 # generated native folders
 /ios
-!dist/*.apk
