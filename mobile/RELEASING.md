@@ -79,6 +79,26 @@ verification, downloads it again anonymously, and prints:
 Use that URL as the release download link. Keep the checksum in the release
 notes and in `docs/MOBILE_AUDIT.md`.
 
+## Automatic tag release worker (production)
+
+A protected host can poll GitHub for successful `mobile-v*` tag builds and run
+the signing/publish steps automatically:
+
+```bash
+export GITHUB_TOKEN=...
+export GITHUB_REPOSITORY=vku-open-source-2026/SynapseCity
+export RELEASE_PRODUCT=synapsecity
+export RELEASE_ARTIFACT_PREFIX=synapsecity-android
+export RELEASE_FILE_PREFIX=SynapseCity
+export SYNAPSEDX_RELEASE_API_KEY="$(cat ~/release-secrets/tier2-release.key)"
+set -a; source ~/release-secrets/sign-city.env; set +a
+bash mobile/scripts/ci-release.sh
+```
+
+Run it from a 5-minute systemd timer or cron. It stores processed tags under
+`~/.local/state/synapse-mobile-release/` and uses a lock so two workers cannot
+publish concurrently. A tag is only processed after its workflow run is green.
+
 ## Rollback
 
 Publish a new versioned file id for the previous build or point the download

@@ -7,18 +7,34 @@ function assert(condition, message) {
 }
 
 async function get(path) {
-  const response = await fetch(`${API}${path}`, {
-    headers: { Accept: 'application/json', 'User-Agent': 'SynapseCity-Mobile-Contract/0.1' },
-    signal: AbortSignal.timeout(20_000),
-  });
-  const text = await response.text();
-  let body = null;
-  try {
-    body = text ? JSON.parse(text) : null;
-  } catch {
-    body = text;
+  let lastError;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      const response = await fetch(`${API}${path}`, {
+        headers: { Accept: 'application/json', 'User-Agent': 'SynapseCity-Mobile-Contract/0.1' },
+        signal: AbortSignal.timeout(20_000),
+      });
+      const text = await response.text();
+      let body = null;
+      try {
+        body = text ? JSON.parse(text) : null;
+      } catch {
+        body = text;
+      }
+      if ([429, 502, 503, 504].includes(response.status) && attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** attempt));
+        continue;
+      }
+      return { response, body };
+    } catch (error) {
+      lastError = error;
+      if (attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** attempt));
+        continue;
+      }
+    }
   }
-  return { response, body };
+  throw lastError || new Error(`GET ${path} failed after retries`);
 }
 
 const failures = [];
