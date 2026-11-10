@@ -153,6 +153,7 @@ const AboutUs: React.FC = () => {
                         {[
                             { href: LINKS.vku, logo: "/vku-logo.svg", label: a.partners.vku },
                             { href: LINKS.vic, logo: "/vic-logo.svg", label: a.partners.vic },
+                            { href: LINKS.olp, logo: "/olp-icpc-logo.svg", label: a.partners.olp },
                         ].map((p) => (
                             <a
                                 key={p.href}

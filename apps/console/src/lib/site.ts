@@ -25,4 +25,5 @@ export const LINKS = {
     synapseOne: "https://synapseone.space/",
     vku: "https://vku.udn.vn",
     vic: "https://www.facebook.com/vic.club.vku?locale=vi_VN",
+    olp: "https://online.vku.udn.vn/organization/32-vku-olp-icpc-team",
 } as const;

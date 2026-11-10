@@ -143,7 +143,7 @@ export const en: Messages = {
         teamLead: "The people who build and maintain SynapseCity",
         partnersTitle: "Supported by",
         partnersLead: "Backed by organisations that believe in open source",
-        partners: { vku: "VKU University", vic: "VKU IT Club" },
+        partners: { vku: "VKU University", vic: "VKU IT Club", olp: "VKU OLP-ICPC Team" },
         licenseTitle: "Licences and source code",
         licenseLead: "SynapseCity is open-source software. You can install, audit and reuse it yourself.",
         license: {
