@@ -3,7 +3,14 @@
 All notable changes to SynapseCity are documented here. Entries follow the
 Keep a Changelog format and version tags use Semantic Versioning.
 
-## [Unreleased] - 2026-11-09
+## [Unreleased]
+
+## [0.3.0] - 2026-11-10
+
+### Added
+- Public GHCR images for `city-service`, `gateway` and `console` with
+  `vX.Y.Z`, `latest` and `sha-<commit>` tags, plus a self-host guide covering
+  `docker compose pull` and building from source.
 
 ### Added
 

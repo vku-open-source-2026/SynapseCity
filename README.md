@@ -122,6 +122,54 @@ npm run dev --workspace=@synapsecity/console
 The production stack is reproducible with `docker compose up -d --build`; the
 Docker build installs the published npm package and needs no sibling repository.
 
+## Self-host
+
+Every release publishes three Apache-2.0 images to the public GitHub Container
+Registry (no registry login required):
+
+- `ghcr.io/vku-open-source-2026/synapsecity-city-service`
+- `ghcr.io/vku-open-source-2026/synapsecity-gateway`
+- `ghcr.io/vku-open-source-2026/synapsecity-console`
+
+City is Tier 3: point `SYNAPSEDX_BASE_URL` at a Tier-2 SynapseDX deployment and
+set a scoped `SYNAPSEDX_API_KEY` issued for this product account. The default
+`https://synapsedx.sbs` is the public demo.
+
+### 1. Run the published images (recommended)
+
+```bash
+git clone https://github.com/vku-open-source-2026/SynapseCity.git
+cd SynapseCity
+cp .env.example .env       # set SYNAPSEDX_BASE_URL / API key and AUTH_SECRET
+export SYNAPSECITY_VERSION=v0.3.0   # or latest
+
+docker compose pull
+docker compose up -d --no-build
+curl http://127.0.0.1:8085/health
+```
+
+The gateway is bound to loopback; terminate TLS at your own edge and proxy
+`/v1` to the gateway (see `infra/nginx/synapsecity.conf`).
+
+### 2. Build from source
+
+Requirements: Node.js 20+, Docker Engine 24+ and Compose v2.24+.
+
+```bash
+git clone https://github.com/vku-open-source-2026/SynapseCity.git
+cd SynapseCity
+cp .env.example .env
+npm ci
+npm run check:release
+npm run build
+npm test
+docker compose build
+docker compose up -d --no-build
+```
+
+`docker compose up -d --build` combines the last two steps. Local builds use
+the same GHCR image names, so `pull` and `build` are interchangeable.
+
 ### Legacy OpenInfra data migration
 
 `npm run import:openinfra` loads the legacy JSON export into the City datasets

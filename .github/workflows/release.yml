@@ -38,7 +38,11 @@ jobs:
         run: cp .env.example .env
 
       - name: Build images
-        run: docker compose build
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          OWNER="$(echo "${OWNER}" | tr '[:upper:]' '[:lower:]')"
+          SYNAPSECITY_IMAGE_OWNER="$OWNER" SYNAPSECITY_VERSION=latest docker compose build
 
       - name: Log in to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
@@ -54,12 +58,25 @@ jobs:
           images="synapsecity-city-service synapsecity-gateway synapsecity-console"
           for image in $images; do
             remote="ghcr.io/${OWNER}/${image}"
-            docker tag "${image}:latest" "${remote}:${TAG}"
-            docker tag "${image}:latest" "${remote}:latest"
-            docker tag "${image}:latest" "${remote}:sha-${SHA}"
+            docker tag "${remote}:latest" "${remote}:${TAG}"
+            docker tag "${remote}:latest" "${remote}:sha-${SHA}"
             docker push "${remote}:${TAG}"
             docker push "${remote}:latest"
             docker push "${remote}:sha-${SHA}"
+          done
+
+      - name: Make GHCR packages public
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GHCR_PAT || secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -uo pipefail
+          OWNER="$(echo "${OWNER}" | tr '[:upper:]' '[:lower:]')"
+          for image in synapsecity-city-service synapsecity-gateway synapsecity-console; do
+            if ! gh api --method PATCH "/orgs/${OWNER}/packages/container/${image}" -f visibility=public >/dev/null 2>&1; then
+              echo "::warning::Could not set ${image} public; set it in GitHub package settings."
+            fi
           done
 
       - name: Create GitHub release
