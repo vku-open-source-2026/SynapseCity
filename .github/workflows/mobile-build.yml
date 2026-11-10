@@ -99,3 +99,40 @@ jobs:
             mobile/dist/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14
+
+  github-release:
+    if: startsWith(github.ref, 'refs/tags/mobile-v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Collect public release metadata
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./mobile/app.json').expo.version")"
+          LINK="$(grep -o 'https://synapsedx.sbs/v1/capabilities/public/files/synapsecity-android-[^ )]*' README.md | head -1)"
+          SHA="$(grep -o '[a-f0-9]\{64\}' docs/MOBILE_AUDIT.md | head -1)"
+          test -n "$LINK"
+          test -n "$SHA"
+          {
+            echo "SIGNED_APK_LINK=$LINK"
+            echo "SIGNED_APK_SHA=$SHA"
+            echo "VERSION=$VERSION"
+          } >> "$GITHUB_ENV"
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          body: |
+            SynapseCity Android ${{ env.VERSION }}
+
+            Signed APK (Tier-2 public file backed by Tier-1 SynapseOCS):
+            ${{ env.SIGNED_APK_LINK }}
+
+            SHA-256: `${{ env.SIGNED_APK_SHA }}`
+
+            The GitHub artifact is **unsigned**; the protected production
+            release job signs it with the upload keystore and publishes it to
+            SynapseOCS. Package: `sbs.synapsecity.mobile`.
+
