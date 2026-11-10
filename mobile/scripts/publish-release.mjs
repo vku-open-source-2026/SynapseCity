@@ -33,6 +33,7 @@ const file = arg('apk');
 const arch = arg('arch', 'universal');
 const channel = arg('channel', 'stable');
 const explicitId = arg('id');
+const contentType = arg('content-type', 'application/vnd.android.package-archive');
 
 if (!apiKey) throw new Error('SYNAPSEDX_RELEASE_API_KEY is required');
 if (!product || !version || !file) {
@@ -87,7 +88,7 @@ let created = await request('/v1/capabilities/files', {
   body: JSON.stringify({
     id,
     filename: basename(file),
-    contentType: 'application/vnd.android.package-archive',
+    contentType,
     size: info.size,
     checksumSha256,
     public: true,
@@ -100,7 +101,7 @@ if (created.response.status === 409) {
     body: JSON.stringify({
       id,
       filename: basename(file),
-      contentType: 'application/vnd.android.package-archive',
+      contentType,
       size: info.size,
       checksumSha256,
       public: true,
@@ -122,7 +123,7 @@ if (!presign.response.ok) {
 const upload = await fetch(presign.body.url, {
   method: 'PUT',
   headers: {
-    'content-type': 'application/vnd.android.package-archive',
+    'content-type': contentType,
     'x-object-checksum-sha256': checksumSha256,
   },
   body: bytes,
