@@ -15,6 +15,7 @@
     "check:release": "node scripts/check-release.cjs",
     "demo:seed": "node scripts/demo-seed.mjs",
     "demo:reset": "node scripts/demo-reset.mjs",
-    "import:openinfra": "node scripts/import-openinfra.mjs"
+    "import:openinfra": "node scripts/import-openinfra.mjs",
+    "workflows:validate": "node workflows/validate.mjs"
   }
 }

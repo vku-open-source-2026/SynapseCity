@@ -34,6 +34,8 @@ jobs:
 
       - name: Build
         run: npm run build
+      - name: Validate git-managed workflows
+        run: npm run workflows:validate
 
       - name: Test
         run: npm test
