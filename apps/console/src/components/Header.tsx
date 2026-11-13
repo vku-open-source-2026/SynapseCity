@@ -7,6 +7,7 @@ import { useI18n } from "../lib/i18n-context";
 import { useTheme } from "../lib/theme-context";
 import { LINKS } from "../lib/site";
 import { StableLabel } from "./StableLabel";
+import { BrandSymbol } from "./BrandSymbol";
 
 const linkBase =
     "whitespace-nowrap text-[15px] transition-colors max-lg:text-lg max-lg:py-2 flex items-center gap-1.5";
@@ -52,9 +53,12 @@ const Header: React.FC = () => {
     return (
         <header className="fixed top-0 left-0 z-[1001] h-20 w-full border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
             <div className="mx-auto flex h-full max-w-7xl items-center justify-between gap-8 px-4">
-                <Link to="/" onClick={closeMobileMenu} className="flex shrink-0 flex-col leading-tight">
-                    <span className="font-montserrat text-xl font-bold text-[#087f83] dark:text-teal-400">SynapseCity</span>
-                    <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">{m.nav.tagline}</span>
+                <Link to="/" onClick={closeMobileMenu} className="flex shrink-0 items-center gap-2.5">
+                    <BrandSymbol className="h-9 w-9 shrink-0" />
+                    <span className="flex flex-col leading-tight">
+                        <span className="font-montserrat text-xl font-bold text-[#1D4ED8] dark:text-blue-300">SynapseCity</span>
+                        <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">{m.nav.tagline}</span>
+                    </span>
                 </Link>
 
                 <div className="flex items-center gap-1 lg:hidden">

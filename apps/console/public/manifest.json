@@ -1,63 +1,63 @@
 {
-    "name": "SynapseCity",
-    "short_name": "SynapseCity",
-    "description": "SynapseCity city infrastructure operations - asset registry, incidents, maintenance and public reporting",
-    "start_url": "/",
-    "scope": "/",
-    "display": "minimal-ui",
-    "background_color": "#ffffff",
-    "theme_color": "#ffffff",
-    "orientation": "any",
-    "icons": [
-        {
-            "src": "/icons/icon-192x192.png",
-            "sizes": "192x192",
-            "type": "image/png",
-            "purpose": "any"
-        },
-        {
-            "src": "/icons/icon-512x512.png",
-            "sizes": "512x512",
-            "type": "image/png",
-            "purpose": "any"
-        },
-        {
-            "src": "/icons/icon-maskable-192x192.png",
-            "sizes": "192x192",
-            "type": "image/png",
-            "purpose": "maskable"
-        },
-        {
-            "src": "/icons/icon-maskable-512x512.png",
-            "sizes": "512x512",
-            "type": "image/png",
-            "purpose": "maskable"
-        },
-        {
-            "src": "/icons/apple-touch-icon-180x180.png",
-            "sizes": "180x180",
-            "type": "image/png",
-            "purpose": "any"
-        }
-    ],
-    "screenshots": [
-        {
-            "src": "/icons/splash-750x1334.png",
-            "sizes": "750x1334",
-            "type": "image/png",
-            "form_factor": "narrow"
-        },
-        {
-            "src": "/icons/splash-1284x2778.png",
-            "sizes": "1284x2778",
-            "type": "image/png",
-            "form_factor": "narrow"
-        }
-    ],
-    "categories": [
-        "utilities",
-        "productivity"
-    ],
-    "lang": "vi",
-    "prefer_related_applications": false
+  "name": "SynapseCity",
+  "short_name": "SynapseCity",
+  "description": "SynapseCity — city infrastructure operations",
+  "start_url": "/",
+  "scope": "/",
+  "display": "minimal-ui",
+  "background_color": "#f7faff",
+  "theme_color": "#1D4ED8",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/apple-touch-icon-180x180.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "categories": [
+    "utilities",
+    "productivity"
+  ],
+  "lang": "vi",
+  "prefer_related_applications": false,
+  "screenshots": [
+    {
+      "src": "/icons/splash-750x1334.png",
+      "sizes": "750x1334",
+      "type": "image/png",
+      "form_factor": "narrow"
+    },
+    {
+      "src": "/icons/splash-1284x2778.png",
+      "sizes": "1284x2778",
+      "type": "image/png",
+      "form_factor": "narrow"
+    }
+  ]
 }
