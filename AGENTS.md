@@ -7,7 +7,7 @@ or datasets. When working in the workspace, the workspace-level
 
 The repository is split into product parts:
 
-- `apps/gateway`: public API boundary and console proxy;
+- `apps/gateway`: public API boundary and console proxy (Rust/Axum);
 - `apps/city-service`: Tier-3 city infrastructure backend;
 - `apps/console`: city operations console;
 - `apps/contribution-service`: Rust backend for the public contribution portal;
@@ -162,6 +162,7 @@ npm run start:service                              # city service
 npm run dev --workspace=@synapsecity/console       # console dev server
 npm run dev:contribution                           # contribution UI dev server
 npm run build:contribution                         # contribution UI build
+(cd apps/gateway && cargo test)                    # Rust gateway tests
 (cd apps/contribution-service && cargo test)       # contribution backend tests
 docker compose up -d --build                       # production stack
 docker compose -p synapsecity up -d --no-deps --build contribution-service contribution-console

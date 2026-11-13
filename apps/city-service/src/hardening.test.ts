@@ -42,6 +42,7 @@ function json(method: string, body?: unknown): RequestInit {
 before(async () => {
   tier2 = await startMockTier2();
   process.env.SYNAPSEDX_BASE_URL = tier2.url;
+  process.env.SYNAPSEDX_API_KEY = 'city-hardening-tier2-key';
 
   turnstile = http.createServer(async (req, res) => {
     const chunks: Buffer[] = [];

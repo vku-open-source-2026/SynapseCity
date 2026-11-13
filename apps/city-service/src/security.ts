@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 import type { NextFunction, Request, Response } from 'express';
+import { verifyTier2Turnstile, tier2MapConfigured } from './tier2-map';
 
 /**
  * Edge-abuse and observability helpers for the City service.
  *
  * - a small fixed-window rate limiter for anonymous/auth endpoints;
- * - server-side Cloudflare Turnstile verification (the browser widget alone is
- *   decorative);
+ * - server-side Turnstile verification through the Tier-2 security capability
+ *   (City never holds the CAPTCHA provider secret);
  * - Prometheus-style request counters and structured request logs.
  *
  * None of these are domain stores: the counters and limiter buckets are
@@ -70,16 +71,14 @@ export interface TurnstileResult {
 }
 
 /**
- * Verify a Turnstile token server-side.
+ * Verify a Turnstile token through the Tier-2 security capability.
  *
- * If no secret is configured the call succeeds only when Turnstile is not
- * required (`REQUIRE_TURNSTILE=true` turns it into a hard failure so a
- * production deployment cannot silently run unprotected). The verification URL
- * is overridable for explicit tests.
+ * If Tier 2 reports that no provider is configured the call succeeds only when
+ * Turnstile is not required (`REQUIRE_TURNSTILE=true` turns it into a hard
+ * failure so a production deployment cannot silently run unprotected).
  */
 export async function verifyTurnstile(req: Request): Promise<TurnstileResult> {
-  const secret = (process.env.TURNSTILE_SECRET_KEY || '').trim();
-  if (!secret) {
+  if (!tier2MapConfigured()) {
     if (process.env.REQUIRE_TURNSTILE === 'true') {
       return { ok: false, configured: false, error: 'turnstile_not_configured' };
     }
@@ -88,25 +87,11 @@ export async function verifyTurnstile(req: Request): Promise<TurnstileResult> {
   const headerToken = req.header('cf-turnstile-response') || '';
   const body = (req.body && typeof req.body === 'object' ? req.body : {}) as Record<string, unknown>;
   const token = String(headerToken || body.turnstile_token || body['cf-turnstile-response'] || '').trim();
-  if (!token) return { ok: false, configured: true, error: 'turnstile_token_required' };
-  const url = process.env.TURNSTILE_VERIFY_URL || 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 5000);
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ secret, response: token, ...(clientKey(req) !== 'unknown' ? { remoteip: clientKey(req) } : {}) }).toString(),
-      signal: controller.signal,
-    });
-    const payload = await response.json().catch(() => null) as { success?: boolean; 'error-codes'?: string[] } | null;
-    if (response.ok && payload?.success === true) return { ok: true, configured: true };
-    return { ok: false, configured: true, error: 'turnstile_failed' };
-  } catch {
-    return { ok: false, configured: true, error: 'turnstile_unavailable' };
-  } finally {
-    clearTimeout(timer);
+  const result = await verifyTier2Turnstile(token, clientKey(req) !== 'unknown' ? clientKey(req) : undefined);
+  if (!result.ok && !result.configured && process.env.REQUIRE_TURNSTILE !== 'true') {
+    return { ok: true, configured: false };
   }
+  return result;
 }
 
 interface MetricsState {

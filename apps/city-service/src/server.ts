@@ -4,7 +4,7 @@ import express, { NextFunction, Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { CapabilitiesError, CapabilitiesClient, type Dataset } from '@synapsedx/capabilities';
 import { DATASETS, TIER2_URL, capabilitiesFromRequest, ensureDataset, objectBody, requiredString } from './domain';
-import { proxyVietMapTile, vietMapAutocomplete, vietMapConfigured, vietMapGeocode, vietMapPlace, vietMapReverse, vietMapTileStyle } from './vietmap';
+import { proxyTier2Tile, tier2MapConfigured } from './tier2-map';
 import {
   AuthedRequest,
   Permission,
@@ -67,11 +67,9 @@ import {
 } from './identity';
 import {
   geoCoderStatus,
-  geoProviderMode,
   tier2Autocomplete,
   tier2Geocode,
   tier2Reverse,
-  vietmapFallbackAllowed,
 } from './geo-provider';
 import {
   analyseCoverage,
@@ -3350,54 +3348,29 @@ app.get('/v1/geo/search-address', async (req, res, next) => {
   try {
     const query = String(req.query.q || '').trim();
     if (query.length < 2) return res.json([]);
-    if (geoProviderMode() === 'tier2') {
-      try {
-        const hits = await tier2Autocomplete(capabilitiesFromRequest(req), query, 5);
-        return res.json(hits.map((hit) => ({
-          address: hit.address,
-          coordinates: hit.coordinates,
-          city: hit.city,
-          country: hit.country,
-          ...(hit.id ? { ref_id: hit.id } : {}),
-          provider: 'synapsedx',
-        })));
-      } catch (error) {
-        if (!vietmapFallbackAllowed()) throw error;
-        console.warn('[synapsecity] geo_tier2_fallback', (error as Error).message);
-      }
-    }
-    const suggestions = await vietMapAutocomplete(query);
-    const enriched = await Promise.all(suggestions.slice(0, 5).map(async (item) => {
-      const place = item.ref_id ? await vietMapPlace(item.ref_id).catch(() => null) : null;
-      return { address: item.display || item.address || item.name || query, coordinates: { latitude: Number(place?.lat || 0), longitude: Number(place?.lng || 0) }, city: place?.city || '', country: 'Vietnam', ref_id: item.ref_id, provider: 'vietmap' };
-    }));
-    res.json(enriched.filter((item) => item.coordinates.latitude !== 0 || item.coordinates.longitude !== 0));
+    const hits = await tier2Autocomplete(capabilitiesFromRequest(req), query, 5);
+    res.json(hits.map((hit) => ({
+      address: hit.address,
+      coordinates: hit.coordinates,
+      city: hit.city,
+      country: hit.country,
+      ...(hit.id ? { ref_id: hit.id } : {}),
+      provider: 'synapsedx',
+    })));
   } catch (error) { next(error); }
 });
 app.post('/v1/geo/geocode', async (req, res, next) => {
   try {
     const text = String(privateInput(req).address || '').trim();
     if (!text) return res.status(400).json({ error: 'address_required' });
-    if (geoProviderMode() === 'tier2') {
-      try {
-        const hit = await tier2Geocode(capabilitiesFromRequest(req), text);
-        if (!hit) return res.status(404).json({ error: 'address_not_found' });
-        return res.json({
-          coordinates: hit.coordinates,
-          geojson: { type: 'Point', coordinates: [hit.coordinates.longitude, hit.coordinates.latitude] },
-          display_name: hit.address || text,
-          provider: 'synapsedx',
-        });
-      } catch (error) {
-        if (!vietmapFallbackAllowed()) throw error;
-        console.warn('[synapsecity] geo_tier2_fallback', (error as Error).message);
-      }
-    }
-    const [match] = await vietMapGeocode(text);
-    if (!match?.ref_id) return res.status(404).json({ error: 'address_not_found' });
-    const place = await vietMapPlace(match.ref_id);
-    if (!Number.isFinite(place.lat) || !Number.isFinite(place.lng)) return res.status(404).json({ error: 'coordinates_not_found' });
-    res.json({ coordinates: { latitude: place.lat, longitude: place.lng }, geojson: { type: 'Point', coordinates: [place.lng, place.lat] }, display_name: place.display || match.display || text, provider: 'vietmap' });
+    const hit = await tier2Geocode(capabilitiesFromRequest(req), text);
+    if (!hit) return res.status(404).json({ error: 'address_not_found' });
+    res.json({
+      coordinates: hit.coordinates,
+      geojson: { type: 'Point', coordinates: [hit.coordinates.longitude, hit.coordinates.latitude] },
+      display_name: hit.address || text,
+      provider: 'synapsedx',
+    });
   } catch (error) { next(error); }
 });
 app.post('/v1/geo/reverse-geocode', async (req, res, next) => {
@@ -3406,19 +3379,9 @@ app.post('/v1/geo/reverse-geocode', async (req, res, next) => {
     const latitude = Number(input.latitude);
     const longitude = Number(input.longitude);
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return res.status(400).json({ error: 'coordinates_required' });
-    if (geoProviderMode() === 'tier2') {
-      try {
-        const hit = await tier2Reverse(capabilitiesFromRequest(req), latitude, longitude);
-        if (!hit) return res.status(404).json({ error: 'address_not_found' });
-        return res.json({ address: hit.address, city: hit.city, country: hit.country, provider: 'synapsedx' });
-      } catch (error) {
-        if (!vietmapFallbackAllowed()) throw error;
-        console.warn('[synapsecity] geo_tier2_fallback', (error as Error).message);
-      }
-    }
-    const [place] = await vietMapReverse(latitude, longitude);
-    if (!place) return res.status(404).json({ error: 'address_not_found' });
-    res.json({ address: place.display || place.address || '', city: place.city || '', country: 'Vietnam', provider: 'vietmap' });
+    const hit = await tier2Reverse(capabilitiesFromRequest(req), latitude, longitude);
+    if (!hit) return res.status(404).json({ error: 'address_not_found' });
+    res.json({ address: hit.address, city: hit.city, country: hit.country, provider: 'synapsedx' });
   } catch (error) { next(error); }
 });
 
@@ -3498,6 +3461,15 @@ app.post('/v1/ingest/csv', async (req, res, next) => {
     const dataset = await ensureDataset(client, DATASETS.assets);
     const errors: Array<{ row: number; message: string }> = [];
     let created = 0;
+    // Build the asset rows first, then persist them through the Tier-2 bulk
+    // endpoint in chunks of 100. A 1,000-row contribution import used to make
+    // 1,000 sequential Tier-2 calls; batching keeps the import inside the
+    // public gateway timeout and makes daily contribution sync practical.
+    const entries: Array<{ id: string; data: Record<string, unknown>; publish: true }> = [];
+    const rowNumbers: number[] = [];
+    let skipped = 0;
+    const isDuplicateFailure = (failure: { code?: string; message?: string }): boolean =>
+      /already_exists|record_already_exists|duplicate/i.test(`${failure.code || ''} ${failure.message || ''}`);
     for (const [index, row] of parsed.rows.entries()) {
       const latitude = Number(row.latitude);
       const longitude = Number(row.longitude);
@@ -3519,43 +3491,126 @@ app.post('/v1/ingest/csv', async (req, res, next) => {
           continue;
         }
       }
-      const asset = {
-        assetId: row.asset_code,
-        asset_code: row.asset_code,
-        name: row.name,
-        feature_type: row.feature_type,
-        feature_code: row.feature_code,
-        category: row.category || row.feature_type,
-        status: row.status || 'active',
-        geometry: { type: 'Point', coordinates: [longitude, latitude] },
-        location: { address: row.address || '', coordinates: { longitude, latitude } },
-        properties,
-        source: 'synapsecity-ingest',
-        sourceVersion: '1.0.0',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      try {
-        await client.records.create(dataset.id, asset, { id: row.asset_code, publish: true });
-        created += 1;
-      } catch (error) {
-        errors.push({ row: index + 2, message: error instanceof Error ? error.message : 'asset_create_failed' });
+      // Optional GeoJSON geometry column. Points can still be sent as
+      // latitude/longitude; lines and polygons keep their real geometry.
+      let geometry: Record<string, unknown> = { type: 'Point', coordinates: [longitude, latitude] };
+      if (row.geometry) {
+        try {
+          const parsedGeometry = JSON.parse(row.geometry);
+          if (!parsedGeometry || typeof parsedGeometry !== 'object' || typeof parsedGeometry.type !== 'string' || !Array.isArray(parsedGeometry.coordinates)) {
+            errors.push({ row: index + 2, message: 'geometry_must_be_geojson' });
+            continue;
+          }
+          geometry = parsedGeometry;
+        } catch {
+          errors.push({ row: index + 2, message: 'geometry_must_be_valid_json' });
+          continue;
+        }
       }
+      entries.push({
+        id: row.asset_code,
+        publish: true,
+        data: {
+          assetId: row.asset_code,
+          asset_code: row.asset_code,
+          name: row.name,
+          feature_type: row.feature_type,
+          feature_code: row.feature_code,
+          category: row.category || row.feature_type,
+          status: row.status || 'active',
+          geometry,
+          location: { address: row.address || '', coordinates: { longitude, latitude } },
+          properties,
+          source: 'synapsecity-ingest',
+          sourceVersion: '1.0.0',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      });
+      rowNumbers.push(index + 2);
     }
+    // Idempotent daily sync: skip assets the dataset already has instead of
+    // sending duplicate ids through the Tier-2 bulk endpoint.
+    const existingIds = new Set(
+      (await listAllRecords(client, dataset.id)).map((record) => String(record.id)),
+    );
+    const fresh: typeof entries = [];
+    const freshRowNumbers: number[] = [];
+    for (let i = 0; i < entries.length; i += 1) {
+      if (existingIds.has(entries[i].id)) continue;
+      fresh.push(entries[i]);
+      freshRowNumbers.push(rowNumbers[i]);
+    }
+    skipped += entries.length - fresh.length;
+    // Tier-2 bulk writes one record at a time internally, so a 100-record
+    // request can exceed the 20s SDK timeout. Use small chunks with bounded
+    // concurrency: a 200-row import finishes in a few waves while keeping the
+    // public request below the edge/workflow timeout.
+    const CHUNK = 25;
+    const CONCURRENCY = 4;
+    let cursor = 0;
+    const runChunk = async (offset: number, chunk: typeof fresh): Promise<void> => {
+      try {
+        const result = await client.records.bulkCreate(dataset.id, chunk);
+        created += result.created.length;
+        for (const failure of result.errors) {
+          if (isDuplicateFailure(failure)) {
+            skipped += 1;
+            continue;
+          }
+          const absolute = offset + Number(failure.index || 0);
+          errors.push({ row: freshRowNumbers[absolute] ?? absolute + 2, message: failure.message || 'asset_create_failed' });
+        }
+      } catch (error) {
+        // A wholly duplicate chunk returns 400. Treat it as an idempotent skip
+        // so a retried daily sync can still acknowledge the batch.
+        const bodyErrors = (error as { body?: { errors?: Array<{ index?: number; code?: string; message?: string }> } })?.body?.errors;
+        if (Array.isArray(bodyErrors) && bodyErrors.length > 0) {
+          for (const failure of bodyErrors) {
+            if (isDuplicateFailure(failure)) {
+              skipped += 1;
+              continue;
+            }
+            const absolute = offset + Number(failure.index || 0);
+            errors.push({ row: freshRowNumbers[absolute] ?? absolute + 2, message: failure.message || 'asset_create_failed' });
+          }
+          return;
+        }
+        const message = error instanceof Error ? error.message : 'asset_bulk_create_failed';
+        for (let i = 0; i < chunk.length; i += 1) {
+          errors.push({ row: freshRowNumbers[offset + i] ?? offset + i + 2, message });
+        }
+      }
+    };
+    const worker = async (): Promise<void> => {
+      for (;;) {
+        const offset = cursor;
+        cursor += CHUNK;
+        if (offset >= fresh.length) return;
+        await runChunk(offset, fresh.slice(offset, offset + CHUNK));
+      }
+    };
+    const workerCount = Math.min(CONCURRENCY, Math.max(1, Math.ceil(fresh.length / CHUNK)));
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
     const job = await genericWrite(req, 'ingest', {
       filename,
       status: 'completed',
       accepted: parsed.rows.length,
       created,
+      skipped,
       failed: errors.length,
       errors: errors.slice(0, 50),
       completed_at: new Date().toISOString(),
     });
-    res.status(202).json({
-      message: `Ingested ${created} of ${parsed.rows.length} asset rows`,
+    // A completely failed batch must not look like a successful sync: the
+    // workflow only acknowledges features after a 2xx response.
+    const allFailed = created === 0 && skipped === 0 && errors.length > 0;
+    res.status(allFailed ? 502 : 202).json({
+      message: `Ingested ${created} of ${parsed.rows.length} asset rows (${skipped} already present)`,
       job_id: job.id,
       accepted: parsed.rows.length,
       created,
+      skipped,
       errors,
     });
   } catch (error) { next(error); }
@@ -3774,9 +3829,9 @@ app.get('/v1/public/incidents/:incidentId', async (req, res, next) => {
 // ---------------------------------------------------------------------------
 // AI and map capability instances
 // ---------------------------------------------------------------------------
-app.get('/v1/map/config', (_req, res) => res.json(vietMapConfigured() ? { provider: 'vietmap', tileUrl: '/v1/map/tiles/{z}/{x}/{y}.png', attribution: '&copy; VIETMAP', maxZoom: 20, maxNativeZoom: 20, style: vietMapTileStyle() } : { provider: 'openstreetmap', tileUrl: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attribution: '&copy; OpenStreetMap contributors', maxZoom: 20, maxNativeZoom: 19 }));
-app.get('/v1/map/tiles/:z/:x/:y.png', async (req, res, next) => { try { await proxyVietMapTile(Number(req.params.z), Number(req.params.x), Number(req.params.y), res); } catch (error) { next(error); } });
-app.get('/v1/map/status', (_req, res) => res.json({ provider: vietMapConfigured() ? 'vietmap' : 'openstreetmap', configured: vietMapConfigured(), service: 'synapsecity' }));
+app.get('/v1/map/config', (_req, res) => res.json({ provider: 'synapsedx', tileUrl: '/v1/map/tiles/{z}/{x}/{y}.png', attribution: '&copy; VIETMAP', maxZoom: 20, maxNativeZoom: 20, style: 'tm' }));
+app.get('/v1/map/tiles/:z/:x/:y.png', async (req, res, next) => { try { await proxyTier2Tile(Number(req.params.z), Number(req.params.x), Number(req.params.y), res); } catch (error) { next(error); } });
+app.get('/v1/map/status', (_req, res) => res.json({ provider: 'synapsedx', configured: tier2MapConfigured(), service: 'synapsecity' }));
 
 // Public assistant: anonymous visitors get a strict per-IP budget; signed-in
 // operators share the same limiter (the session still scopes upstream calls).
@@ -3829,13 +3884,8 @@ app.use((error: any, _req: Request, res: Response, _next: NextFunction) => {
 export function createServer() { return app; }
 
 if (require.main === module) {
-  if (process.env.NODE_ENV === 'production' && !(process.env.TURNSTILE_SECRET_KEY || '').trim()) {
-    const banner = '='.repeat(72);
-    console.error(banner);
-    console.error('[synapsecity] WARNING: TURNSTILE_SECRET_KEY is not configured in production.');
-    console.error('[synapsecity] Anonymous report endpoints (/v1/public/*) run WITHOUT bot protection.');
-    console.error('[synapsecity] Set TURNSTILE_SECRET_KEY (+ REQUIRE_TURNSTILE=true) to enable it.');
-    console.error(banner);
+  if (process.env.NODE_ENV === 'production' && process.env.REQUIRE_TURNSTILE !== 'true') {
+    console.warn('[synapsecity] REQUIRE_TURNSTILE is not enabled; anonymous reports rely on the Tier-2 Turnstile adapter when configured.');
   }
   app.listen(PORT, () => console.log(`[synapsecity] Tier-3 API listening on :${PORT}; Tier-2=${TIER2_URL}`));
 }

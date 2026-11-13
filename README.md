@@ -36,7 +36,7 @@ root. The repo-local summary is [`PRODUCT_BOUNDARY.md`](PRODUCT_BOUNDARY.md).
 ## Architecture
 
 ```text
-apps/gateway        public HTTPS API boundary and console proxy (port 8080)
+apps/gateway        public HTTPS API boundary and console proxy (Rust/Axum, port 8080)
 apps/city-service   city infrastructure domain backend (port 8083)
 apps/console        city operations console
 apps/contribution-service  public data-contribution backend (contribution.synapsecity.sbs)

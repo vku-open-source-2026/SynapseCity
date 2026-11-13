@@ -84,6 +84,22 @@ before(async () => {
         const offset = Number(url.searchParams.get('offset') || 0);
         return send(res, 200, { items: items.slice(offset, offset + limit), total: items.length, limit, offset });
       }
+      if (parts.length === 6 && parts[4] === 'records' && parts[5] === 'bulk' && req.method === 'POST') {
+        const input = (body || {}) as { records?: Array<{ id?: string; data?: Record<string, unknown> }> };
+        const created: Array<{ id: string; data: Record<string, unknown> }> = [];
+        const errors: Array<{ index: number; code: string; message: string }> = [];
+        for (const [index, entry] of (input.records || []).entries()) {
+          const id = String(entry.id || `record-${recordsFor(datasetId).size + 1}`);
+          if (recordsFor(datasetId).has(id)) {
+            errors.push({ index, code: 'record_already_exists', message: 'record exists' });
+            continue;
+          }
+          const data = { ...(entry.data || {}), id };
+          recordsFor(datasetId).set(id, data);
+          created.push({ id, data });
+        }
+        return send(res, 201, { created, errors });
+      }
       if (parts.length === 5 && parts[4] === 'records' && req.method === 'POST') {
         const input = (body || {}) as { id?: string; data?: Record<string, unknown> };
         const id = String(input.id || `record-${recordsFor(datasetId).size + 1}`);
