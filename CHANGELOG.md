@@ -5,6 +5,10 @@ Keep a Changelog format and version tags use Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+- Mobile app: new Synapse logo system (app icon, adaptive/monochrome icon,
+  splash, notification icon); Android version 0.1.1 (versionCode 2).
+
 ## [0.3.0] - 2026-11-10
 
 ### Added

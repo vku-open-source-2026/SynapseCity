@@ -10,7 +10,7 @@
  *
  * Usage:
  *   SYNAPSEDX_RELEASE_API_KEY=... node scripts/publish-release.mjs \
- *     --product synapsecity --version 0.1.0 --apk dist/SynapseCity.apk
+ *     --product synapsecity --version 0.1.1 --apk dist/SynapseCity.apk
  */
 import { createHash } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';

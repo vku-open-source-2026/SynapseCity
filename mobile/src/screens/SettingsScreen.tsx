@@ -37,7 +37,7 @@ export function SettingsScreen({
   navigate,
   onBack,
 }: SettingsScreenProps) {
-  const appVersion = Constants.expoConfig?.version ?? '0.1.0';
+  const appVersion = Constants.expoConfig?.version ?? '0.1.1';
 
   return (
     <Screen>
