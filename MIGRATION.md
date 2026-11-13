@@ -18,6 +18,7 @@ this repository.
 | geofences and data ingest | `/v1/geofences`, `/v1/ingest` | SynapseCity |
 | public NGSI-LD projections | `/v1/public/assets`, `/v1/public/incidents` | Tier 2 publication capability -> Tier 1 SynapseLDS |
 | map tiles, geocoding, AI | `/v1/map`, `/v1/geo`, `/v1/ai` | SynapseCity instance |
+| public data-contribution portal | `contribution.synapsecity.sbs` `/api/*` | SynapseCity `contribution-service` + `contribution-console` (legacy `contribution_*` SynapseBase exception) |
 | Celery/Redis jobs | capability events emitted by Tier 2 | Tier 1 SynapseQueue |
 | MongoDB collections | SynapseBase collections behind Tier 2 | Tier 1 |
 | MinIO/object storage | future Tier-2 file capability | Tier 1 managed object API |
@@ -33,8 +34,13 @@ projected and marked public before they reach SynapseLDS. The original domain
 records remain behind authenticated Tier-2 routes.
 
 The runtime split is `apps/gateway` (public edge), `apps/city-service` (domain
-backend) and `apps/console` (frontend). The domain backend only imports the
-Tier-2 SDK; the gateway and console have no platform credentials.
+backend), `apps/console` (frontend), `apps/contribution-service` (public
+contribution backend) and `apps/contribution-console` (public contribution UI).
+The domain backend only imports the Tier-2 SDK; the gateway and console have no
+platform credentials. The contribution backend is the scoped exception that
+still reads/writes `contribution_*` through the SynapseOne Rust SDK until those
+collections move to Tier 2. `openinfra/` is reference-only and is not a
+deployment source.
 
 ## Loading the legacy export
 

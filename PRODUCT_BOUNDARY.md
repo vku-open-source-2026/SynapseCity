@@ -15,6 +15,7 @@ repository).
 | Console | `https://synapsecity.sbs` (served through the gateway) |
 | Optional console alias | `https://cloud.synapsecity.sbs` (same console/gateway; operator-managed DNS/TLS) |
 | API | `https://synapsecity.sbs/v1` |
+| Contribution portal | `https://contribution.synapsecity.sbs` (`/api/*`) |
 | Sibling product | SynapseCitySOS at `https://sos.synapsecity.sbs` |
 | License | Apache-2.0 (`LICENSE`, `NOTICE`, `THIRD-PARTY.md`) |
 
@@ -66,7 +67,16 @@ These belong to SynapseCitySOS. The only permitted reference is a public HTTPS
 navigation link to `https://sos.synapsecity.sbs`; never an API call, shared
 dataset or embedded data source.
 
+The contribution portal has a legacy public `/api/sos` intake for citizen SOS
+reports. It is a data-collection surface only, not the SOS operations product:
+it must not add dispatch, EOP, SITREP, AAR, hazard feeds or command-centre
+features. SOS operations remain owned by SynapseCitySOS.
+
 ## API namespace ownership
+
+The contribution portal is deployed on its own host,
+`https://contribution.synapsecity.sbs`, under `/api/*`. It is a separate public
+data-collection edge and does not add routes to the `/v1/city` operations API.
 
 Owned:
 
@@ -129,7 +139,13 @@ Only `/health`, `/ready`, `/metrics` (optional token), `/v1/city`, `/v1/auth/*`,
 
 ## Dataset ownership
 
-Every dataset uses the `city-` prefix. A `sos-` dataset is foreign and must
+The contribution portal currently uses the legacy SynapseBase collections
+`contribution_features`, `contribution_submissions` and
+`contribution_sos_reports`. This is a scoped exception while the portal moves to
+Tier-2 datasets; the target names are `city-contribution-*`. Do not reuse these
+collections from `city-service`.
+
+Every City operations dataset uses the `city-` prefix. A `sos-` dataset is foreign and must
 never be read or written. The service fails at start-up if a configured dataset
 does not use the City prefix.
 

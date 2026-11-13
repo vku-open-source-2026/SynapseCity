@@ -32,6 +32,8 @@ root. The repo-local summary is [`PRODUCT_BOUNDARY.md`](PRODUCT_BOUNDARY.md).
 apps/gateway        public HTTPS API boundary and console proxy (port 8080)
 apps/city-service   city infrastructure domain backend (port 8083)
 apps/console        city operations console
+apps/contribution-service  public data-contribution backend (contribution.synapsecity.sbs)
+apps/contribution-console  public data-contribution UI
 infra/              public-edge snippets and deployment material
 ```
 
@@ -58,6 +60,8 @@ instances. None of them proxy SOS.
 - budgets and budget transactions;
 - operational reports;
 - city operators and user administration;
+- public data-contribution portal (submissions, moderation, leaderboard, CSV
+  export, map proxy);
 - geofences and CSV/data ingestion;
 - public asset map, public asset lookup and public incident reporting;
 - map tiles, geocoding, reverse geocoding, nearby and polygon search;

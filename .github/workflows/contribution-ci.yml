@@ -1,0 +1,66 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 VKU.VIC
+name: Contribution portal CI
+
+on:
+  pull_request:
+    paths:
+      - 'apps/contribution-service/**'
+      - 'apps/contribution-console/**'
+      - '.github/workflows/contribution-ci.yml'
+      - 'docker-compose.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/contribution-service/**'
+      - 'apps/contribution-console/**'
+      - '.github/workflows/contribution-ci.yml'
+      - 'docker-compose.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: contribution-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check out the Tier-1 Rust SDK (temporary path dependency)
+        uses: actions/checkout@v4
+        with:
+          repository: vku-open-source-2026/SynapseOne
+          path: SynapseOne
+      - name: Stage the sibling SDK path used by Cargo/Docker
+        run: cp -a "${GITHUB_WORKSPACE}/SynapseOne" "${GITHUB_WORKSPACE}/../SynapseOne"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/contribution-service
+      - run: cargo fmt --all -- --check
+        working-directory: apps/contribution-service
+      - run: cargo clippy --all-targets --locked -- -D warnings
+        working-directory: apps/contribution-service
+      - run: cargo test --locked
+        working-directory: apps/contribution-service
+
+  console:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: apps/contribution-console/package-lock.json
+      - run: npm ci
+        working-directory: apps/contribution-console
+      - run: npm run build
+        working-directory: apps/contribution-console

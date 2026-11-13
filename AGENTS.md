@@ -10,6 +10,8 @@ The repository is split into product parts:
 - `apps/gateway`: public API boundary and console proxy;
 - `apps/city-service`: Tier-3 city infrastructure backend;
 - `apps/console`: city operations console;
+- `apps/contribution-service`: Rust backend for the public contribution portal;
+- `apps/contribution-console`: React UI for the contribution portal;
 - `infra`: edge/deployment files.
 
 ## Dependency contract
@@ -26,6 +28,30 @@ The repository is split into product parts:
 - Do not call, import or proxy SynapseCitySOS. A link to
   `https://sos.synapsecity.sbs` is public navigation only.
 - Do not add cross-product imports or API calls anywhere in the workspace.
+- **Contribution exception:** `apps/contribution-service` currently uses the
+  `synapseone` Rust SDK to read/write the `contribution_*` SynapseBase
+  collections. This is a scoped legacy exception while those collections move
+  to Tier-2 datasets. It must not be copied into `city-service`, the gateway or
+  the console; no other City app may call Tier 1 directly.
+
+## Contribution portal
+
+The public data-contribution portal at `https://contribution.synapsecity.sbs`
+is owned by this repository. It was migrated from the OpenInfra reference
+implementation; `openinfra/` is not a deployment source.
+
+- Backend: `apps/contribution-service` (Rust/Axum).
+- UI: `apps/contribution-console` (React/Vite).
+- Compose: services `contribution-service` and `contribution-console` in
+  `docker-compose.yml`; aliases `contribution-backend` and
+  `contribution-frontend` on the shared edge network.
+- Env prefix: `CONTRIBUTION_*` in `.env` / `.env.example`.
+- Data: `contribution_features`, `contribution_submissions`,
+  `contribution_sos_reports` (legacy SynapseBase exception; target is Tier-2).
+- The portal may collect public citizen infrastructure submissions and SOS
+  reports, but it is **not** the SOS operations product. It must not add
+  dispatch, EOP, SITREP, AAR, hazard feeds or emergency command-centre
+  features. SOS operations remain in SynapseCitySOS.
 
 ## Feature ownership
 
@@ -41,6 +67,10 @@ centre/phase boards/rescue operations, public hazard map. Never add these
 modules, routes, types or datasets here.
 
 ## API namespace ownership
+
+The contribution portal is a separate public surface on
+`https://contribution.synapsecity.sbs` (`/api/*`). It does not add routes to the
+`/v1/city` operations API.
 
 Owned:
 
@@ -84,6 +114,11 @@ adding a route.
 
 Use only `city-*` datasets:
 
+The contribution portal uses the legacy `contribution_*` SynapseBase
+collections; those are an explicit exception, not `city-*` datasets. Do not
+reuse them from `city-service`. Migration target: `city-contribution-*`
+datasets through Tier 2.
+
 ```text
 city-assets                 city-incidents
 city-maintenance            city-iot-sensors
@@ -125,7 +160,11 @@ npm run build
 npm test
 npm run start:service                              # city service
 npm run dev --workspace=@synapsecity/console       # console dev server
+npm run dev:contribution                           # contribution UI dev server
+npm run build:contribution                         # contribution UI build
+(cd apps/contribution-service && cargo test)       # contribution backend tests
 docker compose up -d --build                       # production stack
+docker compose -p synapsecity up -d --no-deps --build contribution-service contribution-console
 ```
 
 Before release, verify:

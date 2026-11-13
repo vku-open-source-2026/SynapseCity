@@ -55,6 +55,52 @@ services:
       synapsecity:
         aliases: [synapsecity-console]
 
+  # Contribution portal (contribution.synapsecity.sbs). Migrated from the
+  # OpenInfra reference implementation; OpenInfra is not a deployment source.
+  contribution-service:
+    image: ghcr.io/${SYNAPSECITY_IMAGE_OWNER:-vku-open-source-2026}/synapsecity-contribution-service:${SYNAPSECITY_VERSION:-latest}
+    build:
+      context: ..
+      dockerfile: SynapseCity/apps/contribution-service/Dockerfile
+    restart: unless-stopped
+    environment:
+      STORAGE_BACKEND: ${CONTRIBUTION_STORAGE_BACKEND:-base}
+      SYNAPSEONE_BASE_URL: ${CONTRIBUTION_SYNAPSEONE_BASE_URL:-https://api.synapseone.space}
+      SYNAPSEONE_API_KEY: ${CONTRIBUTION_SYNAPSEONE_API_KEY:-}
+      SYNC_SHARED_SECRET: ${CONTRIBUTION_SYNC_SHARED_SECRET:-}
+      VIETMAP_API_KEY: ${CONTRIBUTION_VIETMAP_API_KEY:-}
+      JWT_SECRET_KEY: ${CONTRIBUTION_JWT_SECRET_KEY:-}
+      ADMIN_USERNAME: ${CONTRIBUTION_ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${CONTRIBUTION_ADMIN_PASSWORD:-}
+      ENVIRONMENT: production
+      CORS_ORIGINS: ${CONTRIBUTION_CORS_ORIGINS:-https://contribution.synapsecity.sbs}
+      BIND_ADDR: 0.0.0.0:8000
+      TRUST_PROXY_HEADERS: "true"
+    expose: ["8000"]
+    networks:
+      edge:
+        aliases: [contribution-backend]
+    security_opt:
+      - no-new-privileges:true
+
+  contribution-console:
+    image: ghcr.io/${SYNAPSECITY_IMAGE_OWNER:-vku-open-source-2026}/synapsecity-contribution-console:${SYNAPSECITY_VERSION:-latest}
+    build:
+      context: ./apps/contribution-console
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ""
+    restart: unless-stopped
+    expose: ["5173"]
+    networks:
+      edge:
+        aliases: [contribution-frontend]
+    security_opt:
+      - no-new-privileges:true
+
 networks:
   synapsecity:
     name: synapsecity-public-stack
+  edge:
+    external: true
+    name: synapseone_synapseone-net

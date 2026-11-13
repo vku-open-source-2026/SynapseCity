@@ -5,7 +5,9 @@
   "license": "Apache-2.0",
   "description": "SynapseCity Tier-3 infrastructure product migrated from OpenInfra",
   "workspaces": [
-    "apps/*"
+    "apps/city-service",
+    "apps/console",
+    "apps/gateway"
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
@@ -16,6 +18,8 @@
     "demo:seed": "node scripts/demo-seed.mjs",
     "demo:reset": "node scripts/demo-reset.mjs",
     "import:openinfra": "node scripts/import-openinfra.mjs",
-    "workflows:validate": "node workflows/validate.mjs"
+    "workflows:validate": "node workflows/validate.mjs",
+    "build:contribution": "npm --prefix apps/contribution-console run build",
+    "dev:contribution": "npm --prefix apps/contribution-console run dev"
   }
 }
