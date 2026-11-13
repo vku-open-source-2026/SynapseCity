@@ -1733,6 +1733,8 @@ dependencies = [
 [[package]]
 name = "synapseone"
 version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dafdf52b097993f69bc2496418440898f18b2b3c3c5ef620cf37bdb8981fd544"
 dependencies = [
  "bytes",
  "http",

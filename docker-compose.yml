@@ -60,8 +60,8 @@ services:
   contribution-service:
     image: ghcr.io/${SYNAPSECITY_IMAGE_OWNER:-vku-open-source-2026}/synapsecity-contribution-service:${SYNAPSECITY_VERSION:-latest}
     build:
-      context: ..
-      dockerfile: SynapseCity/apps/contribution-service/Dockerfile
+      context: ./apps/contribution-service
+      dockerfile: Dockerfile
     restart: unless-stopped
     environment:
       STORAGE_BACKEND: ${CONTRIBUTION_STORAGE_BACKEND:-base}

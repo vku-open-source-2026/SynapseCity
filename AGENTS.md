@@ -29,7 +29,7 @@ The repository is split into product parts:
   `https://sos.synapsecity.sbs` is public navigation only.
 - Do not add cross-product imports or API calls anywhere in the workspace.
 - **Contribution exception:** `apps/contribution-service` currently uses the
-  `synapseone` Rust SDK to read/write the `contribution_*` SynapseBase
+  published `synapseone` Rust SDK from crates.io to read/write the `contribution_*` SynapseBase
   collections. This is a scoped legacy exception while those collections move
   to Tier-2 datasets. It must not be copied into `city-service`, the gateway or
   the console; no other City app may call Tier 1 directly.

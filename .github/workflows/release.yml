@@ -18,13 +18,6 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - name: Check out the Tier-1 Rust SDK (contribution service path dependency)
-        uses: actions/checkout@v4
-        with:
-          repository: vku-open-source-2026/SynapseOne
-          path: SynapseOne
-      - name: Stage the sibling SDK path used by Cargo/Docker
-        run: cp -a "${GITHUB_WORKSPACE}/SynapseOne" "${GITHUB_WORKSPACE}/../SynapseOne"
       - uses: dtolnay/rust-toolchain@stable
       - uses: actions/setup-node@v4
         with:

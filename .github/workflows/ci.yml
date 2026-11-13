@@ -62,15 +62,6 @@ jobs:
       - name: Browser E2E
         run: npm run test:e2e --workspace=@synapsecity/console
 
-      - name: Check out the Tier-1 Rust SDK (contribution service path dependency)
-        uses: actions/checkout@v4
-        with:
-          repository: vku-open-source-2026/SynapseOne
-          path: SynapseOne
-
-      - name: Stage the sibling SDK path used by Docker
-        run: cp -a "${GITHUB_WORKSPACE}/SynapseOne" "${GITHUB_WORKSPACE}/../SynapseOne"
-
       - name: Prepare compose env
         run: cp .env.example .env
 

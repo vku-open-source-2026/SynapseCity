@@ -93,19 +93,16 @@ SYNC_SHARED_SECRET=testsecret \
 ./target/release/contribution-backend
 ```
 
-The crate depends on the local `synapseone` SDK at
-`SynapseOne/sdks/sdk-rust`. After the SDK is published, replace the `path`
-dependency with `synapseone = "0.9"`.
+The crate resolves `synapseone = "0.9.0"` from crates.io. No sibling checkout
+or `path` dependency is required.
 
 ## Docker
 
-Build from the **workspace root** (the Rust SDK is a sibling repository):
+Build from this directory (self-contained context):
 
 ```bash
-cd /home/phamngoclananh30032009/OLP_OSS_2026
-docker build \
-  -f SynapseCity/apps/contribution-service/Dockerfile \
-  -t synapsecity-contribution-service:latest .
+cd SynapseCity/apps/contribution-service
+docker build -t synapsecity-contribution-service:latest .
 ```
 
 The service is part of the SynapseCity stack:
