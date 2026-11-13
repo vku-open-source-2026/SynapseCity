@@ -38,9 +38,9 @@ backend), `apps/console` (frontend), `apps/contribution-service` (public
 contribution backend) and `apps/contribution-console` (public contribution UI).
 The domain backend only imports the Tier-2 SDK; the gateway and console have no
 platform credentials. The contribution backend is the scoped exception that
-still reads/writes `contribution_*` through the published SynapseOne Rust SDK from crates.io until those
-collections move to Tier 2. `openinfra/` is reference-only and is not a
-deployment source.
+still reads/writes `contribution_*` through the published SynapseOne Rust SDK
+from crates.io until those collections move to Tier 2. The `openinfra/` checkout
+has been removed and is not a deployment source.
 
 ## Loading the legacy export
 

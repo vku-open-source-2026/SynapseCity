@@ -38,7 +38,7 @@ The repository is split into product parts:
 
 The public data-contribution portal at `https://contribution.synapsecity.sbs`
 is owned by this repository. It was migrated from the OpenInfra reference
-implementation; `openinfra/` is not a deployment source.
+implementation; the `openinfra/` checkout has been removed and must not be recreated.
 
 - Backend: `apps/contribution-service` (Rust/Axum).
 - UI: `apps/contribution-console` (React/Vite).

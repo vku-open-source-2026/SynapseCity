@@ -26,8 +26,8 @@ contract and persists through the SynapseBase collections
 * Compose: `SynapseCity/docker-compose.yml` services
   `contribution-service` and `contribution-console`
 * Public host: `contribution.synapsecity.sbs`
-* The old `openinfra/datacollector` project is reference-only and must stay
-  stopped.
+* The old `openinfra/datacollector` project and the entire OpenInfra checkout
+  have been removed; do not recreate them.
 
 ## Endpoints
 
@@ -125,7 +125,7 @@ docker compose -p synapsecity up -d --no-deps --build contribution-service contr
 * `/health`, `/ready`, `/api/health` and `/api/ready` are new.
 * Password comparison is constant-time.
 * `STORAGE_BACKEND=json` is a development fallback only; production uses Base.
-* The service is SynapseCity-owned; `openinfra/` is reference material only.
+* The service is SynapseCity-owned; the OpenInfra checkout has been removed.
 
 ## Tests
 
