@@ -104,6 +104,11 @@ GitHub release: <https://github.com/vku-open-source-2026/SynapseCity/releases/ta
 
 SHA-256: `dce9b691ef578d81370b86d7ef767b3eb12aa96e7c149cd7001698a6c0515aa5`
 
+> **Known issue (0.1.1):** the production public asset-detail lookup by asset
+> code (`GET /v1/public/assets/:code`) returns 404; lookup by record id works.
+> A server-side fix is pending, so the in-app asset detail screen can show
+> "not found" for some assets.
+
 CI builds an unsigned APK; the production release job signs it with the
 protected keystore and publishes it through the Tier-2 files capability. See
 [`mobile/RELEASING.md`](mobile/RELEASING.md).

@@ -7,6 +7,14 @@ theme and re-audits the widget end to end.
 Status: **PASS with documented medium/low limitations; no open critical or high
 finding.**
 
+## Known issue (0.1.1)
+
+The production public asset-detail lookup by asset code
+(`GET /v1/public/assets/:code`) returns 404 for assets beyond the first
+records page; lookup by record id works. A server-side fix is pending
+(`findRecord` should scan all pages, not one 500-record page). The Android
+build itself is signed and verified; this is a backend contract issue.
+
 ## 1. Delivered
 
 | Item | Location |
