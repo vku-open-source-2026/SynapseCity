@@ -1,0 +1,251 @@
+{
+  "format": "synapsedx-plugin",
+  "formatVersion": 1,
+  "plugin": {
+    "product": "city",
+    "name": "City maintenance workshop",
+    "slug": "city-maintenance-workshop",
+    "audience": "admin",
+    "roles": [
+      "admin",
+      "manager"
+    ],
+    "widgets": [
+      {
+        "id": "intro",
+        "text": "Scheduling and execution stay in City-owned workflow source. The page updates the same Tier-2 maintenance dataset used by the technician workspace.",
+        "type": "text",
+        "title": "Plan, assign and complete work orders",
+        "width": "full"
+      },
+      {
+        "id": "maintenance-metric",
+        "type": "metric",
+        "title": "Work orders",
+        "width": "half",
+        "resource": "maintenance"
+      },
+      {
+        "id": "assets-metric",
+        "type": "metric",
+        "title": "Assets covered",
+        "width": "half",
+        "resource": "assets"
+      },
+      {
+        "id": "incidents-metric",
+        "type": "metric",
+        "title": "Incidents linked",
+        "width": "half",
+        "resource": "incidents"
+      },
+      {
+        "id": "maintenance-table",
+        "type": "table",
+        "title": "Work orders",
+        "width": "full",
+        "columns": [
+          "id",
+          "work_order_number",
+          "asset_id",
+          "title",
+          "priority",
+          "status",
+          "technician",
+          "scheduled_date",
+          "actual_end_time"
+        ],
+        "resource": "maintenance"
+      },
+      {
+        "id": "maintenance-create",
+        "type": "form",
+        "title": "Create a work order",
+        "width": "full",
+        "action": "create",
+        "fields": [
+          {
+            "name": "asset_id",
+            "type": "text",
+            "label": "Asset id",
+            "required": true
+          },
+          {
+            "name": "title",
+            "type": "text",
+            "label": "Title",
+            "required": true
+          },
+          {
+            "name": "priority",
+            "type": "text",
+            "label": "Priority"
+          },
+          {
+            "name": "scheduled_date",
+            "type": "text",
+            "label": "Scheduled date"
+          },
+          {
+            "name": "description",
+            "type": "textarea",
+            "label": "Description"
+          },
+          {
+            "name": "estimated_cost",
+            "type": "number",
+            "label": "Estimated cost"
+          }
+        ],
+        "resource": "maintenance",
+        "workflowRef": {
+          "name": "city-maintenance-create",
+          "checksum": "ad8bf0ddc4557049b7a5485e1494cac7486a00e5fc0e2d3330f85035353d5528"
+        }
+      },
+      {
+        "id": "maintenance-assign",
+        "type": "form",
+        "title": "Assign a work order",
+        "width": "half",
+        "action": "update",
+        "fields": [
+          {
+            "name": "work_order_id",
+            "type": "text",
+            "label": "Work order id",
+            "required": true
+          },
+          {
+            "name": "assigned_to",
+            "type": "text",
+            "label": "Technician",
+            "required": true
+          }
+        ],
+        "resource": "maintenance",
+        "workflowRef": {
+          "name": "city-maintenance-assign",
+          "checksum": "6a62ad14c1ddbbfd5da2c6fd5f595a5c2679aeebc6cf3322f98d041cdba04361"
+        }
+      },
+      {
+        "id": "maintenance-start",
+        "type": "form",
+        "title": "Start a work order",
+        "width": "half",
+        "action": "update",
+        "fields": [
+          {
+            "name": "work_order_id",
+            "type": "text",
+            "label": "Work order id",
+            "required": true
+          }
+        ],
+        "resource": "maintenance",
+        "workflowRef": {
+          "name": "city-maintenance-start",
+          "checksum": "dfd35d0edde3fdf572da52145087325551743c5dbae003b985fe0899859107ae"
+        }
+      },
+      {
+        "id": "maintenance-complete",
+        "type": "form",
+        "title": "Complete a work order",
+        "width": "half",
+        "action": "update",
+        "fields": [
+          {
+            "name": "work_order_id",
+            "type": "text",
+            "label": "Work order id",
+            "required": true
+          },
+          {
+            "name": "work_performed",
+            "type": "textarea",
+            "label": "Work performed"
+          },
+          {
+            "name": "actual_cost",
+            "type": "number",
+            "label": "Actual cost"
+          },
+          {
+            "name": "notes",
+            "type": "textarea",
+            "label": "Notes"
+          }
+        ],
+        "resource": "maintenance",
+        "workflowRef": {
+          "name": "city-maintenance-complete",
+          "checksum": "bd4a31669699c7ff5241e082d506802e6c875700870084a484c50da8381288a7"
+        }
+      },
+      {
+        "id": "maintenance-cancel",
+        "type": "form",
+        "title": "Cancel a work order",
+        "width": "half",
+        "action": "update",
+        "fields": [
+          {
+            "name": "work_order_id",
+            "type": "text",
+            "label": "Work order id",
+            "required": true
+          },
+          {
+            "name": "notes",
+            "type": "textarea",
+            "label": "Reason"
+          }
+        ],
+        "resource": "maintenance",
+        "workflowRef": {
+          "name": "city-maintenance-cancel",
+          "checksum": "6f898665f92f0ff8f882c8e45c3fd49557ff45a7b446e5d412a4c6ee06445e36"
+        }
+      },
+      {
+        "id": "maintenance-review",
+        "type": "form",
+        "title": "Approve or reject a work order",
+        "width": "half",
+        "action": "execute",
+        "fields": [
+          {
+            "name": "record_id",
+            "type": "text",
+            "label": "Work order id",
+            "required": true
+          },
+          {
+            "name": "decision",
+            "type": "text",
+            "label": "Decision: approve or reject",
+            "required": true
+          },
+          {
+            "name": "notes",
+            "type": "textarea",
+            "label": "Review note"
+          }
+        ],
+        "resource": "maintenance",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        }
+      }
+    ]
+  },
+  "source": {
+    "repository": "https://github.com/vku-open-source-2026/SynapseCity",
+    "path": "plugins/city-maintenance-workshop.plugin.json",
+    "revision": "2026-11-14.3"
+  },
+  "checksum": "sha256:297a8f80c146f445252154ce83577d12bf1bd557edc9123bce3cd5823ed060c3"
+}

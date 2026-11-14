@@ -1,0 +1,258 @@
+{
+  "format": "synapsedx-plugin",
+  "formatVersion": 1,
+  "plugin": {
+    "product": "city",
+    "name": "City asset registry",
+    "slug": "city-asset-registry",
+    "audience": "admin",
+    "roles": [
+      "admin",
+      "manager"
+    ],
+    "widgets": [
+      {
+        "id": "intro",
+        "text": "Register infrastructure assets, keep lifecycle state current, and retire records without bypassing the City workflow review. Asset forms write through the Tier-2 records API using the organization technical identity.",
+        "type": "text",
+        "title": "Asset lifecycle and location",
+        "width": "full"
+      },
+      {
+        "id": "assets-metric",
+        "type": "metric",
+        "title": "Assets",
+        "width": "half",
+        "resource": "assets"
+      },
+      {
+        "id": "incidents-metric",
+        "type": "metric",
+        "title": "Linked incidents",
+        "width": "half",
+        "resource": "incidents"
+      },
+      {
+        "id": "maintenance-metric",
+        "type": "metric",
+        "title": "Linked work orders",
+        "width": "half",
+        "resource": "maintenance"
+      },
+      {
+        "id": "assets-table",
+        "type": "table",
+        "title": "Assets",
+        "width": "full",
+        "columns": [
+          "id",
+          "asset_code",
+          "name",
+          "feature_type",
+          "category",
+          "status",
+          "condition",
+          "lifecycle_stage",
+          "address",
+          "owner"
+        ],
+        "resource": "assets"
+      },
+      {
+        "id": "geofences-table",
+        "type": "table",
+        "title": "Geofences and service areas",
+        "width": "full",
+        "columns": [
+          "id",
+          "name",
+          "type",
+          "category",
+          "active"
+        ],
+        "resource": "geofences"
+      },
+      {
+        "id": "asset-create",
+        "type": "form",
+        "title": "Register an asset",
+        "width": "full",
+        "action": "create",
+        "fields": [
+          {
+            "name": "name",
+            "type": "text",
+            "label": "Name",
+            "required": true
+          },
+          {
+            "name": "asset_code",
+            "type": "text",
+            "label": "Asset code"
+          },
+          {
+            "name": "feature_type",
+            "type": "text",
+            "label": "Feature type"
+          },
+          {
+            "name": "feature_code",
+            "type": "text",
+            "label": "Feature code"
+          },
+          {
+            "name": "category",
+            "type": "text",
+            "label": "Category"
+          },
+          {
+            "name": "status",
+            "type": "text",
+            "label": "Status"
+          },
+          {
+            "name": "description",
+            "type": "textarea",
+            "label": "Description"
+          },
+          {
+            "name": "address",
+            "type": "text",
+            "label": "Address"
+          },
+          {
+            "name": "ward",
+            "type": "text",
+            "label": "Ward"
+          },
+          {
+            "name": "district",
+            "type": "text",
+            "label": "District"
+          },
+          {
+            "name": "city",
+            "type": "text",
+            "label": "City"
+          },
+          {
+            "name": "owner",
+            "type": "text",
+            "label": "Owning unit"
+          },
+          {
+            "name": "managing_unit",
+            "type": "text",
+            "label": "Managing unit"
+          },
+          {
+            "name": "latitude",
+            "type": "number",
+            "label": "Latitude"
+          },
+          {
+            "name": "longitude",
+            "type": "number",
+            "label": "Longitude"
+          },
+          {
+            "name": "properties_json",
+            "type": "textarea",
+            "label": "Extra properties (JSON)"
+          }
+        ],
+        "resource": "assets",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        }
+      },
+      {
+        "id": "asset-update",
+        "type": "form",
+        "title": "Update asset lifecycle",
+        "width": "full",
+        "action": "update",
+        "fields": [
+          {
+            "name": "record_id",
+            "type": "text",
+            "label": "Asset id",
+            "required": true
+          },
+          {
+            "name": "name",
+            "type": "text",
+            "label": "Name"
+          },
+          {
+            "name": "status",
+            "type": "text",
+            "label": "Status"
+          },
+          {
+            "name": "condition",
+            "type": "text",
+            "label": "Condition"
+          },
+          {
+            "name": "lifecycle_stage",
+            "type": "text",
+            "label": "Lifecycle stage"
+          },
+          {
+            "name": "address",
+            "type": "text",
+            "label": "Address"
+          },
+          {
+            "name": "owner",
+            "type": "text",
+            "label": "Owning unit"
+          },
+          {
+            "name": "managing_unit",
+            "type": "text",
+            "label": "Managing unit"
+          },
+          {
+            "name": "description",
+            "type": "textarea",
+            "label": "Description"
+          }
+        ],
+        "resource": "assets",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        }
+      },
+      {
+        "id": "asset-delete",
+        "type": "form",
+        "title": "Retire an asset record",
+        "width": "half",
+        "action": "delete",
+        "fields": [
+          {
+            "name": "record_id",
+            "type": "text",
+            "label": "Asset id",
+            "required": true
+          }
+        ],
+        "resource": "assets",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        }
+      }
+    ]
+  },
+  "source": {
+    "repository": "https://github.com/vku-open-source-2026/SynapseCity",
+    "path": "plugins/city-asset-registry.plugin.json",
+    "revision": "2026-11-14.3"
+  },
+  "checksum": "sha256:ab4856f04c7c4f42d8f2605c0b53c370fa28509cc7bcd5d7ad04db81d20e1ef8"
+}

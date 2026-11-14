@@ -1,0 +1,190 @@
+{
+  "format": "synapsedx-plugin",
+  "formatVersion": 1,
+  "plugin": {
+    "product": "city",
+    "name": "City manager review",
+    "slug": "city-manager-review",
+    "audience": "admin",
+    "roles": [
+      "admin",
+      "manager"
+    ],
+    "widgets": [
+      {
+        "id": "intro",
+        "text": "One view for budgets, maintenance approvals, incident verification and report readiness. Each decision form executes a reviewed City workflow and records the actor.",
+        "type": "text",
+        "title": "Review lane for approvals and publication",
+        "width": "full"
+      },
+      {
+        "id": "budgets-metric",
+        "type": "metric",
+        "title": "Budgets awaiting action",
+        "width": "half",
+        "resource": "budgets"
+      },
+      {
+        "id": "maintenance-metric",
+        "type": "metric",
+        "title": "Work orders awaiting action",
+        "width": "half",
+        "resource": "maintenance"
+      },
+      {
+        "id": "incidents-metric",
+        "type": "metric",
+        "title": "Incidents awaiting verification",
+        "width": "half",
+        "resource": "incidents"
+      },
+      {
+        "id": "reports-metric",
+        "type": "metric",
+        "title": "Reports",
+        "width": "half",
+        "resource": "reports"
+      },
+      {
+        "id": "budgets-table",
+        "type": "table",
+        "title": "Budget review",
+        "width": "full",
+        "columns": [
+          "id",
+          "budget_code",
+          "fiscal_year",
+          "category",
+          "total_amount",
+          "status"
+        ],
+        "resource": "budgets"
+      },
+      {
+        "id": "maintenance-table",
+        "type": "table",
+        "title": "Maintenance review",
+        "width": "full",
+        "columns": [
+          "id",
+          "work_order_number",
+          "title",
+          "priority",
+          "status",
+          "approval_status",
+          "assigned_to"
+        ],
+        "resource": "maintenance"
+      },
+      {
+        "id": "incidents-table",
+        "type": "table",
+        "title": "Incident verification",
+        "width": "full",
+        "columns": [
+          "id",
+          "incident_number",
+          "title",
+          "severity",
+          "status",
+          "assigned_to"
+        ],
+        "resource": "incidents"
+      },
+      {
+        "id": "budget-decision",
+        "type": "form",
+        "title": "Decide a budget",
+        "width": "half",
+        "action": "execute",
+        "fields": [
+          {
+            "name": "record_id",
+            "type": "text",
+            "label": "Budget id",
+            "required": true
+          },
+          {
+            "name": "decision",
+            "type": "text",
+            "label": "Decision: approve or reject",
+            "required": true
+          },
+          {
+            "name": "notes",
+            "type": "textarea",
+            "label": "Note"
+          }
+        ],
+        "resource": "budgets",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        }
+      },
+      {
+        "id": "maintenance-decision",
+        "type": "form",
+        "title": "Decide a work order",
+        "width": "half",
+        "action": "execute",
+        "fields": [
+          {
+            "name": "record_id",
+            "type": "text",
+            "label": "Work order id",
+            "required": true
+          },
+          {
+            "name": "decision",
+            "type": "text",
+            "label": "Decision: approve or reject",
+            "required": true
+          },
+          {
+            "name": "notes",
+            "type": "textarea",
+            "label": "Note"
+          }
+        ],
+        "resource": "maintenance",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        }
+      },
+      {
+        "id": "incident-verify",
+        "type": "form",
+        "title": "Verify an incident resolution",
+        "width": "half",
+        "action": "update",
+        "fields": [
+          {
+            "name": "incident_id",
+            "type": "text",
+            "label": "Incident id",
+            "required": true
+          },
+          {
+            "name": "notes",
+            "type": "textarea",
+            "label": "Verification note"
+          }
+        ],
+        "resource": "incidents",
+        "workflowRef": {
+          "name": "city-incident-verify",
+          "checksum": "bd47fa64a2ec0feb99683a998f0724f15a8817639788edefcb8caa63fd69c9a1"
+        }
+      }
+    ]
+  },
+  "source": {
+    "repository": "https://github.com/vku-open-source-2026/SynapseCity",
+    "path": "plugins/city-manager-review.plugin.json",
+    "revision": "2026-11-14.3"
+  },
+  "checksum": "sha256:d433c6318f1ece150e8c873ce1f9cbb882717ef48af9515d7f345681b825c9c0"
+}

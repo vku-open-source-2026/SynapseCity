@@ -1,0 +1,289 @@
+{
+  "format": "synapsedx-plugin",
+  "formatVersion": 1,
+  "plugin": {
+    "product": "city",
+    "name": "City incident desk",
+    "slug": "city-incident-desk",
+    "audience": "admin",
+    "roles": [
+      "admin",
+      "manager"
+    ],
+    "widgets": [
+      {
+        "id": "intro",
+        "text": "Triage citizen and operator reports, assign an owner, record verification and close the loop. Lifecycle transitions use the reviewed City incident workflows and optimistic record versions.",
+        "type": "text",
+        "title": "Incident intake and resolution",
+        "width": "full"
+      },
+      {
+        "id": "incidents-metric",
+        "type": "metric",
+        "title": "Incidents",
+        "width": "half",
+        "resource": "incidents"
+      },
+      {
+        "id": "alerts-metric",
+        "type": "metric",
+        "title": "Alerts",
+        "width": "half",
+        "resource": "alerts"
+      },
+      {
+        "id": "maintenance-metric",
+        "type": "metric",
+        "title": "Related work orders",
+        "width": "half",
+        "resource": "maintenance"
+      },
+      {
+        "id": "incidents-table",
+        "type": "table",
+        "title": "Incident queue",
+        "width": "full",
+        "columns": [
+          "id",
+          "incident_number",
+          "title",
+          "category",
+          "severity",
+          "status",
+          "assigned_to",
+          "reported_at"
+        ],
+        "resource": "incidents"
+      },
+      {
+        "id": "alerts-table",
+        "type": "table",
+        "title": "Automatic alerts",
+        "width": "full",
+        "columns": [
+          "id",
+          "alert_type",
+          "severity",
+          "status",
+          "message",
+          "asset_id"
+        ],
+        "resource": "alerts"
+      },
+      {
+        "id": "incident-create",
+        "type": "form",
+        "title": "Report an incident",
+        "width": "full",
+        "action": "create",
+        "fields": [
+          {
+            "name": "title",
+            "type": "text",
+            "label": "Title",
+            "required": true
+          },
+          {
+            "name": "category",
+            "type": "text",
+            "label": "Category",
+            "required": true
+          },
+          {
+            "name": "severity",
+            "type": "text",
+            "label": "Severity"
+          },
+          {
+            "name": "description",
+            "type": "textarea",
+            "label": "Description"
+          },
+          {
+            "name": "address",
+            "type": "text",
+            "label": "Address"
+          },
+          {
+            "name": "latitude",
+            "type": "number",
+            "label": "Latitude"
+          },
+          {
+            "name": "longitude",
+            "type": "number",
+            "label": "Longitude"
+          }
+        ],
+        "resource": "incidents",
+        "workflowRef": {
+          "name": "city-incident-create",
+          "checksum": "9950bd892b99cba6ae904d01d474cba11932f9a4dcd33df59d9b4914f9a75d6e"
+        }
+      },
+      {
+        "id": "incident-assign",
+        "type": "form",
+        "title": "Assign an incident",
+        "width": "half",
+        "action": "update",
+        "fields": [
+          {
+            "name": "incident_id",
+            "type": "text",
+            "label": "Incident id",
+            "required": true
+          },
+          {
+            "name": "assigned_to",
+            "type": "text",
+            "label": "Operator",
+            "required": true
+          }
+        ],
+        "resource": "incidents",
+        "workflowRef": {
+          "name": "city-incident-assign",
+          "checksum": "fdba856b14fc29e9e069a766c1f80bfdc29d6d1909939bd287498c7bf9484365"
+        }
+      },
+      {
+        "id": "incident-acknowledge",
+        "type": "form",
+        "title": "Acknowledge an incident",
+        "width": "half",
+        "action": "update",
+        "fields": [
+          {
+            "name": "incident_id",
+            "type": "text",
+            "label": "Incident id",
+            "required": true
+          },
+          {
+            "name": "notes",
+            "type": "textarea",
+            "label": "Note"
+          }
+        ],
+        "resource": "incidents",
+        "workflowRef": {
+          "name": "city-incident-acknowledge",
+          "checksum": "a34af488f4212b9af90cdab7ceae1a88587f6679cfb5721aeec944399a4376d6"
+        }
+      },
+      {
+        "id": "incident-resolve",
+        "type": "form",
+        "title": "Resolve an incident",
+        "width": "half",
+        "action": "update",
+        "fields": [
+          {
+            "name": "incident_id",
+            "type": "text",
+            "label": "Incident id",
+            "required": true
+          },
+          {
+            "name": "resolution_type",
+            "type": "text",
+            "label": "Resolution type"
+          },
+          {
+            "name": "resolution_notes",
+            "type": "textarea",
+            "label": "Resolution notes"
+          }
+        ],
+        "resource": "incidents",
+        "workflowRef": {
+          "name": "city-incident-resolve",
+          "checksum": "7fd679806d1f340b1e6a39f6b70d1bebb1e01aeafe9b3777d97c3a51e242686a"
+        }
+      },
+      {
+        "id": "incident-verify",
+        "type": "form",
+        "title": "Verify a resolution",
+        "width": "half",
+        "action": "update",
+        "fields": [
+          {
+            "name": "incident_id",
+            "type": "text",
+            "label": "Incident id",
+            "required": true
+          },
+          {
+            "name": "notes",
+            "type": "textarea",
+            "label": "Verification note"
+          }
+        ],
+        "resource": "incidents",
+        "workflowRef": {
+          "name": "city-incident-verify",
+          "checksum": "bd47fa64a2ec0feb99683a998f0724f15a8817639788edefcb8caa63fd69c9a1"
+        }
+      },
+      {
+        "id": "incident-reject",
+        "type": "form",
+        "title": "Reject an incident",
+        "width": "half",
+        "action": "update",
+        "fields": [
+          {
+            "name": "incident_id",
+            "type": "text",
+            "label": "Incident id",
+            "required": true
+          },
+          {
+            "name": "notes",
+            "type": "textarea",
+            "label": "Reason"
+          }
+        ],
+        "resource": "incidents",
+        "workflowRef": {
+          "name": "city-incident-reject",
+          "checksum": "019bcd502c5c91e800cf46e18d35de28f64e81510d0ec5e4c13e3fd0185d0814"
+        }
+      },
+      {
+        "id": "incident-close",
+        "type": "form",
+        "title": "Close an incident",
+        "width": "half",
+        "action": "update",
+        "fields": [
+          {
+            "name": "incident_id",
+            "type": "text",
+            "label": "Incident id",
+            "required": true
+          },
+          {
+            "name": "notes",
+            "type": "textarea",
+            "label": "Closing note"
+          }
+        ],
+        "resource": "incidents",
+        "workflowRef": {
+          "name": "city-incident-close",
+          "checksum": "3be6563b203d91d88a855a39553ade26561bebb57a5d073332be194e5f86af0d"
+        }
+      }
+    ]
+  },
+  "source": {
+    "repository": "https://github.com/vku-open-source-2026/SynapseCity",
+    "path": "plugins/city-incident-desk.plugin.json",
+    "revision": "2026-11-14.3"
+  },
+  "checksum": "sha256:1bfa9cd536d3414e50bc73b3e0dcaa248e6f39748b5f190e80f98892f5d53337"
+}

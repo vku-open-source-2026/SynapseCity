@@ -1,0 +1,165 @@
+{
+  "format": "synapsedx-plugin",
+  "formatVersion": 1,
+  "plugin": {
+    "product": "city",
+    "name": "City data ingest",
+    "slug": "city-data-ingest",
+    "audience": "admin",
+    "roles": [
+      "admin",
+      "manager"
+    ],
+    "widgets": [
+      {
+        "id": "intro",
+        "text": "Queue ingest work, inspect imported row counts and keep the source file reference. The actual ingestion service remains a City backend concern; this page manages job metadata through the capability dataset.",
+        "type": "text",
+        "title": "CSV and batch ingest jobs",
+        "width": "full"
+      },
+      {
+        "id": "ingest-metric",
+        "type": "metric",
+        "title": "Ingest jobs",
+        "width": "half",
+        "resource": "ingest"
+      },
+      {
+        "id": "files-metric",
+        "type": "metric",
+        "title": "Stored files",
+        "width": "half",
+        "resource": "files"
+      },
+      {
+        "id": "ingest-table",
+        "type": "table",
+        "title": "Ingest jobs",
+        "width": "full",
+        "columns": [
+          "id",
+          "source",
+          "dataset",
+          "file_name",
+          "status",
+          "rows_total",
+          "rows_imported",
+          "error_message"
+        ],
+        "resource": "ingest"
+      },
+      {
+        "id": "files-table",
+        "type": "table",
+        "title": "File registry",
+        "width": "full",
+        "columns": [
+          "id",
+          "name",
+          "content_type",
+          "size",
+          "checksum"
+        ],
+        "resource": "files"
+      },
+      {
+        "id": "ingest-create",
+        "type": "form",
+        "title": "Queue an ingest job",
+        "width": "full",
+        "action": "create",
+        "fields": [
+          {
+            "name": "source",
+            "type": "text",
+            "label": "Source: csv, api or manual",
+            "required": true
+          },
+          {
+            "name": "dataset",
+            "type": "text",
+            "label": "Target dataset"
+          },
+          {
+            "name": "file_name",
+            "type": "text",
+            "label": "File name"
+          },
+          {
+            "name": "rows_total",
+            "type": "number",
+            "label": "Expected rows"
+          }
+        ],
+        "resource": "ingest",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        }
+      },
+      {
+        "id": "ingest-update",
+        "type": "form",
+        "title": "Update job progress",
+        "width": "half",
+        "action": "execute",
+        "fields": [
+          {
+            "name": "record_id",
+            "type": "text",
+            "label": "Job id",
+            "required": true
+          },
+          {
+            "name": "decision",
+            "type": "text",
+            "label": "Decision: start, complete or fail",
+            "required": true
+          },
+          {
+            "name": "rows_imported",
+            "type": "number",
+            "label": "Imported rows"
+          },
+          {
+            "name": "error_message",
+            "type": "textarea",
+            "label": "Error message"
+          }
+        ],
+        "resource": "ingest",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        }
+      },
+      {
+        "id": "ingest-delete",
+        "type": "form",
+        "title": "Remove a job record",
+        "width": "half",
+        "action": "delete",
+        "fields": [
+          {
+            "name": "record_id",
+            "type": "text",
+            "label": "Job id",
+            "required": true
+          }
+        ],
+        "resource": "ingest",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        }
+      }
+    ]
+  },
+  "source": {
+    "repository": "https://github.com/vku-open-source-2026/SynapseCity",
+    "path": "plugins/city-data-ingest.plugin.json",
+    "revision": "2026-11-14.3"
+  },
+  "checksum": "sha256:c54900f532ab75c061a4792e9f9d65e4a680579979e7dd151d95df4ddcb06290"
+}

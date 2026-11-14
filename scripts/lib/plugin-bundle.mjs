@@ -40,7 +40,11 @@ export const PRODUCT_SPEC = {
     /** Non-public City roles that may receive a workspace plugin. */
     roles: ['admin', 'manager', 'technician', 'volunteer'],
     /** Catalog resource keys owned by City. Values are never URLs. */
-    resources: ['assets', 'incidents', 'maintenance', 'iot', 'alerts', 'budgets', 'reports'],
+    resources: [
+        'assets', 'incidents', 'maintenance', 'iot', 'iotReadings', 'alerts',
+        'budgets', 'budgetTransactions', 'reports', 'users', 'geofences', 'ingest',
+        'files', 'notifications',
+    ],
 };
 
 /**

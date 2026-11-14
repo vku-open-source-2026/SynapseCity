@@ -1,0 +1,200 @@
+{
+  "format": "synapsedx-plugin",
+  "formatVersion": 1,
+  "plugin": {
+    "product": "city",
+    "name": "City people directory",
+    "slug": "city-people-admin",
+    "audience": "admin",
+    "roles": [
+      "admin"
+    ],
+    "widgets": [
+      {
+        "id": "intro",
+        "text": "Administrative directory of City operators and their operational role/status. Account authentication and organization roles remain in Tier-1 IAM and the DX membership table; this page never stores passwords.",
+        "type": "text",
+        "title": "City operator directory",
+        "width": "full"
+      },
+      {
+        "id": "users-metric",
+        "type": "metric",
+        "title": "City operators",
+        "width": "half",
+        "resource": "users"
+      },
+      {
+        "id": "users-table",
+        "type": "table",
+        "title": "Operator directory",
+        "width": "full",
+        "columns": [
+          "id",
+          "username",
+          "full_name",
+          "email",
+          "role",
+          "status",
+          "department",
+          "last_login"
+        ],
+        "resource": "users"
+      },
+      {
+        "id": "user-create",
+        "type": "form",
+        "title": "Add an operator profile",
+        "width": "full",
+        "action": "create",
+        "fields": [
+          {
+            "name": "username",
+            "type": "text",
+            "label": "Username",
+            "required": true
+          },
+          {
+            "name": "email",
+            "type": "text",
+            "label": "Email",
+            "required": true
+          },
+          {
+            "name": "full_name",
+            "type": "text",
+            "label": "Full name",
+            "required": true
+          },
+          {
+            "name": "phone",
+            "type": "text",
+            "label": "Phone"
+          },
+          {
+            "name": "role",
+            "type": "text",
+            "label": "Role: admin, manager, technician or volunteer",
+            "required": true
+          },
+          {
+            "name": "department",
+            "type": "text",
+            "label": "Department"
+          },
+          {
+            "name": "permissions_json",
+            "type": "textarea",
+            "label": "Permissions (JSON array)"
+          }
+        ],
+        "resource": "users",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        }
+      },
+      {
+        "id": "user-update",
+        "type": "form",
+        "title": "Update an operator profile",
+        "width": "half",
+        "action": "update",
+        "fields": [
+          {
+            "name": "record_id",
+            "type": "text",
+            "label": "User id",
+            "required": true
+          },
+          {
+            "name": "full_name",
+            "type": "text",
+            "label": "Full name"
+          },
+          {
+            "name": "phone",
+            "type": "text",
+            "label": "Phone"
+          },
+          {
+            "name": "role",
+            "type": "text",
+            "label": "Role"
+          },
+          {
+            "name": "status",
+            "type": "text",
+            "label": "Status"
+          },
+          {
+            "name": "department",
+            "type": "text",
+            "label": "Department"
+          },
+          {
+            "name": "permissions_json",
+            "type": "textarea",
+            "label": "Permissions (JSON array)"
+          }
+        ],
+        "resource": "users",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        }
+      },
+      {
+        "id": "user-suspend",
+        "type": "form",
+        "title": "Suspend an operator profile",
+        "width": "half",
+        "action": "update",
+        "fields": [
+          {
+            "name": "record_id",
+            "type": "text",
+            "label": "User id",
+            "required": true
+          },
+          {
+            "name": "status",
+            "type": "text",
+            "label": "Status: suspended"
+          }
+        ],
+        "resource": "users",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        }
+      },
+      {
+        "id": "user-delete",
+        "type": "form",
+        "title": "Remove an operator profile",
+        "width": "half",
+        "action": "delete",
+        "fields": [
+          {
+            "name": "record_id",
+            "type": "text",
+            "label": "User id",
+            "required": true
+          }
+        ],
+        "resource": "users",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        }
+      }
+    ]
+  },
+  "source": {
+    "repository": "https://github.com/vku-open-source-2026/SynapseCity",
+    "path": "plugins/city-people-admin.plugin.json",
+    "revision": "2026-11-14.3"
+  },
+  "checksum": "sha256:881240795752050ebf32edf6d25c954175b070dcf3e9a928cf24e62599447ce7"
+}

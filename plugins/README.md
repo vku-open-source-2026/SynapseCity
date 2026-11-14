@@ -10,8 +10,20 @@ truth for the City plugin artifacts that an administrator imports into DX.
 
 | File | Audience | Roles | Purpose |
 | --- | --- | --- | --- |
-| `city-operations-overview.plugin.json` | admin | `admin`, `manager` | Asset, incident, maintenance and alert overview |
-| `city-technician-work.plugin.json` | member | `technician` | Technician work queue and asset context |
+| `city-operations-overview.plugin.json` | admin | `admin`, `manager` | Operations command center: assets, incidents, maintenance, alerts, IoT, budgets, reports and operators |
+| `city-asset-registry.plugin.json` | admin | `admin`, `manager` | Asset lifecycle, registration, update and retirement with geofence context |
+| `city-incident-desk.plugin.json` | admin | `admin`, `manager` | Incident intake, assignment, acknowledge, resolve, verify, reject and close |
+| `city-maintenance-workshop.plugin.json` | admin | `admin`, `manager` | Work-order planning, assignment, start, complete, cancel and review |
+| `city-alert-center.plugin.json` | admin | `admin`, `manager` | Alert feed, creation, acknowledgement, resolution and dismissal |
+| `city-iot-network.plugin.json` | admin | `admin`, `manager` | Sensor registry, sensor lifecycle and reading ingest |
+| `city-budget-office.plugin.json` | admin | `admin`, `manager` | Budgets, transactions, approvals and rejection review |
+| `city-report-studio.plugin.json` | admin | `admin`, `manager` | Report requests, status transitions and report history |
+| `city-gis-workspace.plugin.json` | admin | `admin`, `manager` | Asset, incident and geofence location context |
+| `city-people-admin.plugin.json` | admin | `admin` | City operator directory and profile lifecycle |
+| `city-data-ingest.plugin.json` | admin | `admin`, `manager` | Ingest job queue, progress and file references |
+| `city-manager-review.plugin.json` | admin | `admin`, `manager` | Cross-domain approval and incident-verification lane |
+| `city-technician-work.plugin.json` | member | `technician` | Technician work queue, asset context and work notes |
+| `city-volunteer-desk.plugin.json` | member | `volunteer` | Volunteer incident/alert picture and public-style incident reporting |
 
 The declarative bundles contain metrics, tables and **workflow-bound form
 widgets**. A form carries `workflowRef` (portable) and `action`
@@ -76,8 +88,9 @@ work pages until the bound actions are verified end to end.
   safe repository-relative `plugins/*.json` path. `revision` is a short
   provenance label.
 - Widgets use only `text`, `metric`, `table` and `form`, and bind a City catalog
-  key (`assets`, `incidents`, `maintenance`, `iot`, `alerts`, `budgets`,
-  `reports`) — never a URL.
+  key (`assets`, `incidents`, `maintenance`, `iot`, `iotReadings`, `alerts`,
+  `budgets`, `budgetTransactions`, `reports`, `users`, `geofences`, `ingest`,
+  `files`, `notifications`) — never a URL.
 - A `form` widget may carry a portable `workflowRef` (`{name, slug?, checksum?}`);
   DX resolves it to server-owned `workflowArtifactId` + revision/checksum pins.
   `workflowArtifactId`, `workflowArtifactRevision` and `workflowArtifactChecksum`

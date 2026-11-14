@@ -3,7 +3,7 @@
   "formatVersion": 1,
   "plugin": {
     "product": "city",
-    "name": "City operations overview",
+    "name": "City operations command center",
     "slug": "city-operations-overview",
     "audience": "admin",
     "roles": [
@@ -13,193 +13,213 @@
     "widgets": [
       {
         "id": "intro",
+        "text": "One workspace for the infrastructure registry, incident queue, maintenance workshop, alerts, IoT network, budgets and reports. Read models come from the Tier-2 capability datasets; writes are bound to reviewed City workflows.",
         "type": "text",
-        "title": "Daily operations",
-        "text": "Read-only snapshot of City assets, incidents, maintenance work orders and infrastructure alerts. Writes stay in the City product API, which enforces the operator role and permission.",
+        "title": "City operations at a glance",
         "width": "full"
       },
       {
         "id": "assets-metric",
         "type": "metric",
-        "title": "Assets published on the public map",
-        "resource": "assets",
-        "width": "half"
+        "title": "Assets in the registry",
+        "width": "half",
+        "resource": "assets"
       },
       {
         "id": "incidents-metric",
         "type": "metric",
-        "title": "Incident work queue",
-        "resource": "incidents",
-        "width": "half"
+        "title": "Incident queue",
+        "width": "half",
+        "resource": "incidents"
       },
       {
         "id": "maintenance-metric",
         "type": "metric",
         "title": "Maintenance work orders",
-        "resource": "maintenance",
-        "width": "half"
+        "width": "half",
+        "resource": "maintenance"
       },
       {
         "id": "alerts-metric",
         "type": "metric",
         "title": "Infrastructure alerts",
-        "resource": "alerts",
-        "width": "half"
+        "width": "half",
+        "resource": "alerts"
+      },
+      {
+        "id": "iot-metric",
+        "type": "metric",
+        "title": "IoT sensors",
+        "width": "half",
+        "resource": "iot"
+      },
+      {
+        "id": "budgets-metric",
+        "type": "metric",
+        "title": "Budgets",
+        "width": "half",
+        "resource": "budgets"
+      },
+      {
+        "id": "reports-metric",
+        "type": "metric",
+        "title": "Operational reports",
+        "width": "half",
+        "resource": "reports"
+      },
+      {
+        "id": "users-metric",
+        "type": "metric",
+        "title": "City operators",
+        "width": "half",
+        "resource": "users"
       },
       {
         "id": "assets-table",
         "type": "table",
-        "title": "Recent assets",
-        "resource": "assets",
+        "title": "Asset registry snapshot",
+        "width": "full",
         "columns": [
           "id",
+          "asset_code",
           "name",
           "category",
           "status",
-          "lifecycle_status",
-          "updated_at"
+          "lifecycle_stage",
+          "address"
         ],
-        "width": "full"
+        "resource": "assets"
       },
       {
         "id": "incidents-table",
         "type": "table",
-        "title": "Recent incidents",
-        "resource": "incidents",
+        "title": "Incident queue",
+        "width": "full",
         "columns": [
           "id",
+          "incident_number",
           "title",
           "category",
+          "severity",
           "status",
-          "priority",
-          "reported_at"
+          "assigned_to"
         ],
-        "width": "full"
+        "resource": "incidents"
       },
       {
-        "id": "incident-create-form",
+        "id": "maintenance-table",
+        "type": "table",
+        "title": "Maintenance work orders",
+        "width": "full",
+        "columns": [
+          "id",
+          "work_order_number",
+          "title",
+          "priority",
+          "status",
+          "assigned_to",
+          "scheduled_date"
+        ],
+        "resource": "maintenance"
+      },
+      {
+        "id": "alerts-table",
+        "type": "table",
+        "title": "Recent alerts",
+        "width": "full",
+        "columns": [
+          "id",
+          "alert_type",
+          "severity",
+          "status",
+          "message",
+          "asset_id"
+        ],
+        "resource": "alerts"
+      },
+      {
+        "id": "incident-create",
         "type": "form",
         "title": "Report a city incident",
-        "resource": "incidents",
-        "action": "create",
-        "workflowRef": {
-          "name": "city-incident-create",
-          "slug": "city-incident-create"
-        },
         "width": "full",
+        "action": "create",
         "fields": [
           {
             "name": "title",
-            "label": "Title",
             "type": "text",
+            "label": "Title",
             "required": true
           },
           {
             "name": "category",
-            "label": "Category",
             "type": "text",
+            "label": "Category",
             "required": true
           },
           {
             "name": "severity",
-            "label": "Severity",
-            "type": "text"
+            "type": "text",
+            "label": "Severity"
           },
           {
             "name": "description",
-            "label": "Description",
-            "type": "textarea"
+            "type": "textarea",
+            "label": "Description"
           }
-        ]
-      },
-      {
-        "id": "incident-assign-form",
-        "type": "form",
-        "title": "Assign an incident",
+        ],
         "resource": "incidents",
-        "action": "update",
         "workflowRef": {
-          "name": "city-incident-assign",
-          "slug": "city-incident-assign"
-        },
-        "width": "half",
-        "fields": [
-          {
-            "name": "incident_id",
-            "label": "Incident id",
-            "type": "text",
-            "required": true
-          },
-          {
-            "name": "assigned_to",
-            "label": "Operator",
-            "type": "text",
-            "required": true
-          }
-        ]
+          "name": "city-incident-create",
+          "checksum": "9950bd892b99cba6ae904d01d474cba11932f9a4dcd33df59d9b4914f9a75d6e"
+        }
       },
       {
-        "id": "incident-resolve-form",
+        "id": "maintenance-create",
         "type": "form",
-        "title": "Resolve an incident",
-        "resource": "incidents",
-        "action": "update",
-        "workflowRef": {
-          "name": "city-incident-resolve",
-          "slug": "city-incident-resolve"
-        },
-        "width": "half",
-        "fields": [
-          {
-            "name": "incident_id",
-            "label": "Incident id",
-            "type": "text",
-            "required": true
-          },
-          {
-            "name": "resolution_type",
-            "label": "Resolution type",
-            "type": "text"
-          },
-          {
-            "name": "resolution_notes",
-            "label": "Resolution notes",
-            "type": "textarea"
-          }
-        ]
-      },
-      {
-        "id": "maintenance-assign-form",
-        "type": "form",
-        "title": "Assign a work order",
-        "resource": "maintenance",
-        "action": "update",
-        "workflowRef": {
-          "name": "city-maintenance-assign",
-          "slug": "city-maintenance-assign"
-        },
+        "title": "Create a maintenance work order",
         "width": "full",
+        "action": "create",
         "fields": [
           {
-            "name": "work_order_id",
-            "label": "Work order id",
+            "name": "asset_id",
             "type": "text",
+            "label": "Asset id",
             "required": true
           },
           {
-            "name": "assigned_to",
-            "label": "Technician",
+            "name": "title",
             "type": "text",
+            "label": "Title",
             "required": true
+          },
+          {
+            "name": "priority",
+            "type": "text",
+            "label": "Priority"
+          },
+          {
+            "name": "scheduled_date",
+            "type": "text",
+            "label": "Scheduled date"
+          },
+          {
+            "name": "description",
+            "type": "textarea",
+            "label": "Description"
           }
-        ]
+        ],
+        "resource": "maintenance",
+        "workflowRef": {
+          "name": "city-maintenance-create",
+          "checksum": "ad8bf0ddc4557049b7a5485e1494cac7486a00e5fc0e2d3330f85035353d5528"
+        }
       }
     ]
   },
   "source": {
     "repository": "https://github.com/vku-open-source-2026/SynapseCity",
     "path": "plugins/city-operations-overview.plugin.json",
-    "revision": "2026-11-14"
+    "revision": "2026-11-14.3"
   },
-  "checksum": "sha256:5c1735d260f105d1456cac4b5b66564aef057290b8cef600ae674ab7867b1b0c"
+  "checksum": "sha256:b18f810a3cd1d7c74a04298fdce3de3b573dbbbed47c4fc32ac66d02b53359ff"
 }

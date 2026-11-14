@@ -354,5 +354,130 @@
       "sha256": "sha256:776c156bc0c6e0ef58fc840c46d9008369decb471739dba3bcf8a97ea9291de3",
       "bytes": 15920
     }
+  ],
+  "workspacePages": [
+    {
+      "slug": "city-alert-center",
+      "file": "city-alert-center.plugin.json",
+      "audience": "admin",
+      "roles": [
+        "admin",
+        "manager"
+      ]
+    },
+    {
+      "slug": "city-asset-registry",
+      "file": "city-asset-registry.plugin.json",
+      "audience": "admin",
+      "roles": [
+        "admin",
+        "manager"
+      ]
+    },
+    {
+      "slug": "city-budget-office",
+      "file": "city-budget-office.plugin.json",
+      "audience": "admin",
+      "roles": [
+        "admin",
+        "manager"
+      ]
+    },
+    {
+      "slug": "city-data-ingest",
+      "file": "city-data-ingest.plugin.json",
+      "audience": "admin",
+      "roles": [
+        "admin",
+        "manager"
+      ]
+    },
+    {
+      "slug": "city-gis-workspace",
+      "file": "city-gis-workspace.plugin.json",
+      "audience": "admin",
+      "roles": [
+        "admin",
+        "manager"
+      ]
+    },
+    {
+      "slug": "city-incident-desk",
+      "file": "city-incident-desk.plugin.json",
+      "audience": "admin",
+      "roles": [
+        "admin",
+        "manager"
+      ]
+    },
+    {
+      "slug": "city-iot-network",
+      "file": "city-iot-network.plugin.json",
+      "audience": "admin",
+      "roles": [
+        "admin",
+        "manager"
+      ]
+    },
+    {
+      "slug": "city-maintenance-workshop",
+      "file": "city-maintenance-workshop.plugin.json",
+      "audience": "admin",
+      "roles": [
+        "admin",
+        "manager"
+      ]
+    },
+    {
+      "slug": "city-manager-review",
+      "file": "city-manager-review.plugin.json",
+      "audience": "admin",
+      "roles": [
+        "admin",
+        "manager"
+      ]
+    },
+    {
+      "slug": "city-operations-overview",
+      "file": "city-operations-overview.plugin.json",
+      "audience": "admin",
+      "roles": [
+        "admin",
+        "manager"
+      ]
+    },
+    {
+      "slug": "city-people-admin",
+      "file": "city-people-admin.plugin.json",
+      "audience": "admin",
+      "roles": [
+        "admin"
+      ]
+    },
+    {
+      "slug": "city-report-studio",
+      "file": "city-report-studio.plugin.json",
+      "audience": "admin",
+      "roles": [
+        "admin",
+        "manager"
+      ]
+    },
+    {
+      "slug": "city-technician-work",
+      "file": "city-technician-work.plugin.json",
+      "audience": "member",
+      "roles": [
+        "technician"
+      ]
+    },
+    {
+      "slug": "city-volunteer-desk",
+      "file": "city-volunteer-desk.plugin.json",
+      "audience": "member",
+      "roles": [
+        "volunteer"
+      ]
+    }
   ]
 }

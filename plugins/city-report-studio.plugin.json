@@ -1,0 +1,140 @@
+{
+  "format": "synapsedx-plugin",
+  "formatVersion": 1,
+  "plugin": {
+    "product": "city",
+    "name": "City report studio",
+    "slug": "city-report-studio",
+    "audience": "admin",
+    "roles": [
+      "admin",
+      "manager"
+    ],
+    "widgets": [
+      {
+        "id": "intro",
+        "text": "Request CSV or JSON exports from City operational datasets. Report records and generated file references stay in the tenant-owned capability store.",
+        "type": "text",
+        "title": "Operational reporting",
+        "width": "full"
+      },
+      {
+        "id": "reports-metric",
+        "type": "metric",
+        "title": "Reports",
+        "width": "half",
+        "resource": "reports"
+      },
+      {
+        "id": "reports-table",
+        "type": "table",
+        "title": "Report history",
+        "width": "full",
+        "columns": [
+          "id",
+          "report_code",
+          "type",
+          "format",
+          "status",
+          "row_count",
+          "file_url",
+          "created_at"
+        ],
+        "resource": "reports"
+      },
+      {
+        "id": "report-create",
+        "type": "form",
+        "title": "Request a report",
+        "width": "full",
+        "action": "create",
+        "fields": [
+          {
+            "name": "report_code",
+            "type": "text",
+            "label": "Report code"
+          },
+          {
+            "name": "type",
+            "type": "text",
+            "label": "Type: asset, incident, maintenance or budget",
+            "required": true
+          },
+          {
+            "name": "format",
+            "type": "text",
+            "label": "Format: csv or json",
+            "required": true
+          },
+          {
+            "name": "parameters_json",
+            "type": "textarea",
+            "label": "Parameters (JSON)"
+          }
+        ],
+        "resource": "reports",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        }
+      },
+      {
+        "id": "report-update",
+        "type": "form",
+        "title": "Update report status",
+        "width": "half",
+        "action": "execute",
+        "fields": [
+          {
+            "name": "record_id",
+            "type": "text",
+            "label": "Report id",
+            "required": true
+          },
+          {
+            "name": "decision",
+            "type": "text",
+            "label": "Decision: complete, fail or archive",
+            "required": true
+          },
+          {
+            "name": "row_count",
+            "type": "number",
+            "label": "Row count"
+          }
+        ],
+        "resource": "reports",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        }
+      },
+      {
+        "id": "report-delete",
+        "type": "form",
+        "title": "Delete a report record",
+        "width": "half",
+        "action": "delete",
+        "fields": [
+          {
+            "name": "record_id",
+            "type": "text",
+            "label": "Report id",
+            "required": true
+          }
+        ],
+        "resource": "reports",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        }
+      }
+    ]
+  },
+  "source": {
+    "repository": "https://github.com/vku-open-source-2026/SynapseCity",
+    "path": "plugins/city-report-studio.plugin.json",
+    "revision": "2026-11-14.3"
+  },
+  "checksum": "sha256:dec8a2216ed8b9fea697a4c840ee03a555be3fc4b6dc493bb49b1c2e802c1877"
+}

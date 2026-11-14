@@ -6,10 +6,20 @@ Keep a Changelog format and version tags use Semantic Versioning.
 ## [Unreleased]
 
 ### Added
-- Portable City workspace plugin bundles under `plugins/` (operations overview
-  and technician work queue) with `scripts/plugin-bundle.mjs` for strict
-  validation, checksum verification and HTTPS DX export/import/sync
-  (`docs/PLUGIN_SYNC.md`).
+- Full City work-page catalog (14 portable bundles): operations command center,
+  asset registry, incident desk, maintenance workshop, alert center, IoT
+  network, budget office, report studio, GIS workspace, people directory, data
+  ingest, manager review, technician work and volunteer desk. The catalog
+  covers every non-public City role and mirrors the retired admin/technician
+  surfaces with declarative widgets.
+- Generic `city-workspace-actions` workflow dispatcher plus its checked-in
+  generator. It supports allowlisted create/update/delete/execute actions for
+  assets, incidents, maintenance, IoT sensors/readings, alerts, budgets,
+  transactions, reports, users, geofences, ingest jobs, files and notifications
+  through the Tier-2 records API with the organization technical credential.
+- Portable City workspace plugin bundles under `plugins/` with
+  `scripts/plugin-bundle.mjs` for strict validation, checksum verification and
+  HTTPS DX export/import/sync (`docs/PLUGIN_SYNC.md`).
 - Product-owned Tier-1 workflow artifacts under `plugins/workflows/` for
   incidents.create/assign/resolve and maintenance.create/assign/start/complete: create HTTP POST, transition GET(`includeInput:true`) → domain merge →
   conditional PATCH (`ifVersion`), AAR-before-event-close. Auth is the portable

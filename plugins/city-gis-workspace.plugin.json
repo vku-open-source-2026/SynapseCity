@@ -1,0 +1,207 @@
+{
+  "format": "synapsedx-plugin",
+  "formatVersion": 1,
+  "plugin": {
+    "product": "city",
+    "name": "City GIS workspace",
+    "slug": "city-gis-workspace",
+    "audience": "admin",
+    "roles": [
+      "admin",
+      "manager"
+    ],
+    "widgets": [
+      {
+        "id": "intro",
+        "text": "Review asset locations, geofences and open incidents together. Coordinate fields are stored as JSON geometry and are available to map consumers; this page deliberately does not embed a third-party map script.",
+        "type": "text",
+        "title": "Service areas and location context",
+        "width": "full"
+      },
+      {
+        "id": "assets-metric",
+        "type": "metric",
+        "title": "Assets",
+        "width": "half",
+        "resource": "assets"
+      },
+      {
+        "id": "geofences-metric",
+        "type": "metric",
+        "title": "Geofences",
+        "width": "half",
+        "resource": "geofences"
+      },
+      {
+        "id": "incidents-metric",
+        "type": "metric",
+        "title": "Incidents",
+        "width": "half",
+        "resource": "incidents"
+      },
+      {
+        "id": "assets-table",
+        "type": "table",
+        "title": "Assets with address context",
+        "width": "full",
+        "columns": [
+          "id",
+          "asset_code",
+          "name",
+          "category",
+          "status",
+          "address",
+          "owner"
+        ],
+        "resource": "assets"
+      },
+      {
+        "id": "geofences-table",
+        "type": "table",
+        "title": "Geofences",
+        "width": "full",
+        "columns": [
+          "id",
+          "name",
+          "type",
+          "category",
+          "active",
+          "description"
+        ],
+        "resource": "geofences"
+      },
+      {
+        "id": "incidents-table",
+        "type": "table",
+        "title": "Incident locations",
+        "width": "full",
+        "columns": [
+          "id",
+          "title",
+          "category",
+          "severity",
+          "status",
+          "address"
+        ],
+        "resource": "incidents"
+      },
+      {
+        "id": "geofence-create",
+        "type": "form",
+        "title": "Create a geofence",
+        "width": "full",
+        "action": "create",
+        "fields": [
+          {
+            "name": "name",
+            "type": "text",
+            "label": "Name",
+            "required": true
+          },
+          {
+            "name": "type",
+            "type": "text",
+            "label": "Type"
+          },
+          {
+            "name": "category",
+            "type": "text",
+            "label": "Category"
+          },
+          {
+            "name": "description",
+            "type": "textarea",
+            "label": "Description"
+          },
+          {
+            "name": "active",
+            "type": "text",
+            "label": "Active: true or false"
+          },
+          {
+            "name": "geometry_json",
+            "type": "textarea",
+            "label": "Geometry GeoJSON",
+            "required": true
+          }
+        ],
+        "resource": "geofences",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        }
+      },
+      {
+        "id": "geofence-update",
+        "type": "form",
+        "title": "Update a geofence",
+        "width": "half",
+        "action": "update",
+        "fields": [
+          {
+            "name": "record_id",
+            "type": "text",
+            "label": "Geofence id",
+            "required": true
+          },
+          {
+            "name": "name",
+            "type": "text",
+            "label": "Name"
+          },
+          {
+            "name": "type",
+            "type": "text",
+            "label": "Type"
+          },
+          {
+            "name": "description",
+            "type": "textarea",
+            "label": "Description"
+          },
+          {
+            "name": "active",
+            "type": "text",
+            "label": "Active: true or false"
+          },
+          {
+            "name": "geometry_json",
+            "type": "textarea",
+            "label": "Geometry GeoJSON"
+          }
+        ],
+        "resource": "geofences",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        }
+      },
+      {
+        "id": "geofence-delete",
+        "type": "form",
+        "title": "Delete a geofence",
+        "width": "half",
+        "action": "delete",
+        "fields": [
+          {
+            "name": "record_id",
+            "type": "text",
+            "label": "Geofence id",
+            "required": true
+          }
+        ],
+        "resource": "geofences",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        }
+      }
+    ]
+  },
+  "source": {
+    "repository": "https://github.com/vku-open-source-2026/SynapseCity",
+    "path": "plugins/city-gis-workspace.plugin.json",
+    "revision": "2026-11-14.3"
+  },
+  "checksum": "sha256:2b8b373b50828dcad04d34ba6c864be279dd51d6d913320a1b5acf9a71a03dda"
+}

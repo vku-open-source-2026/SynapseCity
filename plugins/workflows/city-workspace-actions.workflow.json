@@ -1,0 +1,336 @@
+{
+  "name": "city-workspace-actions",
+  "nodes": [
+    {
+      "name": "DX manual execution",
+      "type": "manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        200,
+        300
+      ],
+      "parameters": {}
+    },
+    {
+      "name": "Validate envelope and select operation",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        300
+      ],
+      "parameters": {
+        "code": "const envelope = $input || {};\nconst text = (value) => (typeof value === 'string' ? value.trim() : '');\nconst num = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : undefined);\nconst bool = (value) => (value === true || value === 'true' ? true : value === false || value === 'false' ? false : undefined);\nconst parseJson = (value, name) => {\n  if (typeof value !== 'string' || !value.trim()) return undefined;\n  try { return JSON.parse(value); } catch { throw new Error(name + '_invalid_json'); }\n};\nconst envelopeKeys = new Set(['pluginId', 'widgetId', 'product', 'resource', 'action', 'submittedBy', 'submittedAt', 'fields']);\nconst unknownEnvelope = Object.keys(envelope).filter((key) => !envelopeKeys.has(key));\nif (unknownEnvelope.length) throw new Error('unknown_envelope_fields:' + unknownEnvelope.join(','));\nconst product = text(envelope.product);\nconst resource = text(envelope.resource);\nconst action = text(envelope.action) || 'create';\nconst submittedBy = text(envelope.submittedBy);\nif (!submittedBy) throw new Error('submitted_by_required');\nif (product !== 'city') throw new Error('unsupported_product');\nif (!['create', 'update', 'delete', 'execute'].includes(action)) throw new Error('unsupported_action');\nconst fields = envelope.fields && typeof envelope.fields === 'object' && !Array.isArray(envelope.fields) ? envelope.fields : null;\nif (!fields) throw new Error('fields_required');\nconst SCHEMAS = {\"assets\":{\"dataset\":\"city-assets\",\"recordType\":\"Asset\",\"publish\":true,\"terminal\":[\"retired\",\"disposed\"],\"statuses\":[\"active\",\"inactive\",\"maintenance\",\"retired\",\"disposed\"],\"fields\":{\"asset_code\":{\"kind\":\"text\",\"max\":120},\"name\":{\"kind\":\"text\",\"max\":200},\"feature_type\":{\"kind\":\"text\",\"max\":80},\"feature_code\":{\"kind\":\"text\",\"max\":120},\"category\":{\"kind\":\"text\",\"max\":80},\"status\":{\"kind\":\"text\",\"max\":40},\"condition\":{\"kind\":\"text\",\"max\":40},\"lifecycle_stage\":{\"kind\":\"text\",\"max\":60},\"address\":{\"kind\":\"text\",\"max\":300},\"ward\":{\"kind\":\"text\",\"max\":120},\"district\":{\"kind\":\"text\",\"max\":120},\"city\":{\"kind\":\"text\",\"max\":120},\"owner\":{\"kind\":\"text\",\"max\":160},\"managing_unit\":{\"kind\":\"text\",\"max\":160},\"description\":{\"kind\":\"text\",\"max\":4000},\"latitude\":{\"kind\":\"number\"},\"longitude\":{\"kind\":\"number\"},\"properties_json\":{\"kind\":\"json\"}},\"required\":[\"name\"],\"defaults\":{\"status\":\"active\"}},\"incidents\":{\"dataset\":\"city-incidents\",\"recordType\":\"Incident\",\"publish\":true,\"terminal\":[\"closed\",\"cancelled\",\"rejected\",\"merged\"],\"statuses\":[\"reported\",\"open\",\"acknowledged\",\"assigned\",\"investigating\",\"in_progress\",\"waiting_approval\",\"resolved\",\"verified\",\"closed\",\"rejected\",\"cancelled\",\"merged\"],\"fields\":{\"title\":{\"kind\":\"text\",\"max\":200},\"description\":{\"kind\":\"text\",\"max\":4000},\"category\":{\"kind\":\"text\",\"max\":80},\"severity\":{\"kind\":\"text\",\"max\":40},\"status\":{\"kind\":\"text\",\"max\":40},\"priority\":{\"kind\":\"text\",\"max\":40},\"asset_id\":{\"kind\":\"text\",\"max\":128},\"assigned_to\":{\"kind\":\"text\",\"max\":160},\"reporter_type\":{\"kind\":\"text\",\"max\":40},\"resolution_type\":{\"kind\":\"text\",\"max\":80},\"resolution_notes\":{\"kind\":\"text\",\"max\":4000},\"address\":{\"kind\":\"text\",\"max\":300},\"latitude\":{\"kind\":\"number\"},\"longitude\":{\"kind\":\"number\"},\"details_json\":{\"kind\":\"json\"}},\"required\":[\"title\"],\"defaults\":{\"status\":\"reported\",\"severity\":\"medium\"}},\"maintenance\":{\"dataset\":\"city-maintenance\",\"recordType\":\"Maintenance\",\"publish\":false,\"terminal\":[\"completed\",\"cancelled\",\"rejected\"],\"statuses\":[\"scheduled\",\"assigned\",\"in_progress\",\"on_hold\",\"completed\",\"cancelled\",\"rejected\"],\"fields\":{\"asset_id\":{\"kind\":\"text\",\"max\":128},\"title\":{\"kind\":\"text\",\"max\":200},\"description\":{\"kind\":\"text\",\"max\":4000},\"priority\":{\"kind\":\"text\",\"max\":40},\"status\":{\"kind\":\"text\",\"max\":40},\"type\":{\"kind\":\"text\",\"max\":40},\"scheduled_date\":{\"kind\":\"date\"},\"assigned_to\":{\"kind\":\"text\",\"max\":160},\"technician\":{\"kind\":\"text\",\"max\":160},\"estimated_cost\":{\"kind\":\"number\"},\"actual_cost\":{\"kind\":\"number\"},\"work_performed\":{\"kind\":\"text\",\"max\":4000},\"notes\":{\"kind\":\"text\",\"max\":4000},\"approval_status\":{\"kind\":\"text\",\"max\":40},\"rejection_reason\":{\"kind\":\"text\",\"max\":4000},\"parts_json\":{\"kind\":\"json\"}},\"required\":[\"title\"],\"defaults\":{\"status\":\"scheduled\",\"priority\":\"medium\"},\"decisionStatus\":{\"approve\":\"approved\",\"reject\":\"rejected\"}},\"iot\":{\"dataset\":\"city-iot-sensors\",\"recordType\":\"IoTSensor\",\"publish\":false,\"terminal\":[\"retired\"],\"statuses\":[\"active\",\"inactive\",\"offline\",\"maintenance\",\"retired\"],\"fields\":{\"sensor_code\":{\"kind\":\"text\",\"max\":120},\"asset_id\":{\"kind\":\"text\",\"max\":128},\"sensor_type\":{\"kind\":\"text\",\"max\":40},\"status\":{\"kind\":\"text\",\"max\":40},\"measurement_unit\":{\"kind\":\"text\",\"max\":40},\"longitude\":{\"kind\":\"number\"},\"latitude\":{\"kind\":\"number\"},\"threshold_json\":{\"kind\":\"json\"}},\"required\":[\"sensor_code\",\"asset_id\",\"sensor_type\"],\"defaults\":{\"status\":\"active\"}},\"iotReadings\":{\"dataset\":\"city-iot-readings\",\"recordType\":\"SensorReading\",\"publish\":false,\"terminal\":[],\"statuses\":[],\"fields\":{\"sensor_id\":{\"kind\":\"text\",\"max\":128},\"timestamp\":{\"kind\":\"date\"},\"value\":{\"kind\":\"number\"},\"metadata_json\":{\"kind\":\"json\"}},\"required\":[\"sensor_id\",\"value\"],\"defaults\":{}},\"alerts\":{\"dataset\":\"city-alerts\",\"recordType\":\"Alert\",\"publish\":false,\"terminal\":[\"resolved\",\"dismissed\"],\"statuses\":[\"active\",\"acknowledged\",\"resolved\",\"dismissed\"],\"fields\":{\"alert_type\":{\"kind\":\"text\",\"max\":80},\"severity\":{\"kind\":\"text\",\"max\":40},\"status\":{\"kind\":\"text\",\"max\":40},\"asset_id\":{\"kind\":\"text\",\"max\":128},\"sensor_id\":{\"kind\":\"text\",\"max\":128},\"message\":{\"kind\":\"text\",\"max\":4000},\"metadata_json\":{\"kind\":\"json\"},\"resolution_notes\":{\"kind\":\"text\",\"max\":4000}},\"required\":[\"message\"],\"defaults\":{\"status\":\"active\",\"severity\":\"medium\"}},\"budgets\":{\"dataset\":\"city-budgets\",\"recordType\":\"Budget\",\"publish\":false,\"terminal\":[\"approved\",\"rejected\",\"closed\"],\"statuses\":[\"draft\",\"submitted\",\"approved\",\"rejected\",\"closed\"],\"fields\":{\"budget_code\":{\"kind\":\"text\",\"max\":120},\"fiscal_year\":{\"kind\":\"number\"},\"category\":{\"kind\":\"text\",\"max\":120},\"total_amount\":{\"kind\":\"number\"},\"allocated_amount\":{\"kind\":\"number\"},\"spent_amount\":{\"kind\":\"number\"},\"status\":{\"kind\":\"text\",\"max\":40},\"breakdown_json\":{\"kind\":\"json\"}},\"required\":[\"fiscal_year\",\"category\",\"total_amount\"],\"defaults\":{\"status\":\"draft\",\"allocated_amount\":0,\"spent_amount\":0},\"decisionStatus\":{\"approve\":\"approved\",\"reject\":\"rejected\",\"close\":\"closed\"}},\"budgetTransactions\":{\"dataset\":\"city-budget-transactions\",\"recordType\":\"BudgetTransaction\",\"publish\":false,\"terminal\":[],\"statuses\":[\"pending\",\"approved\",\"rejected\"],\"fields\":{\"budget_id\":{\"kind\":\"text\",\"max\":128},\"amount\":{\"kind\":\"number\"},\"description\":{\"kind\":\"text\",\"max\":4000},\"transaction_type\":{\"kind\":\"text\",\"max\":40},\"maintenance_id\":{\"kind\":\"text\",\"max\":128},\"approved_at\":{\"kind\":\"date\"},\"status\":{\"kind\":\"text\",\"max\":40}},\"required\":[\"budget_id\",\"amount\",\"description\",\"transaction_type\"],\"defaults\":{\"status\":\"pending\"},\"decisionStatus\":{\"approve\":\"approved\",\"reject\":\"rejected\"}},\"reports\":{\"dataset\":\"city-reports\",\"recordType\":\"Report\",\"publish\":false,\"terminal\":[\"failed\",\"archived\"],\"statuses\":[\"pending\",\"generating\",\"completed\",\"failed\",\"archived\"],\"fields\":{\"report_code\":{\"kind\":\"text\",\"max\":120},\"type\":{\"kind\":\"text\",\"max\":40},\"format\":{\"kind\":\"text\",\"max\":20},\"status\":{\"kind\":\"text\",\"max\":40},\"parameters_json\":{\"kind\":\"json\"},\"file_url\":{\"kind\":\"text\",\"max\":1000},\"row_count\":{\"kind\":\"number\"}},\"required\":[\"type\",\"format\"],\"defaults\":{\"status\":\"pending\"},\"decisionStatus\":{\"complete\":\"completed\",\"fail\":\"failed\",\"archive\":\"archived\"}},\"users\":{\"dataset\":\"city-users\",\"recordType\":\"CityUser\",\"publish\":false,\"terminal\":[\"deleted\"],\"statuses\":[\"active\",\"inactive\",\"suspended\",\"deleted\"],\"fields\":{\"username\":{\"kind\":\"text\",\"max\":120},\"email\":{\"kind\":\"text\",\"max\":320},\"full_name\":{\"kind\":\"text\",\"max\":200},\"phone\":{\"kind\":\"text\",\"max\":40},\"role\":{\"kind\":\"text\",\"max\":40},\"status\":{\"kind\":\"text\",\"max\":40},\"department\":{\"kind\":\"text\",\"max\":160},\"permissions_json\":{\"kind\":\"json\"}},\"required\":[\"username\",\"email\",\"full_name\",\"role\"],\"defaults\":{\"status\":\"active\"}},\"geofences\":{\"dataset\":\"city-geofences\",\"recordType\":\"Geofence\",\"publish\":false,\"terminal\":[],\"statuses\":[\"active\",\"inactive\"],\"fields\":{\"name\":{\"kind\":\"text\",\"max\":200},\"type\":{\"kind\":\"text\",\"max\":80},\"description\":{\"kind\":\"text\",\"max\":4000},\"active\":{\"kind\":\"boolean\"},\"category\":{\"kind\":\"text\",\"max\":80},\"geometry_json\":{\"kind\":\"json\"}},\"required\":[\"name\"],\"defaults\":{\"active\":true}},\"ingest\":{\"dataset\":\"city-ingest-jobs\",\"recordType\":\"IngestJob\",\"publish\":false,\"terminal\":[\"completed\",\"failed\"],\"statuses\":[\"queued\",\"running\",\"completed\",\"failed\"],\"fields\":{\"source\":{\"kind\":\"text\",\"max\":80},\"dataset\":{\"kind\":\"text\",\"max\":120},\"file_name\":{\"kind\":\"text\",\"max\":300},\"status\":{\"kind\":\"text\",\"max\":40},\"rows_total\":{\"kind\":\"number\"},\"rows_imported\":{\"kind\":\"number\"},\"error_message\":{\"kind\":\"text\",\"max\":4000}},\"required\":[\"source\"],\"defaults\":{\"status\":\"queued\"},\"decisionStatus\":{\"start\":\"running\",\"complete\":\"completed\",\"fail\":\"failed\"}},\"files\":{\"dataset\":\"city-files\",\"recordType\":\"File\",\"publish\":false,\"terminal\":[],\"statuses\":[],\"fields\":{\"name\":{\"kind\":\"text\",\"max\":300},\"content_type\":{\"kind\":\"text\",\"max\":120},\"size\":{\"kind\":\"number\"},\"checksum\":{\"kind\":\"text\",\"max\":128},\"url\":{\"kind\":\"text\",\"max\":1000}},\"required\":[\"name\"],\"defaults\":{}},\"notifications\":{\"dataset\":\"city-notifications\",\"recordType\":\"Notification\",\"publish\":false,\"terminal\":[],\"statuses\":[],\"fields\":{\"user_id\":{\"kind\":\"text\",\"max\":128},\"title\":{\"kind\":\"text\",\"max\":200},\"message\":{\"kind\":\"text\",\"max\":4000},\"type\":{\"kind\":\"text\",\"max\":40},\"read\":{\"kind\":\"boolean\"}},\"required\":[\"title\"],\"defaults\":{\"read\":false}}};\nconst schema = SCHEMAS[resource];\nif (!schema) throw new Error('unsupported_resource');\nconst audit = {\n  product, resource, action,\n  pluginId: text(envelope.pluginId), widgetId: text(envelope.widgetId),\n  submittedBy, submittedAt: text(envelope.submittedAt) || $now,\n};\nconst base = 'https://synapsedx.sbs/v1/capabilities/datasets/' + schema.dataset + '/records';\nconst terminal = (value) => schema.terminal.includes(String(value));\nconst parseField = (name, spec) => {\n  const value = fields[name];\n  if (value === undefined || value === null || value === '') return undefined;\n  if (spec.kind === 'number') {\n    const number = num(value);\n    if (number === undefined) throw new Error(name + '_must_be_number');\n    return number;\n  }\n  if (spec.kind === 'boolean') {\n    const flag = bool(value);\n    if (flag === undefined) throw new Error(name + '_must_be_boolean');\n    return flag;\n  }\n  if (spec.kind === 'json') return parseJson(value, name);\n  const string = text(value);\n  if (typeof value !== 'string' || string.length > (spec.max || 4000)) throw new Error(name + '_invalid_text');\n  return string;\n};\nconst recordId = text(fields.record_id || fields.id);\nif (action !== 'create' && !/^[A-Za-z0-9_@.:+-]{1,256}$/.test(recordId)) throw new Error('record_id_invalid');\nif (action === 'create') {\n  const unknown = Object.keys(fields).filter((key) => key !== 'record_id' && !(key in schema.fields));\n  if (unknown.length) throw new Error('unknown_fields:' + unknown.join(','));\n  for (const required of schema.required) {\n    const value = parseField(required, schema.fields[required]);\n    if (value === undefined || value === '') throw new Error(required + '_required');\n  }\n  const record = { type: schema.recordType, ...schema.defaults };\n  for (const [name, spec] of Object.entries(schema.fields)) {\n    const parsed = parseField(name, spec);\n    if (parsed === undefined) continue;\n    record[name.endsWith('_json') ? name.slice(0, -5) : name] = parsed;\n  }\n  if (record.status !== undefined && schema.statuses.length && !schema.statuses.includes(String(record.status))) throw new Error('status_invalid');\n  record.created_at = $now;\n  record.updated_at = $now;\n  return { mode: 'create', url: base, body: { data: record, publish: schema.publish === true }, audit, operation: resource + '.create' };\n}\nif (action === 'delete') {\n  return { mode: 'delete', url: base + '/' + encodeURIComponent(recordId), audit, operation: resource + '.delete' };\n}\nconst unknown = Object.keys(fields).filter((key) => key !== 'record_id' && key !== 'id' && key !== 'decision' && key !== 'notes' && !(key in schema.fields));\nif (unknown.length) throw new Error('unknown_fields:' + unknown.join(','));\nconst patch = {};\nfor (const [name, spec] of Object.entries(schema.fields)) {\n  const parsed = parseField(name, spec);\n  if (parsed === undefined) continue;\n  patch[name.endsWith('_json') ? name.slice(0, -5) : name] = parsed;\n}\nconst decision = text(fields.decision);\nconst notes = text(fields.notes);\nif (notes) patch.notes = notes;\nif (action === 'execute') {\n  const map = schema.decisionStatus || {};\n  if (decision) {\n    if (!map[decision]) throw new Error('decision_invalid');\n    patch.status = map[decision];\n  }\n  if (!decision && !Object.keys(patch).length) throw new Error('action_fields_required');\n  if (patch.status === 'approved') patch.approved_at = $now;\n  if (patch.status === 'published') patch.published_at = $now;\n  if (patch.status === 'rejected') patch.rejected_at = $now;\n}\nif (!Object.keys(patch).length) throw new Error('nothing_to_update');\nif (patch.status !== undefined && schema.statuses.length && !schema.statuses.includes(String(patch.status))) throw new Error('status_invalid');\nreturn { mode: 'update', url: base + '/' + encodeURIComponent(recordId), patch, audit, operation: resource + '.' + (decision || action) };\n"
+      }
+    },
+    {
+      "name": "Create?",
+      "type": "if",
+      "typeVersion": 1,
+      "position": [
+        640,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{$json.mode}}",
+              "rightValue": "create",
+              "operator": "equals"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Create record",
+      "type": "httpRequest",
+      "typeVersion": 4,
+      "position": [
+        860,
+        180
+      ],
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        "auth": {
+          "credentialRef": "synapsedx-organization",
+          "header": "X-API-Key",
+          "allowedOrigins": [
+            "https://synapsedx.sbs"
+          ]
+        },
+        "body": "={{ $json.body }}",
+        "timeoutMs": 15000
+      }
+    },
+    {
+      "name": "Update?",
+      "type": "if",
+      "typeVersion": 1,
+      "position": [
+        860,
+        420
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{$json.mode}}",
+              "rightValue": "update",
+              "operator": "equals"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Read current record",
+      "type": "httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1080,
+        360
+      ],
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "method": "GET",
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        "auth": {
+          "credentialRef": "synapsedx-organization",
+          "header": "X-API-Key",
+          "allowedOrigins": [
+            "https://synapsedx.sbs"
+          ]
+        },
+        "includeInput": true,
+        "timeoutMs": 15000
+      }
+    },
+    {
+      "name": "Merge and enforce invariants",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        360
+      ],
+      "parameters": {
+        "code": "const response = $input || {};\nconst current = response.body;\nconst action = response.input;\nif (response.statusCode !== 200 || !current || typeof current.data !== 'object' || !current.data) throw new Error('record_not_found');\nconst data = current.data;\nif (!Number.isInteger(current.version)) throw new Error('record_version_unavailable');\nconst schema = {\"assets\":{\"terminal\":[\"retired\",\"disposed\"]},\"incidents\":{\"terminal\":[\"closed\",\"cancelled\",\"rejected\",\"merged\"]},\"maintenance\":{\"terminal\":[\"completed\",\"cancelled\",\"rejected\"]},\"iot\":{\"terminal\":[\"retired\"]},\"iotReadings\":{\"terminal\":[]},\"alerts\":{\"terminal\":[\"resolved\",\"dismissed\"]},\"budgets\":{\"terminal\":[\"approved\",\"rejected\",\"closed\"]},\"budgetTransactions\":{\"terminal\":[]},\"reports\":{\"terminal\":[\"failed\",\"archived\"]},\"users\":{\"terminal\":[\"deleted\"]},\"geofences\":{\"terminal\":[]},\"ingest\":{\"terminal\":[\"completed\",\"failed\"]},\"files\":{\"terminal\":[]},\"notifications\":{\"terminal\":[]}};\nconst terminal = schema[action.resource] ? schema[action.resource].terminal : [];\nif (terminal.includes(String(data.status))) throw new Error('record_terminal');\nconst next = { ...data, ...action.patch, updated_at: $now };\nreturn { body: { data: next, ifVersion: current.version }, url: action.url, audit: action.audit, operation: action.operation };"
+      }
+    },
+    {
+      "name": "Patch full record",
+      "type": "httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1520,
+        360
+      ],
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "method": "PATCH",
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        "auth": {
+          "credentialRef": "synapsedx-organization",
+          "header": "X-API-Key",
+          "allowedOrigins": [
+            "https://synapsedx.sbs"
+          ]
+        },
+        "body": "={{ $json.body }}",
+        "timeoutMs": 15000
+      }
+    },
+    {
+      "name": "Delete?",
+      "type": "if",
+      "typeVersion": 1,
+      "position": [
+        1080,
+        560
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{$json.mode}}",
+              "rightValue": "delete",
+              "operator": "equals"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Delete record",
+      "type": "httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1300,
+        500
+      ],
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "method": "DELETE",
+        "headers": {
+          "Accept": "application/json"
+        },
+        "auth": {
+          "credentialRef": "synapsedx-organization",
+          "header": "X-API-Key",
+          "allowedOrigins": [
+            "https://synapsedx.sbs"
+          ]
+        },
+        "timeoutMs": 15000
+      }
+    },
+    {
+      "name": "Unsupported operation",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        620
+      ],
+      "parameters": {
+        "code": "throw new Error('unsupported_operation');\nreturn {};"
+      }
+    }
+  ],
+  "connections": {
+    "DX manual execution": {
+      "main": [
+        [
+          {
+            "node": "Validate envelope and select operation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate envelope and select operation": {
+      "main": [
+        [
+          {
+            "node": "Create?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create?": {
+      "main": [
+        [
+          {
+            "node": "Create record",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create record": {
+      "main": [
+        []
+      ]
+    },
+    "Update?": {
+      "main": [
+        [
+          {
+            "node": "Read current record",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Delete?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read current record": {
+      "main": [
+        [
+          {
+            "node": "Merge and enforce invariants",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge and enforce invariants": {
+      "main": [
+        [
+          {
+            "node": "Patch full record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Patch full record": {
+      "main": [
+        []
+      ]
+    },
+    "Delete?": {
+      "main": [
+        [
+          {
+            "node": "Delete record",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unsupported operation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete record": {
+      "main": [
+        []
+      ]
+    },
+    "Unsupported operation": {
+      "main": [
+        []
+      ]
+    }
+  }
+}

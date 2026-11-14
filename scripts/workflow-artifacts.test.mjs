@@ -34,7 +34,7 @@ test('manifest is City-owned, source-ready and inactive', () => {
     assert.equal(manifest.active, false);
     assert.equal(manifest.trigger, 'manualTrigger');
     assert.equal(manifest.repository, 'https://github.com/vku-open-source-2026/SynapseCity');
-    assert.deepEqual(manifest.bindingEnvelope, ['pluginId', 'widgetId', 'product', 'resource', 'submittedBy', 'submittedAt', 'fields']);
+    assert.deepEqual(manifest.bindingEnvelope, ['pluginId', 'widgetId', 'product', 'resource', 'submittedBy', 'submittedAt', 'fields', 'action']);
     assert.equal(manifest.persistence.credentialRef, 'synapsedx-organization');
     assert.equal(manifest.persistence.credentialHeader, 'X-API-Key');
     assert.equal(manifest.persistence.credentialBinding.status, 'pending_dx_binding');
@@ -165,7 +165,11 @@ test('transition action design is implemented and keeps invariants', () => {
 });
 
 test('plugin bundles bind every form to an executable declarative workflow', () => {
-    const workflows = new Set(manifest.workflows.map((entry) => entry.workflow));
+    const workflows = new Set([
+        ...manifest.workflows.map((entry) => entry.workflow),
+        ...(manifest.lifecycleWorkflows || []).map((entry) => entry.workflow),
+    ]);
+    if (manifest.genericActionWorkflow?.workflow) workflows.add(manifest.genericActionWorkflow.workflow);
     const forms = [];
     for (const name of fs.readdirSync(path.join(ROOT, 'plugins')).filter((file) => file.endsWith('.plugin.json'))) {
         const bundle = JSON.parse(fs.readFileSync(path.join(ROOT, 'plugins', name), 'utf8'));

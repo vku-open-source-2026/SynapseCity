@@ -1,0 +1,120 @@
+{
+  "format": "synapsedx-plugin",
+  "formatVersion": 1,
+  "plugin": {
+    "product": "city",
+    "name": "City volunteer desk",
+    "slug": "city-volunteer-desk",
+    "audience": "member",
+    "roles": [
+      "volunteer"
+    ],
+    "widgets": [
+      {
+        "id": "intro",
+        "text": "See the current incident and alert picture and report a new infrastructure issue. Volunteer access is read-only apart from the report form, which creates a reviewable City incident.",
+        "type": "text",
+        "title": "Community operations desk",
+        "width": "full"
+      },
+      {
+        "id": "incidents-metric",
+        "type": "metric",
+        "title": "Open incident picture",
+        "width": "half",
+        "resource": "incidents"
+      },
+      {
+        "id": "alerts-metric",
+        "type": "metric",
+        "title": "Alerts",
+        "width": "half",
+        "resource": "alerts"
+      },
+      {
+        "id": "maintenance-metric",
+        "type": "metric",
+        "title": "Work in progress",
+        "width": "half",
+        "resource": "maintenance"
+      },
+      {
+        "id": "incidents-table",
+        "type": "table",
+        "title": "Incident picture",
+        "width": "full",
+        "columns": [
+          "id",
+          "incident_number",
+          "title",
+          "category",
+          "severity",
+          "status",
+          "address"
+        ],
+        "resource": "incidents"
+      },
+      {
+        "id": "alerts-table",
+        "type": "table",
+        "title": "Public alert context",
+        "width": "full",
+        "columns": [
+          "id",
+          "alert_type",
+          "severity",
+          "status",
+          "message"
+        ],
+        "resource": "alerts"
+      },
+      {
+        "id": "incident-report",
+        "type": "form",
+        "title": "Report an infrastructure issue",
+        "width": "full",
+        "action": "create",
+        "fields": [
+          {
+            "name": "title",
+            "type": "text",
+            "label": "What is happening?",
+            "required": true
+          },
+          {
+            "name": "category",
+            "type": "text",
+            "label": "Category",
+            "required": true
+          },
+          {
+            "name": "severity",
+            "type": "text",
+            "label": "Severity"
+          },
+          {
+            "name": "description",
+            "type": "textarea",
+            "label": "Details"
+          },
+          {
+            "name": "address",
+            "type": "text",
+            "label": "Location"
+          }
+        ],
+        "resource": "incidents",
+        "workflowRef": {
+          "name": "city-incident-create",
+          "checksum": "9950bd892b99cba6ae904d01d474cba11932f9a4dcd33df59d9b4914f9a75d6e"
+        }
+      }
+    ]
+  },
+  "source": {
+    "repository": "https://github.com/vku-open-source-2026/SynapseCity",
+    "path": "plugins/city-volunteer-desk.plugin.json",
+    "revision": "2026-11-14.3"
+  },
+  "checksum": "sha256:4a916d0579b9469b87501bc52392fffcc22bdd8324761e1c11f9d03d9f4e5e0b"
+}

@@ -1,0 +1,275 @@
+{
+  "format": "synapsedx-plugin",
+  "formatVersion": 1,
+  "plugin": {
+    "product": "city",
+    "name": "City budget office",
+    "slug": "city-budget-office",
+    "audience": "admin",
+    "roles": [
+      "admin",
+      "manager"
+    ],
+    "widgets": [
+      {
+        "id": "intro",
+        "text": "Plan annual budgets, record allocations and expenses, and approve or reject submissions. Every approval is an explicit City workflow action with an audit trail.",
+        "type": "text",
+        "title": "Budgets, transactions and approvals",
+        "width": "full"
+      },
+      {
+        "id": "budgets-metric",
+        "type": "metric",
+        "title": "Budgets",
+        "width": "half",
+        "resource": "budgets"
+      },
+      {
+        "id": "transactions-metric",
+        "type": "metric",
+        "title": "Transactions",
+        "width": "half",
+        "resource": "budgetTransactions"
+      },
+      {
+        "id": "maintenance-metric",
+        "type": "metric",
+        "title": "Maintenance cost context",
+        "width": "half",
+        "resource": "maintenance"
+      },
+      {
+        "id": "budgets-table",
+        "type": "table",
+        "title": "Budgets",
+        "width": "full",
+        "columns": [
+          "id",
+          "budget_code",
+          "fiscal_year",
+          "category",
+          "total_amount",
+          "allocated_amount",
+          "spent_amount",
+          "status"
+        ],
+        "resource": "budgets"
+      },
+      {
+        "id": "transactions-table",
+        "type": "table",
+        "title": "Transactions",
+        "width": "full",
+        "columns": [
+          "id",
+          "budget_id",
+          "amount",
+          "description",
+          "transaction_type",
+          "status",
+          "approved_at"
+        ],
+        "resource": "budgetTransactions"
+      },
+      {
+        "id": "budget-create",
+        "type": "form",
+        "title": "Create a budget",
+        "width": "full",
+        "action": "create",
+        "fields": [
+          {
+            "name": "budget_code",
+            "type": "text",
+            "label": "Budget code"
+          },
+          {
+            "name": "fiscal_year",
+            "type": "number",
+            "label": "Fiscal year",
+            "required": true
+          },
+          {
+            "name": "category",
+            "type": "text",
+            "label": "Category",
+            "required": true
+          },
+          {
+            "name": "total_amount",
+            "type": "number",
+            "label": "Total amount",
+            "required": true
+          },
+          {
+            "name": "breakdown_json",
+            "type": "textarea",
+            "label": "Breakdown (JSON)"
+          }
+        ],
+        "resource": "budgets",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        }
+      },
+      {
+        "id": "budget-update",
+        "type": "form",
+        "title": "Update a budget",
+        "width": "half",
+        "action": "update",
+        "fields": [
+          {
+            "name": "record_id",
+            "type": "text",
+            "label": "Budget id",
+            "required": true
+          },
+          {
+            "name": "total_amount",
+            "type": "number",
+            "label": "Total amount"
+          },
+          {
+            "name": "allocated_amount",
+            "type": "number",
+            "label": "Allocated amount"
+          },
+          {
+            "name": "spent_amount",
+            "type": "number",
+            "label": "Spent amount"
+          },
+          {
+            "name": "category",
+            "type": "text",
+            "label": "Category"
+          },
+          {
+            "name": "breakdown_json",
+            "type": "textarea",
+            "label": "Breakdown (JSON)"
+          }
+        ],
+        "resource": "budgets",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        }
+      },
+      {
+        "id": "budget-approve",
+        "type": "form",
+        "title": "Approve or reject a budget",
+        "width": "half",
+        "action": "execute",
+        "fields": [
+          {
+            "name": "record_id",
+            "type": "text",
+            "label": "Budget id",
+            "required": true
+          },
+          {
+            "name": "decision",
+            "type": "text",
+            "label": "Decision: approve or reject",
+            "required": true
+          },
+          {
+            "name": "notes",
+            "type": "textarea",
+            "label": "Review note"
+          }
+        ],
+        "resource": "budgets",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        }
+      },
+      {
+        "id": "transaction-create",
+        "type": "form",
+        "title": "Record a transaction",
+        "width": "half",
+        "action": "create",
+        "fields": [
+          {
+            "name": "budget_id",
+            "type": "text",
+            "label": "Budget id",
+            "required": true
+          },
+          {
+            "name": "amount",
+            "type": "number",
+            "label": "Amount",
+            "required": true
+          },
+          {
+            "name": "description",
+            "type": "textarea",
+            "label": "Description",
+            "required": true
+          },
+          {
+            "name": "transaction_type",
+            "type": "text",
+            "label": "Type: expense or allocation",
+            "required": true
+          },
+          {
+            "name": "maintenance_id",
+            "type": "text",
+            "label": "Maintenance id"
+          }
+        ],
+        "resource": "budgetTransactions",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        }
+      },
+      {
+        "id": "transaction-approve",
+        "type": "form",
+        "title": "Approve a transaction",
+        "width": "half",
+        "action": "execute",
+        "fields": [
+          {
+            "name": "record_id",
+            "type": "text",
+            "label": "Transaction id",
+            "required": true
+          },
+          {
+            "name": "decision",
+            "type": "text",
+            "label": "Decision: approve or reject",
+            "required": true
+          },
+          {
+            "name": "notes",
+            "type": "textarea",
+            "label": "Note"
+          }
+        ],
+        "resource": "budgetTransactions",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        }
+      }
+    ]
+  },
+  "source": {
+    "repository": "https://github.com/vku-open-source-2026/SynapseCity",
+    "path": "plugins/city-budget-office.plugin.json",
+    "revision": "2026-11-14.3"
+  },
+  "checksum": "sha256:a47b4d5ace9ce7343035d75fc0988884227b05fb09c49236a858a49e585a3ad2"
+}

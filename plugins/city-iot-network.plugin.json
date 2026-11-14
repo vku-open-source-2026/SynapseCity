@@ -1,0 +1,243 @@
+{
+  "format": "synapsedx-plugin",
+  "formatVersion": 1,
+  "plugin": {
+    "product": "city",
+    "name": "City IoT network",
+    "slug": "city-iot-network",
+    "audience": "admin",
+    "roles": [
+      "admin",
+      "manager"
+    ],
+    "widgets": [
+      {
+        "id": "intro",
+        "text": "Keep the sensor registry current and ingest observations into the Tier-2 IoT datasets. Thresholds and metadata are JSON strings reviewed by the City action workflow.",
+        "type": "text",
+        "title": "Sensors and readings",
+        "width": "full"
+      },
+      {
+        "id": "iot-metric",
+        "type": "metric",
+        "title": "Sensors",
+        "width": "half",
+        "resource": "iot"
+      },
+      {
+        "id": "readings-metric",
+        "type": "metric",
+        "title": "Readings",
+        "width": "half",
+        "resource": "iotReadings"
+      },
+      {
+        "id": "alerts-metric",
+        "type": "metric",
+        "title": "Alerts",
+        "width": "half",
+        "resource": "alerts"
+      },
+      {
+        "id": "iot-table",
+        "type": "table",
+        "title": "Sensor registry",
+        "width": "full",
+        "columns": [
+          "id",
+          "sensor_code",
+          "asset_id",
+          "sensor_type",
+          "status",
+          "measurement_unit",
+          "last_seen",
+          "last_reading"
+        ],
+        "resource": "iot"
+      },
+      {
+        "id": "readings-table",
+        "type": "table",
+        "title": "Recent readings",
+        "width": "full",
+        "columns": [
+          "id",
+          "sensor_id",
+          "timestamp",
+          "value"
+        ],
+        "resource": "iotReadings"
+      },
+      {
+        "id": "sensor-create",
+        "type": "form",
+        "title": "Register a sensor",
+        "width": "full",
+        "action": "create",
+        "fields": [
+          {
+            "name": "sensor_code",
+            "type": "text",
+            "label": "Sensor code",
+            "required": true
+          },
+          {
+            "name": "asset_id",
+            "type": "text",
+            "label": "Asset id",
+            "required": true
+          },
+          {
+            "name": "sensor_type",
+            "type": "text",
+            "label": "Sensor type",
+            "required": true
+          },
+          {
+            "name": "status",
+            "type": "text",
+            "label": "Status"
+          },
+          {
+            "name": "measurement_unit",
+            "type": "text",
+            "label": "Measurement unit"
+          },
+          {
+            "name": "latitude",
+            "type": "number",
+            "label": "Latitude"
+          },
+          {
+            "name": "longitude",
+            "type": "number",
+            "label": "Longitude"
+          },
+          {
+            "name": "threshold_json",
+            "type": "textarea",
+            "label": "Thresholds (JSON)"
+          }
+        ],
+        "resource": "iot",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        }
+      },
+      {
+        "id": "sensor-update",
+        "type": "form",
+        "title": "Update a sensor",
+        "width": "half",
+        "action": "update",
+        "fields": [
+          {
+            "name": "record_id",
+            "type": "text",
+            "label": "Sensor id",
+            "required": true
+          },
+          {
+            "name": "sensor_type",
+            "type": "text",
+            "label": "Sensor type"
+          },
+          {
+            "name": "status",
+            "type": "text",
+            "label": "Status"
+          },
+          {
+            "name": "measurement_unit",
+            "type": "text",
+            "label": "Measurement unit"
+          },
+          {
+            "name": "latitude",
+            "type": "number",
+            "label": "Latitude"
+          },
+          {
+            "name": "longitude",
+            "type": "number",
+            "label": "Longitude"
+          },
+          {
+            "name": "threshold_json",
+            "type": "textarea",
+            "label": "Thresholds (JSON)"
+          }
+        ],
+        "resource": "iot",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        }
+      },
+      {
+        "id": "sensor-delete",
+        "type": "form",
+        "title": "Retire a sensor",
+        "width": "half",
+        "action": "delete",
+        "fields": [
+          {
+            "name": "record_id",
+            "type": "text",
+            "label": "Sensor id",
+            "required": true
+          }
+        ],
+        "resource": "iot",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        }
+      },
+      {
+        "id": "reading-create",
+        "type": "form",
+        "title": "Ingest a reading",
+        "width": "half",
+        "action": "create",
+        "fields": [
+          {
+            "name": "sensor_id",
+            "type": "text",
+            "label": "Sensor id",
+            "required": true
+          },
+          {
+            "name": "value",
+            "type": "number",
+            "label": "Value",
+            "required": true
+          },
+          {
+            "name": "timestamp",
+            "type": "text",
+            "label": "Timestamp"
+          },
+          {
+            "name": "metadata_json",
+            "type": "textarea",
+            "label": "Metadata (JSON)"
+          }
+        ],
+        "resource": "iotReadings",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        }
+      }
+    ]
+  },
+  "source": {
+    "repository": "https://github.com/vku-open-source-2026/SynapseCity",
+    "path": "plugins/city-iot-network.plugin.json",
+    "revision": "2026-11-14.3"
+  },
+  "checksum": "sha256:f0530e6ae704a7ac591afdc4022297fda34cf634abd9345e2d1479216dbde80c"
+}

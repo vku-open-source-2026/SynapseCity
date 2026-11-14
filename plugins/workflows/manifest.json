@@ -15,7 +15,8 @@
     "resource",
     "submittedBy",
     "submittedAt",
-    "fields"
+    "fields",
+    "action"
   ],
   "persistence": {
     "transport": "httpRequest",
@@ -166,5 +167,35 @@
       "status": "source_ready_pending_manifest_sync"
     }
   ],
-  "lifecycleNote": "Second City batch (incident acknowledge/close/reject/verify, maintenance cancel). Artifacts are source-ready; canonical manifest merge + tooling/harness update is a repo-sync handoff to avoid overlapping scripts/** ownership."
+  "lifecycleNote": "Second City batch (incident acknowledge/close/reject/verify, maintenance cancel). Artifacts are source-ready; canonical manifest merge + tooling/harness update is a repo-sync handoff to avoid overlapping scripts/** ownership.",
+  "genericActionWorkflow": {
+    "workflow": "city-workspace-actions",
+    "file": "plugins/workflows/city-workspace-actions.workflow.json",
+    "product": "city",
+    "description": "Declarative create/update/delete/execute dispatcher for organization workspace forms. The DX published-plugin binding pins revision and checksum; fields, datasets and statuses are product-owned allowlists.",
+    "actions": [
+      "create",
+      "update",
+      "delete",
+      "execute"
+    ],
+    "datasets": {
+      "assets": "city-assets",
+      "incidents": "city-incidents",
+      "maintenance": "city-maintenance",
+      "iot": "city-iot-sensors",
+      "iotReadings": "city-iot-readings",
+      "alerts": "city-alerts",
+      "budgets": "city-budgets",
+      "budgetTransactions": "city-budget-transactions",
+      "reports": "city-reports",
+      "users": "city-users",
+      "geofences": "city-geofences",
+      "ingest": "city-ingest-jobs",
+      "files": "city-files",
+      "notifications": "city-notifications"
+    },
+    "status": "source_ready_pending_credential_binding",
+    "generator": "plugins/workflows/generate-workspace-actions.mjs"
+  }
 }
