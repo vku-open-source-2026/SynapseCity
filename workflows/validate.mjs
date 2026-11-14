@@ -7,9 +7,19 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
+const pluginWorkflows = path.join(dir, '..', 'plugins', 'workflows');
+const files = [
+  ...fs.readdirSync(dir)
+    .filter((f) => f.endsWith('.workflow.json') || f === 'mcp-docs-reader.json')
+    .map((name) => ({ name, file: path.join(dir, name) })),
+  ...(fs.existsSync(pluginWorkflows)
+    ? fs.readdirSync(pluginWorkflows)
+      .filter((f) => f.endsWith('.workflow.json'))
+      .map((name) => ({ name: `plugins/workflows/${name}`, file: path.join(pluginWorkflows, name) }))
+    : []),
+];
 let failed = 0;
-for (const name of fs.readdirSync(dir).filter((f) => f.endsWith('.workflow.json') || f === 'mcp-docs-reader.json')) {
-  const file = path.join(dir, name);
+for (const { name, file } of files) {
   try {
     const wf = JSON.parse(fs.readFileSync(file, 'utf8'));
     if (!wf.name || !Array.isArray(wf.nodes) || typeof wf.connections !== 'object') throw new Error('missing name/nodes/connections');

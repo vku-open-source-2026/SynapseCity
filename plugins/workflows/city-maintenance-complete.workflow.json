@@ -1,0 +1,143 @@
+{
+  "name": "city-maintenance-complete",
+  "nodes": [
+    {
+      "id": "dx-manual-trigger",
+      "name": "DX manual execution",
+      "type": "manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        200,
+        300
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "validate-envelope",
+      "name": "Validate DX envelope and action fields",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        300
+      ],
+      "parameters": {
+        "code": "const envelope = $input || {};\nconst text = (value) => (typeof value === 'string' ? value.trim() : '');\nconst envelopeKeys = new Set(['pluginId', 'widgetId', 'product', 'resource', 'submittedBy', 'submittedAt', 'fields']);\nconst unknownEnvelope = Object.keys(envelope).filter((key) => !envelopeKeys.has(key));\nif (unknownEnvelope.length) throw new Error('unknown_envelope_fields:' + unknownEnvelope.join(','));\nconst product = text(envelope.product);\nconst resource = text(envelope.resource);\nconst submittedBy = text(envelope.submittedBy);\nif (!submittedBy) throw new Error('submitted_by_required');\nconst fields = envelope.fields && typeof envelope.fields === 'object' && !Array.isArray(envelope.fields) ? envelope.fields : null;\nif (!fields) throw new Error('fields_required');\nif (product !== 'city') throw new Error('unsupported_product');\nif (resource !== 'maintenance') throw new Error('unsupported_resource');\nconst recordId = text(fields.work_order_id);\nif (!/^[A-Za-z0-9_@.:+-]{1,256}$/.test(recordId)) throw new Error('record_id_invalid');\nconst encodedId = encodeURIComponent(recordId);\nconst allowed = new Set([\"work_order_id\"]);\nconst unknown = Object.keys(fields).filter((key) => !allowed.has(key));\nif (unknown.length) throw new Error('unknown_fields:' + unknown.join(','));\n\nconst patch = { status: 'completed', completed_at: $now, actual_end_time: $now };\n\nconst audit = {\n  product,\n  resource,\n  operation: 'maintenance.complete',\n  recordId,\n  pluginId: text(envelope.pluginId),\n  widgetId: text(envelope.widgetId),\n  submittedBy,\n  submittedAt: text(envelope.submittedAt) || $now,\n};\n\nreturn { recordId, encodedId, patch, audit, operation: 'maintenance.complete' };"
+      }
+    },
+    {
+      "id": "http-get",
+      "name": "Read current record",
+      "type": "httpRequest",
+      "typeVersion": 4,
+      "position": [
+        640,
+        300
+      ],
+      "parameters": {
+        "url": "={{ 'https://synapsedx.sbs/v1/capabilities/datasets/city-maintenance/records/' + $json.encodedId }}",
+        "method": "GET",
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        "auth": {
+          "credentialRef": "synapsedx-organization",
+          "header": "X-API-Key",
+          "allowedOrigins": [
+            "https://synapsedx.sbs"
+          ]
+        },
+        "includeInput": true,
+        "timeoutMs": 15000
+      }
+    },
+    {
+      "id": "merge-record",
+      "name": "Merge and enforce invariants",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        860,
+        300
+      ],
+      "parameters": {
+        "code": "const response = $input || {};\nconst current = response.body;\nconst action = response.input;\nif (response.statusCode !== 200 || !current || typeof current.data !== 'object' || !current.data) throw new Error('record_not_found');\nconst data = current.data;\nif (!Number.isInteger(current.version)) throw new Error('record_version_unavailable');\nif (data.status === 'completed' || data.status === 'cancelled') throw new Error('record_terminal');\nif (data.status !== 'in_progress') throw new Error('record_not_in_progress');\nif (![\"in_progress\"].includes(String(data.status))) throw new Error('record_status_invalid');\nconst next = { ...data, ...action.patch };\nreturn { body: { data: next, ifVersion: current.version }, encodedId: action.encodedId, audit: action.audit };\n"
+      }
+    },
+    {
+      "id": "http-patch",
+      "name": "Patch full record",
+      "type": "httpRequest",
+      "typeVersion": 4,
+      "position": [
+        640,
+        300
+      ],
+      "parameters": {
+        "url": "={{ 'https://synapsedx.sbs/v1/capabilities/datasets/city-maintenance/records/' + $json.encodedId }}",
+        "method": "PATCH",
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        "auth": {
+          "credentialRef": "synapsedx-organization",
+          "header": "X-API-Key",
+          "allowedOrigins": [
+            "https://synapsedx.sbs"
+          ]
+        },
+        "body": "={{ $json.body }}",
+        "includeInput": false,
+        "timeoutMs": 15000
+      }
+    }
+  ],
+  "connections": {
+    "DX manual execution": {
+      "main": [
+        [
+          {
+            "node": "Validate DX envelope and action fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate DX envelope and action fields": {
+      "main": [
+        [
+          {
+            "node": "Read current record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read current record": {
+      "main": [
+        [
+          {
+            "node": "Merge and enforce invariants",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge and enforce invariants": {
+      "main": [
+        [
+          {
+            "node": "Patch full record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

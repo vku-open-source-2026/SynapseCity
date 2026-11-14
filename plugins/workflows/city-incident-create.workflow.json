@@ -1,0 +1,80 @@
+{
+  "name": "city-incident-create",
+  "nodes": [
+    {
+      "id": "dx-manual-trigger",
+      "name": "DX manual execution",
+      "type": "manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        200,
+        300
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "validate-envelope",
+      "name": "Validate DX envelope and domain fields",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        300
+      ],
+      "parameters": {
+        "code": "const envelope = $input || {};\nconst text = (value) => (typeof value === 'string' ? value.trim() : '');\nconst envelopeKeys = new Set(['pluginId', 'widgetId', 'product', 'resource', 'submittedBy', 'submittedAt', 'fields']);\nconst unknownEnvelope = Object.keys(envelope).filter((key) => !envelopeKeys.has(key));\nif (unknownEnvelope.length) throw new Error('unknown_envelope_fields:' + unknownEnvelope.join(','));\nconst product = text(envelope.product);\nconst resource = text(envelope.resource);\nconst submittedBy = text(envelope.submittedBy);\nif (!submittedBy) throw new Error('submitted_by_required');\nconst fields = envelope.fields && typeof envelope.fields === 'object' && !Array.isArray(envelope.fields) ? envelope.fields : null;\nif (!fields) throw new Error('fields_required');\n\nif (product !== 'city') throw new Error('unsupported_product');\nif (resource !== 'incidents') throw new Error('unsupported_resource');\nconst allowed = new Set([\"title\",\"description\",\"category\",\"severity\"]);\nconst unknown = Object.keys(fields).filter((key) => !allowed.has(key));\nif (unknown.length) throw new Error('unknown_fields:' + unknown.join(','));\nconst title = text(fields.title);\nif (!title || title.length > 200) throw new Error('title_required_max_200');\nconst category = text(fields.category);\nif (!category || category.length > 80) throw new Error('category_required_max_80');\nconst severity = text(fields.severity) || 'medium';\nif (!['low', 'medium', 'high', 'critical'].includes(severity)) throw new Error('severity_invalid');\nconst description = text(fields.description);\nif (description.length > 4000) throw new Error('description_max_4000');\nconst binding = { product, resource, dataset: 'city-incidents', recordType: 'Incident', operation: 'incidents.create' };\nconst record = { type: 'Incident', title, description, category, severity, status: 'open', reported_at: $now, source: 'synapsedx-plugin' };\n\nconst audit = {\n  product,\n  resource,\n  operation: 'incidents.create',\n  pluginId: text(envelope.pluginId),\n  widgetId: text(envelope.widgetId),\n  submittedBy,\n  submittedAt: text(envelope.submittedAt) || $now,\n};\n\nreturn {\n  body: { data: record, publish: true },\n  audit,\n  binding,\n};\n"
+      }
+    },
+    {
+      "id": "create-record",
+      "name": "Create via Tier-2 records",
+      "type": "httpRequest",
+      "typeVersion": 4,
+      "position": [
+        640,
+        300
+      ],
+      "parameters": {
+        "url": "https://synapsedx.sbs/v1/capabilities/datasets/city-incidents/records",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        "auth": {
+          "credentialRef": "synapsedx-organization",
+          "header": "X-API-Key",
+          "allowedOrigins": [
+            "https://synapsedx.sbs"
+          ]
+        },
+        "body": "={{ $json.body }}",
+        "timeoutMs": 15000
+      }
+    }
+  ],
+  "connections": {
+    "DX manual execution": {
+      "main": [
+        [
+          {
+            "node": "Validate DX envelope and domain fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate DX envelope and domain fields": {
+      "main": [
+        [
+          {
+            "node": "Create via Tier-2 records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

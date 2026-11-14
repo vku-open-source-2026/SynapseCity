@@ -1,0 +1,170 @@
+{
+  "format": "synapsedx-workflow-source",
+  "formatVersion": 3,
+  "product": "city",
+  "repository": "https://github.com/vku-open-source-2026/SynapseCity",
+  "revision": "2026-11-14",
+  "status": "source_ready_pending_credential_binding",
+  "active": false,
+  "trigger": "manualTrigger",
+  "description": "Tier-1 workflow definition source for a DX-bound workspace form. Source-ready; DX must bind the credentialRef and artifact pins before execution.",
+  "bindingEnvelope": [
+    "pluginId",
+    "widgetId",
+    "product",
+    "resource",
+    "submittedBy",
+    "submittedAt",
+    "fields"
+  ],
+  "persistence": {
+    "transport": "httpRequest",
+    "endpointTemplate": "https://synapsedx.sbs/v1/capabilities/datasets/{dataset}/records",
+    "method": "POST",
+    "bodyShape": "{ data: <domain record>, publish: <boolean> }",
+    "datasetSource": "derived server-side from product+resource",
+    "userSuppliedBinding": "rejected",
+    "credentialRef": "synapsedx-organization",
+    "credentialHeader": "X-API-Key",
+    "credentialKind": "api-key",
+    "note": "The portable source stores a credentialRef, never a deployment-local credential id or secret. DX/workflow worker must resolve it to a same-org Tier-2 API-key credential before execution.",
+    "datasetByResource": {
+      "incidents": "city-incidents",
+      "maintenance": "city-maintenance"
+    },
+    "credentialBinding": {
+      "owner": "DX workflow management (workflow worker)",
+      "resolvedTo": "per-organization technical owner-only encrypted api-key credential",
+      "exportRebinding": "DX export rewrites the bound deployment credential into the portable source reference; no id or secret is written to the repository",
+      "runtimeChecksum": "DX verifies the artifact graph checksum/revision pins at execution",
+      "status": "pending_dx_binding"
+    },
+    "transitionTransport": "httpRequest GET(includeInput:true) -> code merge/invariant check -> PATCH full data with ifVersion",
+    "credentialAllowedOrigins": [
+      "https://synapsedx.sbs"
+    ]
+  },
+  "pluginWidgetBinding": {
+    "portableField": "workflowRef",
+    "resolvedFields": [
+      "workflowArtifactId",
+      "workflowArtifactRevision",
+      "workflowArtifactChecksum"
+    ],
+    "note": "Portable bundles cannot carry environment-specific artifact ids or pins. DX binds them at import/install/publish."
+  },
+  "deploymentGate": "Do not activate or deploy until the credential binding, artifact pinning, and engine test on the deployment are verified. Tier-3 pages stay live until then.",
+  "workflows": [
+    {
+      "operation": "incidents.create",
+      "workflow": "city-incident-create",
+      "file": "plugins/workflows/city-incident-create.workflow.json",
+      "dataset": "city-incidents",
+      "method": "POST",
+      "status": "source_ready_pending_credential_binding",
+      "resource": "incidents"
+    },
+    {
+      "operation": "maintenance.create",
+      "workflow": "city-maintenance-create",
+      "file": "plugins/workflows/city-maintenance-create.workflow.json",
+      "dataset": "city-maintenance",
+      "method": "POST",
+      "status": "source_ready_pending_credential_binding",
+      "resource": "maintenance"
+    },
+    {
+      "operation": "incidents.assign",
+      "workflow": "city-incident-assign",
+      "file": "plugins/workflows/city-incident-assign.workflow.json",
+      "dataset": "city-incidents",
+      "method": "PATCH",
+      "resource": "incidents",
+      "status": "source_ready_pending_credential_binding"
+    },
+    {
+      "operation": "incidents.resolve",
+      "workflow": "city-incident-resolve",
+      "file": "plugins/workflows/city-incident-resolve.workflow.json",
+      "dataset": "city-incidents",
+      "method": "PATCH",
+      "resource": "incidents",
+      "status": "source_ready_pending_credential_binding"
+    },
+    {
+      "operation": "maintenance.assign",
+      "workflow": "city-maintenance-assign",
+      "file": "plugins/workflows/city-maintenance-assign.workflow.json",
+      "dataset": "city-maintenance",
+      "method": "PATCH",
+      "resource": "maintenance",
+      "status": "source_ready_pending_credential_binding"
+    },
+    {
+      "operation": "maintenance.start",
+      "workflow": "city-maintenance-start",
+      "file": "plugins/workflows/city-maintenance-start.workflow.json",
+      "dataset": "city-maintenance",
+      "method": "PATCH",
+      "resource": "maintenance",
+      "status": "source_ready_pending_credential_binding"
+    },
+    {
+      "operation": "maintenance.complete",
+      "workflow": "city-maintenance-complete",
+      "file": "plugins/workflows/city-maintenance-complete.workflow.json",
+      "dataset": "city-maintenance",
+      "method": "PATCH",
+      "resource": "maintenance",
+      "status": "source_ready_pending_credential_binding"
+    }
+  ],
+  "lifecycleWorkflows": [
+    {
+      "operation": "incidents.acknowledge",
+      "workflow": "city-incident-acknowledge",
+      "file": "plugins/workflows/city-incident-acknowledge.workflow.json",
+      "dataset": "city-incidents",
+      "method": "PATCH",
+      "resource": "incidents",
+      "status": "source_ready_pending_manifest_sync"
+    },
+    {
+      "operation": "incidents.close",
+      "workflow": "city-incident-close",
+      "file": "plugins/workflows/city-incident-close.workflow.json",
+      "dataset": "city-incidents",
+      "method": "PATCH",
+      "resource": "incidents",
+      "status": "source_ready_pending_manifest_sync"
+    },
+    {
+      "operation": "incidents.reject",
+      "workflow": "city-incident-reject",
+      "file": "plugins/workflows/city-incident-reject.workflow.json",
+      "dataset": "city-incidents",
+      "method": "PATCH",
+      "resource": "incidents",
+      "status": "source_ready_pending_manifest_sync"
+    },
+    {
+      "operation": "incidents.verify",
+      "workflow": "city-incident-verify",
+      "file": "plugins/workflows/city-incident-verify.workflow.json",
+      "dataset": "city-incidents",
+      "method": "PATCH",
+      "resource": "incidents",
+      "status": "source_ready_pending_manifest_sync"
+    },
+    {
+      "operation": "maintenance.cancel",
+      "workflow": "city-maintenance-cancel",
+      "file": "plugins/workflows/city-maintenance-cancel.workflow.json",
+      "dataset": "city-maintenance",
+      "method": "PATCH",
+      "resource": "maintenance",
+      "status": "source_ready_pending_manifest_sync"
+    }
+  ],
+  "lifecycleNote": "Second City batch (incident acknowledge/close/reject/verify, maintenance cancel). Artifacts are source-ready; canonical manifest merge + tooling/harness update is a repo-sync handoff to avoid overlapping scripts/** ownership."
+}

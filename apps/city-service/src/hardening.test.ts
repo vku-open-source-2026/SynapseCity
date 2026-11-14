@@ -12,6 +12,8 @@ process.env.ALLOW_LOCAL_DEPENDENCIES = 'true';
 process.env.AUTH_SECRET = 'city-hardening-test-secret';
 // This suite exercises the explicit development-only demo session shell.
 process.env.CITY_AUTH_MODE = 'demo';
+// Non-production test only: keep the pre-migration auth routes reachable.
+process.env.TIER3_AUTH_MODE = 'legacy';
 process.env.NODE_ENV = 'test';
 process.env.LOG_LEVEL = 'silent';
 process.env.AUTH_RATE_LIMIT = '2';

@@ -6,6 +6,7 @@ import { CircleAlert, LogIn, Menu, Monitor, Moon, Siren, Sun, X } from "lucide-r
 import { useI18n } from "../lib/i18n-context";
 import { useTheme } from "../lib/theme-context";
 import { LINKS } from "../lib/site";
+import { WORKSPACE_URL } from "../lib/workspace";
 import { StableLabel } from "./StableLabel";
 import { BrandSymbol } from "./BrandSymbol";
 
@@ -118,14 +119,16 @@ const Header: React.FC = () => {
                         <Siren className="h-4 w-4" />
                         <StableLabel pick={(d) => d.nav.sos} />
                     </a>
-                    <Link
-                        to="/login"
+                    {/* Work interfaces moved to the Tier-2 DX workspace; this is
+                        a public navigation link, never an API dependency. */}
+                    <a
+                        href={WORKSPACE_URL}
                         onClick={closeMobileMenu}
                         className={`${linkBase} text-slate-600 hover:text-sky-600 dark:text-slate-300 dark:hover:text-sky-400`}
                     >
                         <LogIn className="h-4 w-4" />
-                        <StableLabel pick={(d) => d.nav.login} />
-                    </Link>
+                        <StableLabel pick={(d) => d.nav.workspace} />
+                    </a>
 
                     <SiteToggles className="max-lg:hidden" />
 

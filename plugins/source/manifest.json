@@ -1,0 +1,358 @@
+{
+  "format": "synapsedx-plugin-source",
+  "formatVersion": 1,
+  "product": "city",
+  "repository": "https://github.com/vku-open-source-2026/SynapseCity",
+  "revision": "a6190ec2986ba51170c5c649d89a49c1352f9c65",
+  "capturedAt": "2026-11-14T07:11:00.813Z",
+  "activeRedirectUrl": "https://synapsedx.sbs/workspace",
+  "description": "Exact pre-migration source for the retired Tier-3 work surfaces: route wrappers and the domain pages they rendered. Reference only: outside the app build, never mounted, imported or executed by the console, the plugin CLI or SynapseDX. Import specifiers reflect the original src/ layout and are not resolved in this archive.",
+  "bundles": {
+    "apps/console/src/routes/admin": "plugins/city-operations-overview.plugin.json",
+    "apps/console/src/routes/technician": "plugins/city-technician-work.plugin.json",
+    "apps/console/src/routes/login.tsx": "plugins/city-operations-overview.plugin.json",
+    "apps/console/src/routes/register.tsx": "plugins/city-operations-overview.plugin.json"
+  },
+  "files": [
+    {
+      "originalPath": "apps/console/src/routes/admin.tsx",
+      "archivePath": "plugins/source/apps/console/src/routes/admin.tsx",
+      "sha256": "sha256:74c404f8c36eb98de7f19cad70bad7aa24f203cb12050d7ef5d7f67648839da5",
+      "bytes": 427
+    },
+    {
+      "originalPath": "apps/console/src/routes/admin/alerts/index.tsx",
+      "archivePath": "plugins/source/apps/console/src/routes/admin/alerts/index.tsx",
+      "sha256": "sha256:50916d382038a01331bc2cb336c30a2ea7919cefc849572959ae2b1c5b4b97af",
+      "bytes": 290
+    },
+    {
+      "originalPath": "apps/console/src/routes/admin/alerts/list.tsx",
+      "archivePath": "plugins/source/apps/console/src/routes/admin/alerts/list.tsx",
+      "sha256": "sha256:ae96c170dcf07d5f7d5f6fa5a1bb4850b77360305b652f5063994360d94a460f",
+      "bytes": 277
+    },
+    {
+      "originalPath": "apps/console/src/routes/admin/analytics.tsx",
+      "archivePath": "plugins/source/apps/console/src/routes/admin/analytics.tsx",
+      "sha256": "sha256:4e88a7cd85a582666b43064a073a7172c83c7687ef8a585223da2698a3da7501",
+      "bytes": 300
+    },
+    {
+      "originalPath": "apps/console/src/routes/admin/assets/$id.tsx",
+      "archivePath": "plugins/source/apps/console/src/routes/admin/assets/$id.tsx",
+      "sha256": "sha256:c9f626c2462d228fe3c8acb194e05c9f130de45aaa2dcbcab06ae42a27dc8524",
+      "bytes": 429
+    },
+    {
+      "originalPath": "apps/console/src/routes/admin/assets/create.tsx",
+      "archivePath": "plugins/source/apps/console/src/routes/admin/assets/create.tsx",
+      "sha256": "sha256:0ffc012f4984cd23d1c11f9897b401a4e03e56fbbb125c28b47cf1c1e499e6dc",
+      "bytes": 304
+    },
+    {
+      "originalPath": "apps/console/src/routes/admin/assets/edit.$id.tsx",
+      "archivePath": "plugins/source/apps/console/src/routes/admin/assets/edit.$id.tsx",
+      "sha256": "sha256:803915962c4f8a0af43411dde26e79af305553116e689b682d0a869833492be1",
+      "bytes": 304
+    },
+    {
+      "originalPath": "apps/console/src/routes/admin/assets/index.tsx",
+      "archivePath": "plugins/source/apps/console/src/routes/admin/assets/index.tsx",
+      "sha256": "sha256:743fbafefb07607aebe3b1c8261a32559a459e8620dd79536c5f92edf580d9fe",
+      "bytes": 274
+    },
+    {
+      "originalPath": "apps/console/src/routes/admin/budgets/$id.tsx",
+      "archivePath": "plugins/source/apps/console/src/routes/admin/budgets/$id.tsx",
+      "sha256": "sha256:ad696b8d2a4044f849f52839acf86c1b56bae0ac7227403c0f935e2517472921",
+      "bytes": 287
+    },
+    {
+      "originalPath": "apps/console/src/routes/admin/budgets/create.tsx",
+      "archivePath": "plugins/source/apps/console/src/routes/admin/budgets/create.tsx",
+      "sha256": "sha256:c7a960fc58a61827d0992eeb345e204bddf3b12dcde02e96b84d2a9a422f9056",
+      "bytes": 290
+    },
+    {
+      "originalPath": "apps/console/src/routes/admin/budgets/index.tsx",
+      "archivePath": "plugins/source/apps/console/src/routes/admin/budgets/index.tsx",
+      "sha256": "sha256:299368e19bd6c50af0ca8f772dcf0dab683b67a359652e74b02a613f5f25497a",
+      "bytes": 278
+    },
+    {
+      "originalPath": "apps/console/src/routes/admin/incidents/$id.tsx",
+      "archivePath": "plugins/source/apps/console/src/routes/admin/incidents/$id.tsx",
+      "sha256": "sha256:d80a39fc63a0e10889898e3d8a1ff8f27e76e7cc9148732b19db5391f8a0f958",
+      "bytes": 297
+    },
+    {
+      "originalPath": "apps/console/src/routes/admin/incidents/create.tsx",
+      "archivePath": "plugins/source/apps/console/src/routes/admin/incidents/create.tsx",
+      "sha256": "sha256:a51777b56f1e2f0b945b7b3eb71e184619afad074138ac7eae060d41f8d7077e",
+      "bytes": 300
+    },
+    {
+      "originalPath": "apps/console/src/routes/admin/incidents/index.tsx",
+      "archivePath": "plugins/source/apps/console/src/routes/admin/incidents/index.tsx",
+      "sha256": "sha256:55df6eed661dfd453caa86b729801880e7b007bc685c209b572e7e248e0a27b8",
+      "bytes": 288
+    },
+    {
+      "originalPath": "apps/console/src/routes/admin/index.tsx",
+      "archivePath": "plugins/source/apps/console/src/routes/admin/index.tsx",
+      "sha256": "sha256:69813226c6a29a662e10b8d0db4c380e01d9b877f94ab45dc4b2ff2dcc862770",
+      "bytes": 259
+    },
+    {
+      "originalPath": "apps/console/src/routes/admin/ingest.tsx",
+      "archivePath": "plugins/source/apps/console/src/routes/admin/ingest.tsx",
+      "sha256": "sha256:46f0d28b35eface6285ee2d0447b848fa1d27bdac5a0e36c00b188b3e1ec04e5",
+      "bytes": 278
+    },
+    {
+      "originalPath": "apps/console/src/routes/admin/iot/$id.tsx",
+      "archivePath": "plugins/source/apps/console/src/routes/admin/iot/$id.tsx",
+      "sha256": "sha256:000357a84fb18f555d26d20e6cfe79e95275da730c6083264ccc64417da1dfb2",
+      "bytes": 279
+    },
+    {
+      "originalPath": "apps/console/src/routes/admin/iot/create.tsx",
+      "archivePath": "plugins/source/apps/console/src/routes/admin/iot/create.tsx",
+      "sha256": "sha256:73522802e5f13ae501f0d6c4a163f5d8da5d003ee13e42820032f8351a11dc2e",
+      "bytes": 282
+    },
+    {
+      "originalPath": "apps/console/src/routes/admin/iot/index.tsx",
+      "archivePath": "plugins/source/apps/console/src/routes/admin/iot/index.tsx",
+      "sha256": "sha256:eeda8b63e4b8edc72c8508d81f8002eefc52331d4d8db9125f9053a99790d7ee",
+      "bytes": 270
+    },
+    {
+      "originalPath": "apps/console/src/routes/admin/map.tsx",
+      "archivePath": "plugins/source/apps/console/src/routes/admin/map.tsx",
+      "sha256": "sha256:8559b7b4319b1d5a815cc5601df35591dbb474f0cbe28f8ae8d40e8f4f4d38fe",
+      "bytes": 396
+    },
+    {
+      "originalPath": "apps/console/src/routes/admin/reports/create.tsx",
+      "archivePath": "plugins/source/apps/console/src/routes/admin/reports/create.tsx",
+      "sha256": "sha256:14622dfa1305d73de8dc17db700ce2ce7059959e8c2102e8050e6bb015bbf2a5",
+      "bytes": 290
+    },
+    {
+      "originalPath": "apps/console/src/routes/admin/reports/index.tsx",
+      "archivePath": "plugins/source/apps/console/src/routes/admin/reports/index.tsx",
+      "sha256": "sha256:4f1540970e1cbbb66c825b770809fa9e605ed5343e165348a791046f56e6b2a5",
+      "bytes": 278
+    },
+    {
+      "originalPath": "apps/console/src/routes/admin/settings/index.tsx",
+      "archivePath": "plugins/source/apps/console/src/routes/admin/settings/index.tsx",
+      "sha256": "sha256:843db252403b4bb48f8b6b0ddcf633bea63ffdf56c4636ecbd6c4dc1084a703d",
+      "bytes": 295
+    },
+    {
+      "originalPath": "apps/console/src/routes/admin/users/$id.tsx",
+      "archivePath": "plugins/source/apps/console/src/routes/admin/users/$id.tsx",
+      "sha256": "sha256:c6ecb839c7d118617ce4bbb497ac66abbb2c7fd3bb324c9d7e3b2f37f91d206d",
+      "bytes": 277
+    },
+    {
+      "originalPath": "apps/console/src/routes/admin/users/create.tsx",
+      "archivePath": "plugins/source/apps/console/src/routes/admin/users/create.tsx",
+      "sha256": "sha256:1b7745d84bcb11927deb402e540c137d922879b3481c529319c9042c8b8e0554",
+      "bytes": 280
+    },
+    {
+      "originalPath": "apps/console/src/routes/admin/users/index.tsx",
+      "archivePath": "plugins/source/apps/console/src/routes/admin/users/index.tsx",
+      "sha256": "sha256:7f595f173fe656ed0863a2b352929c8ad81c3858651f0c479b8a840849c586d1",
+      "bytes": 268
+    },
+    {
+      "originalPath": "apps/console/src/routes/login.tsx",
+      "archivePath": "plugins/source/apps/console/src/routes/login.tsx",
+      "sha256": "sha256:67fc35bb73fa3e158c338d5e8b4951c74e8c64643b334ba73739c1906d4ae500",
+      "bytes": 263
+    },
+    {
+      "originalPath": "apps/console/src/routes/register.tsx",
+      "archivePath": "plugins/source/apps/console/src/routes/register.tsx",
+      "sha256": "sha256:ced6e08aa1f66377c0de3065f0dc2d7e9dfd9054796ad5b93e0f726bd87370a2",
+      "bytes": 275
+    },
+    {
+      "originalPath": "apps/console/src/routes/technician.tsx",
+      "archivePath": "plugins/source/apps/console/src/routes/technician.tsx",
+      "sha256": "sha256:ab5118c8d18a98f45109d27ada8627e3bc1cdc6227348e7fea322153f5db574d",
+      "bytes": 1564
+    },
+    {
+      "originalPath": "apps/console/src/routes/technician/index.tsx",
+      "archivePath": "plugins/source/apps/console/src/routes/technician/index.tsx",
+      "sha256": "sha256:6835d48a6568f5c3504036e8e15578e381f55f0499c0a8f0c36af78371d57154",
+      "bytes": 12132
+    },
+    {
+      "originalPath": "apps/console/src/routes/technician/maintenance.$id.tsx",
+      "archivePath": "plugins/source/apps/console/src/routes/technician/maintenance.$id.tsx",
+      "sha256": "sha256:ca433135a739a9d5908180190354c9ddc33e7478c3dc90420c37f903a4986437",
+      "bytes": 39391
+    },
+    {
+      "originalPath": "apps/console/src/routes/technician/settings/index.tsx",
+      "archivePath": "plugins/source/apps/console/src/routes/technician/settings/index.tsx",
+      "sha256": "sha256:719d09a023db439a1839c3e97119123fe2e67d7d516e362562e5e83938128c78",
+      "bytes": 304
+    },
+    {
+      "originalPath": "apps/console/src/routes/technician/tasks.$taskId.tsx",
+      "archivePath": "plugins/source/apps/console/src/routes/technician/tasks.$taskId.tsx",
+      "sha256": "sha256:2bcf911e222459d53644c02111ea26b205a4d52ab230dc14edf7b6ee8436bd62",
+      "bytes": 17412
+    }
+  ],
+  "uiFiles": [
+    {
+      "archivePath": "plugins/source/apps/console/src/pages/AdminLogin.tsx",
+      "sha256": "sha256:9c0db6c6b827dc82f92fbb52ee3babb153fd6ba7c40f1eaa137d40570880e80c",
+      "bytes": 4936
+    },
+    {
+      "archivePath": "plugins/source/apps/console/src/pages/AssetMapView.tsx",
+      "sha256": "sha256:ffde5bd3cf6864b836e6623710584f10cf955e57d6b9687ac19e317a3fcd1f80",
+      "bytes": 5672
+    },
+    {
+      "archivePath": "plugins/source/apps/console/src/pages/Dashboard.tsx",
+      "sha256": "sha256:05fc716647d12a9eab080bfc7513e1a0836263f40548c56ce6c00caa92598c72",
+      "bytes": 24224
+    },
+    {
+      "archivePath": "plugins/source/apps/console/src/pages/LoginPage.tsx",
+      "sha256": "sha256:2c540304f6af04cdc4d589559ab6f4685fbe4ea3e0ece6f8ec3db3babda3ac7d",
+      "bytes": 8876
+    },
+    {
+      "archivePath": "plugins/source/apps/console/src/pages/RegisterPage.tsx",
+      "sha256": "sha256:802dda3e3d87d8fcd66d397f9e62a61ba3fac8494f2f27c388d0d915ab482785",
+      "bytes": 4725
+    },
+    {
+      "archivePath": "plugins/source/apps/console/src/pages/admin/AdminMap.tsx",
+      "sha256": "sha256:a1d1aad2c10fa5139292edea4e265478ec2e787e8a9a6c9d2222dcc954623b25",
+      "bytes": 23771
+    },
+    {
+      "archivePath": "plugins/source/apps/console/src/pages/admin/AssetDetail.tsx",
+      "sha256": "sha256:876c0756fa1e3552cd6f62db21547edd595bb110ee7e7985c1c13e319c3a0963",
+      "bytes": 15770
+    },
+    {
+      "archivePath": "plugins/source/apps/console/src/pages/admin/AssetForm.tsx",
+      "sha256": "sha256:36f36ffed850dbd892f734152430a1084aa98066cb9d5c71bc0e41213c80d825",
+      "bytes": 14340
+    },
+    {
+      "archivePath": "plugins/source/apps/console/src/pages/admin/AssetList.tsx",
+      "sha256": "sha256:845ac20b4b462452f4fbabfadf89ad0aadcb1a9c266c92ef238eecb389677bea",
+      "bytes": 11768
+    },
+    {
+      "archivePath": "plugins/source/apps/console/src/pages/admin/CoverageAnalytics.tsx",
+      "sha256": "sha256:36d56a18ace5aa4afb654fef98001710d5e91217a035d063dfe242a3cf5d6ba3",
+      "bytes": 7913
+    },
+    {
+      "archivePath": "plugins/source/apps/console/src/pages/admin/DataIngest.tsx",
+      "sha256": "sha256:9f33aa5ac25da1dcdfa724bec388b8c38eda99d9b968b44c9dce34c60a5f3c41",
+      "bytes": 8204
+    },
+    {
+      "archivePath": "plugins/source/apps/console/src/pages/admin/UserCreate.tsx",
+      "sha256": "sha256:21d496398d5ceaf8624bbe45aab26f2ddbd8bc5c06268c2049ccdda342c0748d",
+      "bytes": 5888
+    },
+    {
+      "archivePath": "plugins/source/apps/console/src/pages/admin/UserDetail.tsx",
+      "sha256": "sha256:5ec745e62b784662247b8bfe91a69503e2bda90c578b814601572835e50fbbe9",
+      "bytes": 6254
+    },
+    {
+      "archivePath": "plugins/source/apps/console/src/pages/admin/UserList.tsx",
+      "sha256": "sha256:81e366f045b346785b91a6f0e26c9f0778ca4ce95adf9d1b8d515fbdfa3f455c",
+      "bytes": 7662
+    },
+    {
+      "archivePath": "plugins/source/apps/console/src/pages/alerts/AlertDashboard.tsx",
+      "sha256": "sha256:0d654d333e4c064065967ffe2d603e87d49725235b6c9e1448bbc07b91b22202",
+      "bytes": 12297
+    },
+    {
+      "archivePath": "plugins/source/apps/console/src/pages/alerts/AlertList.tsx",
+      "sha256": "sha256:cceb3a8f0a2aa777ca09f31d8451764c1a4654edc5cabb94c9101f0791f8617b",
+      "bytes": 5062
+    },
+    {
+      "archivePath": "plugins/source/apps/console/src/pages/budgets/BudgetCreate.tsx",
+      "sha256": "sha256:d28acc26cfd6a55ecde131b6cae136720ec53764ae2d5143e016027f321be880",
+      "bytes": 4510
+    },
+    {
+      "archivePath": "plugins/source/apps/console/src/pages/budgets/BudgetDetail.tsx",
+      "sha256": "sha256:eccce0add9b858ece530bfe23f75acae009dc78d568ae4f4baf48e32ce1d32e5",
+      "bytes": 8239
+    },
+    {
+      "archivePath": "plugins/source/apps/console/src/pages/budgets/BudgetList.tsx",
+      "sha256": "sha256:dd0d060f6aaebb0ca24c0d6dcf145dd536e6a94dd15dcfca6ce86a1470187aed",
+      "bytes": 3777
+    },
+    {
+      "archivePath": "plugins/source/apps/console/src/pages/incidents/IncidentCreate.tsx",
+      "sha256": "sha256:4ce5a612df7cb4103a8a08f9d429aca4ccad5fe4bcbd00e14d2e11ddbf78efb0",
+      "bytes": 11849
+    },
+    {
+      "archivePath": "plugins/source/apps/console/src/pages/incidents/IncidentDetail.tsx",
+      "sha256": "sha256:41054a723091934c3517b0dfa38a878e0c07fbca2de03a097e62f5c60964e8cf",
+      "bytes": 28404
+    },
+    {
+      "archivePath": "plugins/source/apps/console/src/pages/incidents/IncidentList.tsx",
+      "sha256": "sha256:ec07cde97ad7e25597aacb504b3640c7aea28f6cf0f8a7bda57225b3931cf0ce",
+      "bytes": 15990
+    },
+    {
+      "archivePath": "plugins/source/apps/console/src/pages/iot/SensorCreate.tsx",
+      "sha256": "sha256:744eda2d49411166273723563c8093bccdaf6eac682f6a83a66c5b9f2b9c4a4d",
+      "bytes": 7285
+    },
+    {
+      "archivePath": "plugins/source/apps/console/src/pages/iot/SensorDetail.tsx",
+      "sha256": "sha256:c546893aed67f0ea603e60e0cc83faa18c899eb4fa12818d5d00a98afa1f8955",
+      "bytes": 6201
+    },
+    {
+      "archivePath": "plugins/source/apps/console/src/pages/iot/SensorList.tsx",
+      "sha256": "sha256:945df0cf0e699c3a39b6810eeb3cdf3d8cc9b0252e8dd60010daf0d0f10a76ce",
+      "bytes": 4935
+    },
+    {
+      "archivePath": "plugins/source/apps/console/src/pages/reports/ReportCreate.tsx",
+      "sha256": "sha256:4526ab0d60814a1e57bb3ee76a91170d7097238736982688b4c26840557a87c1",
+      "bytes": 4284
+    },
+    {
+      "archivePath": "plugins/source/apps/console/src/pages/reports/ReportList.tsx",
+      "sha256": "sha256:8aae60561b68bcedf4902582b1fdf72df13b9ca47ff97d31689d30b5bcc0099b",
+      "bytes": 4445
+    },
+    {
+      "archivePath": "plugins/source/apps/console/src/pages/settings/ProfileSettings.tsx",
+      "sha256": "sha256:776c156bc0c6e0ef58fc840c46d9008369decb471739dba3bcf8a97ea9291de3",
+      "bytes": 15920
+    }
+  ]
+}

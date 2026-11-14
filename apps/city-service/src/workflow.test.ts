@@ -9,6 +9,8 @@ process.env.ALLOW_LOCAL_DEPENDENCIES = 'true';
 process.env.AUTH_SECRET = 'city-test-session-secret';
 // This suite exercises the explicit development-only demo session shell.
 process.env.CITY_AUTH_MODE = 'demo';
+// Non-production test only: keep the pre-migration auth routes reachable.
+process.env.TIER3_AUTH_MODE = 'legacy';
 
 type StoredRecord = { id: string; data: Record<string, unknown> };
 const datasets = new Map<string, Record<string, unknown>>();

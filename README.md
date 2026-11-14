@@ -310,21 +310,15 @@ principal. Anonymous surfaces are `/health`, `/ready`, `/metrics` (optional
 token), `/v1/city`, `/v1/auth/*`, `/v1/public/*` and `/v1/map/*`.
 
 `/v1/users` requires a Bearer session and never accepts, stores or returns
-password fields. In the default **`tier2` identity mode**, `/v1/auth/login` and
-`/v1/auth/register` verify credentials through the Tier-2 auth capability
-(Tier-1 IAM); the Tier-1 token stays inside the signed City session and is never
-returned to the browser. City roles are resolved from City-owned operator
-profiles (`city-users`) or the server-side `CITY_BOOTSTRAP_ADMIN_EMAILS`
-allow-list — never from a request body, request claim or unverified token.
+password fields.
 
-`CITY_AUTH_MODE=demo` selects the explicit development-only session shell. It is
-honoured only when `AUTH_DEMO_MODE=true` (default outside production); the demo
-role comes from `AUTH_DEMO_ROLE`. A demo session cannot change passwords and is
-refused in production unless deliberately enabled. Tokens are kept in tab-scoped
-`sessionStorage`, logout revokes the presented access/refresh tokens and the
-Tier-2 session, and `CITY_AUTH_EXCHANGE=true` additionally mints a delegated
-`synapsecity`-audience token when the deployment's service credential is allowed
-to exchange.
+**Tier-3 auth is retired (2026-11-14 workspace contract).** Every
+`/v1/auth/*` request returns `410` with
+`{ "error": "workspace_moved", "workspace_url": "https://synapsedx.sbs/workspace" }`
+before credential handling. Login, registration, session management and role
+assignment belong to SynapseDX. The remaining session code is reachable only in
+non-production test runs via `TIER3_AUTH_MODE=legacy`; production always ignores
+that variable and answers 410. Remove the code with the Rust migration.
 
 Autocomplete, forward geocoding and reverse geocoding use the shared,
 provider-neutral Tier-2 `geo` capability by default (`CITY_GEO_PROVIDER=tier2`);
@@ -387,31 +381,40 @@ for the exact formula), and the console exposes it at `/admin/analytics`.
 
 ## Console
 
-The City console serves these owned routes:
+The City console is **public presentation only** (2026-11-14 workspace
+contract). Login, registration, operations dashboards and the technician portal
+moved to the Tier-2 SynapseDX workspace at `https://synapsedx.sbs/workspace`.
+The console serves these public routes:
 
 ```text
 /                              city landing
 /about /docs                   product and API docs
 /map                           public city asset map
-/login /register               auth shell
 /asset/$id                     public asset detail
 /public/report                 citizen incident report
 /public/report/$assetId        report about an asset
 /public/incidents/$incidentId  public incident lookup
-/admin                         city operations dashboard
-/admin/map /admin/assets       internal map and asset registry
-/admin/assets/create           asset registration form
-/admin/assets/edit/$id         asset edit form
-/admin/incidents /admin/alerts city incidents and infrastructure alerts
-/admin/iot /admin/budgets      sensors and budgets
-/admin/reports /admin/users    reports and city operators
-/admin/analytics               GIS coverage analysis
-/admin/ingest /admin/settings  ingestion and profile
-/technician[/tasks|/maintenance|/settings] technician portal
 ```
 
-There is no `/disaster` route and no `/admin/emergency-center` route. Never add
-hazard, EOP, dispatch, SITREP, AAR or command-centre pages to this console.
+The retired paths `/login`, `/register`, `/admin/**`, `/technician/**` and
+`/workspace/**` return `308` to `https://synapsedx.sbs/workspace` from the
+console nginx and the public edge, and the console root route redirects
+client-side. No local dashboard can be mounted from a deep link.
+
+**Release gate:** until the DX workflow binding for incident and maintenance create actions is
+verified end to end, the declarative bundles stay read-only and the production
+work pages must not be retired or these redirects deployed. See
+`plugins/workflows/README.md` for the exact gap.
+
+Tier-3 work interfaces are product plugins in DX; their portable source
+artifacts live in `plugins/` and are validated/synced with
+`npm run plugins:check` and `docs/PLUGIN_SYNC.md`. The exact pre-migration route
+source is archived under `plugins/source/` as reference, not built or executed.
+
+`/v1/auth/*` answers `410 workspace_moved` (with `workspace_url`) before any
+credential handling, so no Tier-3 session can be created. There is no
+`/disaster` route and no `/admin/emergency-center` route. Never add hazard,
+EOP, dispatch, SITREP, AAR or command-centre pages to this console.
 
 ## Public edge
 

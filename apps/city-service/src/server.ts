@@ -23,6 +23,7 @@ import {
   verifyToken,
 } from './auth';
 import { missingColumns, parseCsv } from './csv';
+import { workspaceMovedMiddleware } from './workspace-moved';
 import {
   buildNotification,
   dedupeKey,
@@ -841,6 +842,11 @@ function sessionForVerifiedIdentity(identity: Tier2Session['identity'], role: Se
     ...(tokens.refreshToken ? { tier2_refresh_token: tokens.refreshToken } : {}),
   });
 }
+
+// Tier-3 auth surface is retired: every /v1/auth request is answered with
+// 410 workspace_moved before rate limiting, credential handling or session
+// code. Work interfaces live in the Tier-2 DX workspace.
+app.use('/v1/auth', workspaceMovedMiddleware('city'));
 
 app.post('/v1/auth/login', authRateLimit, async (req, res) => {
   const body = objectBody(req.body);

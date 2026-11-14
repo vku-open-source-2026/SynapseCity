@@ -1,0 +1,152 @@
+{
+  "format": "synapsedx-plugin",
+  "formatVersion": 1,
+  "plugin": {
+    "product": "city",
+    "name": "Technician work queue",
+    "slug": "city-technician-work",
+    "audience": "member",
+    "roles": [
+      "technician"
+    ],
+    "widgets": [
+      {
+        "id": "intro",
+        "type": "text",
+        "title": "Field work",
+        "text": "Assigned maintenance and the assets and incidents a technician may read. This page is read-only: completing or rescheduling work still happens through the City product API with the technician permission.",
+        "width": "full"
+      },
+      {
+        "id": "maintenance-metric",
+        "type": "metric",
+        "title": "Assigned work orders",
+        "resource": "maintenance",
+        "width": "half"
+      },
+      {
+        "id": "alerts-metric",
+        "type": "metric",
+        "title": "Open infrastructure alerts",
+        "resource": "alerts",
+        "width": "half"
+      },
+      {
+        "id": "maintenance-table",
+        "type": "table",
+        "title": "Work orders",
+        "resource": "maintenance",
+        "columns": [
+          "id",
+          "asset_id",
+          "status",
+          "priority",
+          "scheduled_date",
+          "updated_at"
+        ],
+        "width": "full"
+      },
+      {
+        "id": "assets-table",
+        "type": "table",
+        "title": "Assets in my area",
+        "resource": "assets",
+        "columns": [
+          "id",
+          "name",
+          "category",
+          "status",
+          "condition"
+        ],
+        "width": "full"
+      },
+      {
+        "id": "work-order-create-form",
+        "type": "form",
+        "title": "Create a maintenance work order",
+        "resource": "maintenance",
+        "action": "create",
+        "workflowRef": {
+          "name": "city-maintenance-create",
+          "slug": "city-maintenance-create"
+        },
+        "width": "full",
+        "fields": [
+          {
+            "name": "asset_id",
+            "label": "Asset id",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "title",
+            "label": "Work title",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "priority",
+            "label": "Priority",
+            "type": "text"
+          },
+          {
+            "name": "scheduled_date",
+            "label": "Scheduled date (ISO)",
+            "type": "text"
+          },
+          {
+            "name": "description",
+            "label": "Work description",
+            "type": "textarea"
+          }
+        ]
+      },
+      {
+        "id": "work-order-start-form",
+        "type": "form",
+        "title": "Start a work order",
+        "resource": "maintenance",
+        "action": "update",
+        "workflowRef": {
+          "name": "city-maintenance-start",
+          "slug": "city-maintenance-start"
+        },
+        "width": "half",
+        "fields": [
+          {
+            "name": "work_order_id",
+            "label": "Work order id",
+            "type": "text",
+            "required": true
+          }
+        ]
+      },
+      {
+        "id": "work-order-complete-form",
+        "type": "form",
+        "title": "Complete a work order",
+        "resource": "maintenance",
+        "action": "update",
+        "workflowRef": {
+          "name": "city-maintenance-complete",
+          "slug": "city-maintenance-complete"
+        },
+        "width": "half",
+        "fields": [
+          {
+            "name": "work_order_id",
+            "label": "Work order id",
+            "type": "text",
+            "required": true
+          }
+        ]
+      }
+    ]
+  },
+  "source": {
+    "repository": "https://github.com/vku-open-source-2026/SynapseCity",
+    "path": "plugins/city-technician-work.plugin.json",
+    "revision": "2026-11-14"
+  },
+  "checksum": "sha256:187a5c2821b7db200def27194c16c44930861277ebf0afe199bd3fa4cf546643"
+}

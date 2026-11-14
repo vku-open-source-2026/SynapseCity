@@ -137,17 +137,25 @@ private and must not be published to the open-data layer.
 
 ## Console route ownership
 
-Keep: `/`, `/about`, `/docs`, `/map`, `/login`, `/register`, `/asset/$id`,
-`/public/report`, `/public/report/$assetId`, `/public/incidents/$incidentId`,
-`/admin`, `/admin/map`, `/admin/assets[/$id]`,
-`/admin/incidents[/create|/$id]`, `/admin/alerts[/list]`,
-`/admin/iot[/create|/$id]`, `/admin/budgets[/create|/$id]`,
-`/admin/reports[/create]`, `/admin/users[/create|/$id]`, `/admin/ingest`,
-`/admin/settings`, and `/technician[/tasks/$taskId|/maintenance/$id|/settings]`.
+Tier 3 is **public presentation only** (2026-11-14 workspace contract). Keep:
+`/`, `/about`, `/docs`, `/map`, `/asset/$id`, `/public/report`,
+`/public/report/$assetId`, `/public/incidents/$incidentId`.
 
-Asset registration (`/admin/assets/create`), asset editing
-(`/admin/assets/edit/$id`) and GIS coverage analytics (`/admin/analytics`) are
-City-owned routes. Never add `/disaster`, `/admin/emergency-center*` or any
+Retired work surfaces redirect to `https://synapsedx.sbs/workspace`:
+`/login`, `/register`, `/workspace/**`, `/admin/**`, `/technician/**`. They
+return `308` from `apps/console/nginx.conf` and `infra/nginx/`, and the root
+route redirects client-side. Route modules are redirect stubs/notices — never
+mount a local dashboard, login form or technician portal again. `/v1/auth/*`
+answers `410 workspace_moved` before auth handling.
+
+**Release gate:** do not deploy the public-only redirects or retire the
+production work pages until the DX workflow binding for incident/maintenance
+actions is verified end to end (see `plugins/workflows/README.md`).
+
+Work interfaces are product plugins in DX; portable bundles live in `plugins/`
+with `npm run plugins:check` / `npm run plugins:test` and
+`docs/PLUGIN_SYNC.md`. Pre-migration route source is archived (not built) in
+`plugins/source/`. Never add `/disaster`, `/admin/emergency-center*` or any
 hazard, EOP, dispatch, SITREP, AAR or command-centre page. `routeTree.gen.ts`
 must contain only owned routes.
 

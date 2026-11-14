@@ -5,7 +5,32 @@ Keep a Changelog format and version tags use Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+- Portable City workspace plugin bundles under `plugins/` (operations overview
+  and technician work queue) with `scripts/plugin-bundle.mjs` for strict
+  validation, checksum verification and HTTPS DX export/import/sync
+  (`docs/PLUGIN_SYNC.md`).
+- Product-owned Tier-1 workflow artifacts under `plugins/workflows/` for
+  incidents.create/assign/resolve and maintenance.create/assign/start/complete: create HTTP POST, transition GET(`includeInput:true`) → domain merge →
+  conditional PATCH (`ifVersion`), AAR-before-event-close. Auth is the portable
+  `synapsedx-organization` credentialRef; plugin bundles bind forms with
+  `workflowRef`/action create|update. Source-ready and engine-tested, inactive
+  until DX binds the credential/pins.
+- `plugins/source/` preserves the exact pre-migration City route and page source
+  (with revision and SHA-256 manifest) as reference; it is outside the build.
+
 ### Changed
+- DX repository export is now published-only; a draft answers `409
+  plugin_not_published`. `plugin-bundle.mjs sync` compares `source` provenance
+  as well as the plugin checksum, so a path/repository-only change is written
+  instead of being reported as `in-sync`.
+- Tier 3 is public presentation only (2026-11-14 workspace contract). Login,
+  registration, operations dashboards and the technician portal moved to
+  `https://synapsedx.sbs/workspace`; `/login`, `/register`, `/admin/**`,
+  `/technician/**` and `/workspace/**` return `308` (nginx and client root
+  route). Public map, asset detail, public reports and contribution intake stay.
+- `/v1/auth/*` answers `410 workspace_moved` with `workspace_url` before any
+  credential handling; production ignores `TIER3_AUTH_MODE=legacy`.
 - Mobile app: new Synapse logo system (app icon, adaptive/monochrome icon,
   splash, notification icon); Android version 0.1.1 (versionCode 2).
 - The public gateway is now a Rust/Axum service (`apps/gateway/src/main.rs`);

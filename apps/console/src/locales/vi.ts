@@ -13,7 +13,7 @@ export const vi = {
         docs: "Tài liệu API",
         report: "Báo sự cố",
         sos: "Khẩn cấp (SOS)",
-        login: "Đăng nhập",
+        workspace: "Không gian làm việc",
         start: "Trải nghiệm ngay",
         openMenu: "Mở menu",
         closeMenu: "Đóng menu",
@@ -49,7 +49,7 @@ export const vi = {
             {
                 title: "Đơn vị quản lý hạ tầng",
                 text: "Quản lý tài sản trên bản đồ, gộp các báo cáo trùng, giao việc bảo trì có phê duyệt, theo dõi cảm biến IoT và ngân sách.",
-                cta: "Đăng nhập hệ thống",
+                cta: "Mở không gian làm việc",
             },
             {
                 title: "Nhà phát triển và doanh nghiệp",

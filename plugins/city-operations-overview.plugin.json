@@ -1,0 +1,205 @@
+{
+  "format": "synapsedx-plugin",
+  "formatVersion": 1,
+  "plugin": {
+    "product": "city",
+    "name": "City operations overview",
+    "slug": "city-operations-overview",
+    "audience": "admin",
+    "roles": [
+      "admin",
+      "manager"
+    ],
+    "widgets": [
+      {
+        "id": "intro",
+        "type": "text",
+        "title": "Daily operations",
+        "text": "Read-only snapshot of City assets, incidents, maintenance work orders and infrastructure alerts. Writes stay in the City product API, which enforces the operator role and permission.",
+        "width": "full"
+      },
+      {
+        "id": "assets-metric",
+        "type": "metric",
+        "title": "Assets published on the public map",
+        "resource": "assets",
+        "width": "half"
+      },
+      {
+        "id": "incidents-metric",
+        "type": "metric",
+        "title": "Incident work queue",
+        "resource": "incidents",
+        "width": "half"
+      },
+      {
+        "id": "maintenance-metric",
+        "type": "metric",
+        "title": "Maintenance work orders",
+        "resource": "maintenance",
+        "width": "half"
+      },
+      {
+        "id": "alerts-metric",
+        "type": "metric",
+        "title": "Infrastructure alerts",
+        "resource": "alerts",
+        "width": "half"
+      },
+      {
+        "id": "assets-table",
+        "type": "table",
+        "title": "Recent assets",
+        "resource": "assets",
+        "columns": [
+          "id",
+          "name",
+          "category",
+          "status",
+          "lifecycle_status",
+          "updated_at"
+        ],
+        "width": "full"
+      },
+      {
+        "id": "incidents-table",
+        "type": "table",
+        "title": "Recent incidents",
+        "resource": "incidents",
+        "columns": [
+          "id",
+          "title",
+          "category",
+          "status",
+          "priority",
+          "reported_at"
+        ],
+        "width": "full"
+      },
+      {
+        "id": "incident-create-form",
+        "type": "form",
+        "title": "Report a city incident",
+        "resource": "incidents",
+        "action": "create",
+        "workflowRef": {
+          "name": "city-incident-create",
+          "slug": "city-incident-create"
+        },
+        "width": "full",
+        "fields": [
+          {
+            "name": "title",
+            "label": "Title",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "category",
+            "label": "Category",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "severity",
+            "label": "Severity",
+            "type": "text"
+          },
+          {
+            "name": "description",
+            "label": "Description",
+            "type": "textarea"
+          }
+        ]
+      },
+      {
+        "id": "incident-assign-form",
+        "type": "form",
+        "title": "Assign an incident",
+        "resource": "incidents",
+        "action": "update",
+        "workflowRef": {
+          "name": "city-incident-assign",
+          "slug": "city-incident-assign"
+        },
+        "width": "half",
+        "fields": [
+          {
+            "name": "incident_id",
+            "label": "Incident id",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "assigned_to",
+            "label": "Operator",
+            "type": "text",
+            "required": true
+          }
+        ]
+      },
+      {
+        "id": "incident-resolve-form",
+        "type": "form",
+        "title": "Resolve an incident",
+        "resource": "incidents",
+        "action": "update",
+        "workflowRef": {
+          "name": "city-incident-resolve",
+          "slug": "city-incident-resolve"
+        },
+        "width": "half",
+        "fields": [
+          {
+            "name": "incident_id",
+            "label": "Incident id",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "resolution_type",
+            "label": "Resolution type",
+            "type": "text"
+          },
+          {
+            "name": "resolution_notes",
+            "label": "Resolution notes",
+            "type": "textarea"
+          }
+        ]
+      },
+      {
+        "id": "maintenance-assign-form",
+        "type": "form",
+        "title": "Assign a work order",
+        "resource": "maintenance",
+        "action": "update",
+        "workflowRef": {
+          "name": "city-maintenance-assign",
+          "slug": "city-maintenance-assign"
+        },
+        "width": "full",
+        "fields": [
+          {
+            "name": "work_order_id",
+            "label": "Work order id",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "assigned_to",
+            "label": "Technician",
+            "type": "text",
+            "required": true
+          }
+        ]
+      }
+    ]
+  },
+  "source": {
+    "repository": "https://github.com/vku-open-source-2026/SynapseCity",
+    "path": "plugins/city-operations-overview.plugin.json",
+    "revision": "2026-11-14"
+  },
+  "checksum": "sha256:5c1735d260f105d1456cac4b5b66564aef057290b8cef600ae674ab7867b1b0c"
+}

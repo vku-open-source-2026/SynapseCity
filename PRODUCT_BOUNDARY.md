@@ -178,34 +178,35 @@ city-ingest-jobs            city-files
 
 ## Console route ownership
 
-Owned:
+Tier 3 is public presentation only (2026-11-14 workspace contract). Work,
+login and dashboard surfaces live in the Tier-2 SynapseDX workspace at
+`https://synapsedx.sbs/workspace`.
+
+Served by this console:
 
 ```text
 /                              city landing
 /about                         city product
 /docs                          city API docs
 /map                           public city asset map
-/login /register               auth shell
 /asset/$id                     public asset detail
 /public/report                 citizen incident report
 /public/report/$assetId        report about an asset
 /public/incidents/$incidentId  public incident lookup
-/admin                         city operations dashboard
-/admin/map                     internal asset map
-/admin/assets[/$id]            asset registry
-/admin/assets/create           asset registration
-/admin/assets/edit/$id         asset edit
-/admin/analytics               GIS coverage analysis
-/admin/incidents[/create|/$id] city incidents
-/admin/alerts[/list]           infrastructure alerts
-/admin/iot[/create|/$id]       IoT sensors
-/admin/budgets[/create|/$id]   budgets
-/admin/reports[/create]        operational reports
-/admin/users[/create|/$id]     city operators
-/admin/ingest                  data ingestion
-/admin/settings                self-service profile
-/technician[/tasks/$taskId|/maintenance/$id|/settings] technician portal
 ```
+
+Redirected to `https://synapsedx.sbs/workspace`:
+
+```text
+/login /register
+/admin/**  (operations dashboards, assets, incidents, alerts, IoT, budgets,
+            reports, users, ingest, analytics, settings)
+/technician/**
+/workspace/**
+```
+
+`/v1/auth/*` returns `410 workspace_moved` before credential handling. The
+portable City plugin bundles that replace the retired pages live in `plugins/`.
 
 Never add:
 

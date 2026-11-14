@@ -24,14 +24,16 @@ import Header from "../components/Header";
 import mapImage from "../assets/map.png";
 import { useI18n } from "../lib/i18n-context";
 import { LINKS } from "../lib/site";
+import { WORKSPACE_URL } from "../lib/workspace";
 
 const FEATURE_ICONS = [MapPin, Wrench, Activity, Gauge, Wallet, Database];
 
 /** Each audience gets its own accent so the three cards read as different paths. */
 const AUDIENCES = [
-    { icon: Users, to: "/public/report", accent: "from-amber-400 to-orange-500", bar: "bg-amber-400", link: "text-amber-700 dark:text-amber-400" },
-    { icon: Building2, to: "/login", accent: "from-cyan-400 to-blue-500", bar: "bg-sky-500", link: "text-sky-700 dark:text-sky-400" },
-    { icon: Code2, to: "/docs", accent: "from-emerald-400 to-teal-500", bar: "bg-emerald-500", link: "text-emerald-700 dark:text-emerald-400" },
+    { icon: Users, to: "/public/report", external: false, accent: "from-amber-400 to-orange-500", bar: "bg-amber-400", link: "text-amber-700 dark:text-amber-400" },
+    // Operators work in the Tier-2 DX workspace; Tier 3 stays public-only.
+    { icon: Building2, to: WORKSPACE_URL, external: true, accent: "from-cyan-400 to-blue-500", bar: "bg-sky-500", link: "text-sky-700 dark:text-sky-400" },
+    { icon: Code2, to: "/docs", external: false, accent: "from-emerald-400 to-teal-500", bar: "bg-emerald-500", link: "text-emerald-700 dark:text-emerald-400" },
 ] as const;
 
 const gradientText = "bg-linear-to-r from-sky-500 to-cyan-400 bg-clip-text text-transparent";
@@ -166,9 +168,9 @@ const HomePage = () => {
                                         </span>
                                         <h3 className="mt-5 text-xl font-semibold text-slate-900 dark:text-white">{a.title}</h3>
                                         <p className={`mt-3 flex-1 leading-relaxed ${bodyText}`}>{a.text}</p>
-                                        <Link to={style.to} className={`mt-5 inline-flex items-center justify-center gap-1 font-semibold hover:underline ${style.link}`}>
+                                        <a href={style.to} className={`mt-5 inline-flex items-center justify-center gap-1 font-semibold hover:underline ${style.link}`}>
                                             {a.cta} <ArrowRight className="h-4 w-4" />
-                                        </Link>
+                                        </a>
                                     </div>
                                 );
                             })}
