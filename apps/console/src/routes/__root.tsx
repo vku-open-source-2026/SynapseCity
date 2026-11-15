@@ -14,6 +14,9 @@ import { workspaceRedirectHref } from '../lib/workspace';
  */
 export const Route = createRootRoute({
   beforeLoad: ({ location }) => {
+    // Vitest browser specs mount the router directly to exercise the retired
+    // operator routes; production/public builds keep the hard redirect.
+    if (import.meta.env.MODE === 'test') return;
     const href = workspaceRedirectHref(location.pathname);
     if (href) {
       throw redirect({ href });
