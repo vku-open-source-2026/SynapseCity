@@ -14,30 +14,98 @@
       {
         "id": "intro",
         "text": "Register infrastructure assets, keep lifecycle state current, and retire records without bypassing the City workflow review. Asset forms write through the Tier-2 records API using the organization technical identity.",
-        "type": "text",
+        "type": "heading",
         "title": "Asset lifecycle and location",
         "width": "full"
+      },
+      {
+        "id": "workspace-navigation",
+        "type": "navigation",
+        "title": "Quick access",
+        "width": "full",
+        "links": [
+          {
+            "label": "Overview",
+            "target": "page:city-operations-overview",
+            "actionId": "act-workspace-navigation-link1"
+          },
+          {
+            "label": "Assets",
+            "target": "page:city-asset-registry",
+            "actionId": "act-workspace-navigation-link2"
+          },
+          {
+            "label": "Incidents",
+            "target": "page:city-incident-desk",
+            "actionId": "act-workspace-navigation-link3"
+          },
+          {
+            "label": "Maintenance",
+            "target": "page:city-maintenance-workshop",
+            "actionId": "act-workspace-navigation-link4"
+          },
+          {
+            "label": "Team tasks",
+            "target": "module:tasks",
+            "actionId": "act-workspace-navigation-link5"
+          }
+        ]
       },
       {
         "id": "assets-metric",
         "type": "metric",
         "title": "Assets",
         "width": "half",
-        "resource": "assets"
+        "resource": "assets",
+        "onLoad": "act-assets-metric-load"
       },
       {
         "id": "incidents-metric",
         "type": "metric",
         "title": "Linked incidents",
         "width": "half",
-        "resource": "incidents"
+        "resource": "incidents",
+        "onLoad": "act-incidents-metric-load"
       },
       {
         "id": "maintenance-metric",
         "type": "metric",
         "title": "Linked work orders",
         "width": "half",
-        "resource": "maintenance"
+        "resource": "maintenance",
+        "onLoad": "act-maintenance-metric-load"
+      },
+      {
+        "id": "assets-map",
+        "type": "map",
+        "title": "Assets · Live map",
+        "width": "full",
+        "resource": "assets",
+        "columns": [
+          "id",
+          "name",
+          "title",
+          "status",
+          "severity",
+          "address",
+          "district",
+          "latitude",
+          "longitude",
+          "geometry",
+          "geometry_json",
+          "location",
+          "current_location",
+          "current_location_json"
+        ],
+        "onLoad": "act-assets-map-load",
+        "onRowClick": "act-assets-map-row",
+        "onExport": "act-assets-map-export"
+      },
+      {
+        "id": "records-section",
+        "type": "divider",
+        "title": "Your infrastructure",
+        "width": "full"
       },
       {
         "id": "assets-table",
@@ -56,7 +124,10 @@
           "address",
           "owner"
         ],
-        "resource": "assets"
+        "resource": "assets",
+        "onLoad": "act-assets-table-load",
+        "onRowClick": "act-assets-table-row",
+        "onExport": "act-assets-table-export"
       },
       {
         "id": "geofences-table",
@@ -70,7 +141,16 @@
           "category",
           "active"
         ],
-        "resource": "geofences"
+        "resource": "geofences",
+        "onLoad": "act-geofences-table-load",
+        "onRowClick": "act-geofences-table-row",
+        "onExport": "act-geofences-table-export"
+      },
+      {
+        "id": "actions-section",
+        "type": "divider",
+        "title": "Take action",
+        "width": "full"
       },
       {
         "id": "asset-create",
@@ -157,15 +237,17 @@
           },
           {
             "name": "properties_json",
-            "type": "textarea",
-            "label": "Extra properties (JSON)"
+            "type": "json",
+            "label": "Extra properties (JSON)",
+            "selectionPath": "properties"
           }
         ],
         "resource": "assets",
         "workflowRef": {
           "name": "city-workspace-actions",
           "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
-        }
+        },
+        "onSubmit": "act-asset-create-submit"
       },
       {
         "id": "asset-update",
@@ -225,7 +307,8 @@
         "workflowRef": {
           "name": "city-workspace-actions",
           "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
-        }
+        },
+        "onSubmit": "act-asset-update-submit"
       },
       {
         "id": "asset-delete",
@@ -245,6 +328,567 @@
         "workflowRef": {
           "name": "city-workspace-actions",
           "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        },
+        "onSubmit": "act-asset-delete-submit"
+      },
+      {
+        "id": "act-workspace-navigation-link1",
+        "type": "action",
+        "title": "Navigate Overview",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "page:city-operations-overview"
+        }
+      },
+      {
+        "id": "act-workspace-navigation-link2",
+        "type": "action",
+        "title": "Navigate Assets",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "page:city-asset-registry"
+        }
+      },
+      {
+        "id": "act-workspace-navigation-link3",
+        "type": "action",
+        "title": "Navigate Incidents",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "page:city-incident-desk"
+        }
+      },
+      {
+        "id": "act-workspace-navigation-link4",
+        "type": "action",
+        "title": "Navigate Maintenance",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "page:city-maintenance-workshop"
+        }
+      },
+      {
+        "id": "act-workspace-navigation-link5",
+        "type": "action",
+        "title": "Navigate Team tasks",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "module:tasks"
+        }
+      },
+      {
+        "id": "act-assets-metric-load",
+        "type": "action",
+        "title": "Read Assets",
+        "operation": {
+          "kind": "query",
+          "target": "assets-metric",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "assets"
+        }
+      },
+      {
+        "id": "act-incidents-metric-load",
+        "type": "action",
+        "title": "Read Linked incidents",
+        "operation": {
+          "kind": "query",
+          "target": "incidents-metric",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "incidents"
+        }
+      },
+      {
+        "id": "act-maintenance-metric-load",
+        "type": "action",
+        "title": "Read Linked work orders",
+        "operation": {
+          "kind": "query",
+          "target": "maintenance-metric",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "maintenance"
+        }
+      },
+      {
+        "id": "act-assets-map-load",
+        "type": "action",
+        "title": "Read Assets · Live map",
+        "operation": {
+          "kind": "query",
+          "target": "assets-map",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "assets"
+        }
+      },
+      {
+        "id": "act-assets-map-row",
+        "type": "action",
+        "title": "Inspect Assets · Live map",
+        "operation": {
+          "kind": "showRecord",
+          "target": "assets-map",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-assets-map-export",
+        "type": "action",
+        "title": "Export Assets · Live map",
+        "operation": {
+          "kind": "export",
+          "target": "assets-map",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-assets-table-load",
+        "type": "action",
+        "title": "Read Assets",
+        "operation": {
+          "kind": "query",
+          "target": "assets-table",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "assets"
+        }
+      },
+      {
+        "id": "act-assets-table-row",
+        "type": "action",
+        "title": "Inspect Assets",
+        "operation": {
+          "kind": "showRecord",
+          "target": "assets-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-assets-table-export",
+        "type": "action",
+        "title": "Export Assets",
+        "operation": {
+          "kind": "export",
+          "target": "assets-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-geofences-table-load",
+        "type": "action",
+        "title": "Read Geofences and service areas",
+        "operation": {
+          "kind": "query",
+          "target": "geofences-table",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "geofences"
+        }
+      },
+      {
+        "id": "act-geofences-table-row",
+        "type": "action",
+        "title": "Inspect Geofences and service areas",
+        "operation": {
+          "kind": "showRecord",
+          "target": "geofences-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-geofences-table-export",
+        "type": "action",
+        "title": "Export Geofences and service areas",
+        "operation": {
+          "kind": "export",
+          "target": "geofences-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-asset-create-submit",
+        "type": "action",
+        "title": "Submit Register an asset",
+        "operation": {
+          "kind": "create",
+          "target": "asset-create",
+          "mappings": [
+            {
+              "field": "name",
+              "source": "event",
+              "value": "values.name",
+              "required": true
+            },
+            {
+              "field": "asset_code",
+              "source": "event",
+              "value": "values.asset_code",
+              "required": false
+            },
+            {
+              "field": "feature_type",
+              "source": "event",
+              "value": "values.feature_type",
+              "required": false
+            },
+            {
+              "field": "feature_code",
+              "source": "event",
+              "value": "values.feature_code",
+              "required": false
+            },
+            {
+              "field": "category",
+              "source": "event",
+              "value": "values.category",
+              "required": false
+            },
+            {
+              "field": "status",
+              "source": "event",
+              "value": "values.status",
+              "required": false
+            },
+            {
+              "field": "description",
+              "source": "event",
+              "value": "values.description",
+              "required": false
+            },
+            {
+              "field": "address",
+              "source": "event",
+              "value": "values.address",
+              "required": false
+            },
+            {
+              "field": "ward",
+              "source": "event",
+              "value": "values.ward",
+              "required": false
+            },
+            {
+              "field": "district",
+              "source": "event",
+              "value": "values.district",
+              "required": false
+            },
+            {
+              "field": "city",
+              "source": "event",
+              "value": "values.city",
+              "required": false
+            },
+            {
+              "field": "owner",
+              "source": "event",
+              "value": "values.owner",
+              "required": false
+            },
+            {
+              "field": "managing_unit",
+              "source": "event",
+              "value": "values.managing_unit",
+              "required": false
+            },
+            {
+              "field": "latitude",
+              "source": "event",
+              "value": "values.latitude",
+              "required": false
+            },
+            {
+              "field": "longitude",
+              "source": "event",
+              "value": "values.longitude",
+              "required": false
+            },
+            {
+              "field": "properties_json",
+              "source": "event",
+              "value": "values.properties_json",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-asset-create-open",
+        "type": "action",
+        "title": "Open Register an asset",
+        "operation": {
+          "kind": "openForm",
+          "target": "asset-create",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-asset-update-submit",
+        "type": "action",
+        "title": "Submit Update asset lifecycle",
+        "operation": {
+          "kind": "update",
+          "target": "asset-update",
+          "mappings": [
+            {
+              "field": "record_id",
+              "source": "event",
+              "value": "values.record_id",
+              "required": true
+            },
+            {
+              "field": "name",
+              "source": "event",
+              "value": "values.name",
+              "required": false
+            },
+            {
+              "field": "status",
+              "source": "event",
+              "value": "values.status",
+              "required": false
+            },
+            {
+              "field": "condition",
+              "source": "event",
+              "value": "values.condition",
+              "required": false
+            },
+            {
+              "field": "lifecycle_stage",
+              "source": "event",
+              "value": "values.lifecycle_stage",
+              "required": false
+            },
+            {
+              "field": "address",
+              "source": "event",
+              "value": "values.address",
+              "required": false
+            },
+            {
+              "field": "owner",
+              "source": "event",
+              "value": "values.owner",
+              "required": false
+            },
+            {
+              "field": "managing_unit",
+              "source": "event",
+              "value": "values.managing_unit",
+              "required": false
+            },
+            {
+              "field": "description",
+              "source": "event",
+              "value": "values.description",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-asset-update-open",
+        "type": "action",
+        "title": "Open Update asset lifecycle",
+        "operation": {
+          "kind": "openForm",
+          "target": "asset-update",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-asset-delete-submit",
+        "type": "action",
+        "title": "Submit Retire an asset record",
+        "operation": {
+          "kind": "delete",
+          "target": "asset-delete",
+          "mappings": [
+            {
+              "field": "record_id",
+              "source": "event",
+              "value": "values.record_id",
+              "required": true
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-asset-delete-open",
+        "type": "action",
+        "title": "Open Retire an asset record",
+        "operation": {
+          "kind": "openForm",
+          "target": "asset-delete",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
         }
       }
     ]
@@ -252,7 +896,7 @@
   "source": {
     "repository": "https://github.com/vku-open-source-2026/SynapseCity",
     "path": "plugins/city-asset-registry.plugin.json",
-    "revision": "2026-11-14.3"
+    "revision": "2026-11-15.business"
   },
-  "checksum": "sha256:ab4856f04c7c4f42d8f2605c0b53c370fa28509cc7bcd5d7ad04db81d20e1ef8"
+  "checksum": "sha256:f31010398d9b7c9555ebe804bb9ebbc2d26ef8439b23266f10847b42072b7421"
 }

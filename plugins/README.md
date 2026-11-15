@@ -1,6 +1,6 @@
 # City workspace plugins (Tier 3 source → Tier 2 DX runtime)
 
-Status: 2026-11-14 workspace contract. Tier 3 is public presentation only.
+Status: 2026-11-15. Tier 3 is public presentation only. All 15 current bundles use declarative DX widgets and named actions, including a separate app-owned Common workspace.
 
 SynapseCity no longer serves login, registration, operations dashboards or the
 technician portal. All work interfaces live in the Tier-2 SynapseDX workspace at
@@ -53,11 +53,13 @@ engine with fake HTTP and proves creates, transition merge/PATCH, AAR-before-
 event-patch, terminal refusal, CAS conflict propagation and malformed-form
 zero-call behavior.
 
-Still not migrated: approve/merge/verify flows, budget/alert/report/IoT/user/
-ingest/geospatial actions, and the remaining SOS approval/publication actions.
-They have no workflow/action binding yet; do not treat the current bundles as
-full replacement. Do not deploy the public-only redirects or retire production
-work pages until the bound actions are verified end to end.
+The current product forms bind reviewed domain/generic action workflows; Common
+forms use app-scoped reusable capability actions. A workflow binding alone is
+not proof of full parity. Advanced upload/download, spatial analysis, optimization,
+AI orchestration and live/event-context features remain incomplete or unverified.
+See the detailed `SynapseDX/docs/LCDP_BUILDABILITY_AUDIT.md` in this workspace.
+Published product forms must retain reviewed revision/checksum pins in immutable
+snapshots; source bundles use portable workflow references instead of server pins.
 
 ## Bundle format
 
@@ -87,10 +89,9 @@ work pages until the bound actions are verified end to end.
 - `source.repository` must be a public GitHub HTTPS URL. `source.path` must be a
   safe repository-relative `plugins/*.json` path. `revision` is a short
   provenance label.
-- Widgets use only `text`, `metric`, `table` and `form`, and bind a City catalog
-  key (`assets`, `incidents`, `maintenance`, `iot`, `iotReadings`, `alerts`,
-  `budgets`, `budgetTransactions`, `reports`, `users`, `geofences`, `ingest`,
-  `files`, `notifications`) — never a URL.
+- Widgets include the standard DX headings/navigation, metrics, tables, maps,
+  forms, lists, Kanban/timeline and explicit named actions. Source bindings use
+  product catalog keys or app-scoped `common*` connectors, never arbitrary URLs.
 - A `form` widget may carry a portable `workflowRef` (`{name, slug?, checksum?}`);
   DX resolves it to server-owned `workflowArtifactId` + revision/checksum pins.
   `workflowArtifactId`, `workflowArtifactRevision` and `workflowArtifactChecksum`
@@ -158,10 +159,9 @@ provenance. The console build does not import or mount it; the files are
 reference source for migrating business UI into declarative widgets. See
 `plugins/source/README.md`.
 
-The page/component modules those routes rendered (for example
-`apps/console/src/pages/admin/*`) remain in the console source tree as
-**unmounted** modules: no route references them, nginx and the root route
-redirect the old paths, and the production bundle never mounts them.
+The retired page/component modules are also archived under `plugins/source/`.
+They are reference material for business parity review and are never mounted or
+imported by DX or the public console build.
 
 ## Boundary
 

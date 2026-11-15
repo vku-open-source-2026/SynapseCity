@@ -14,65 +14,138 @@
       {
         "id": "intro",
         "text": "One workspace for the infrastructure registry, incident queue, maintenance workshop, alerts, IoT network, budgets and reports. Read models come from the Tier-2 capability datasets; writes are bound to reviewed City workflows.",
-        "type": "text",
+        "type": "heading",
         "title": "City operations at a glance",
         "width": "full"
+      },
+      {
+        "id": "workspace-navigation",
+        "type": "navigation",
+        "title": "Quick access",
+        "width": "full",
+        "links": [
+          {
+            "label": "Overview",
+            "target": "page:city-operations-overview",
+            "actionId": "act-workspace-navigation-link1"
+          },
+          {
+            "label": "Assets",
+            "target": "page:city-asset-registry",
+            "actionId": "act-workspace-navigation-link2"
+          },
+          {
+            "label": "Incidents",
+            "target": "page:city-incident-desk",
+            "actionId": "act-workspace-navigation-link3"
+          },
+          {
+            "label": "Maintenance",
+            "target": "page:city-maintenance-workshop",
+            "actionId": "act-workspace-navigation-link4"
+          },
+          {
+            "label": "Team tasks",
+            "target": "module:tasks",
+            "actionId": "act-workspace-navigation-link5"
+          }
+        ]
       },
       {
         "id": "assets-metric",
         "type": "metric",
         "title": "Assets in the registry",
         "width": "half",
-        "resource": "assets"
+        "resource": "assets",
+        "onLoad": "act-assets-metric-load"
       },
       {
         "id": "incidents-metric",
         "type": "metric",
         "title": "Incident queue",
         "width": "half",
-        "resource": "incidents"
+        "resource": "incidents",
+        "onLoad": "act-incidents-metric-load"
       },
       {
         "id": "maintenance-metric",
         "type": "metric",
         "title": "Maintenance work orders",
         "width": "half",
-        "resource": "maintenance"
+        "resource": "maintenance",
+        "onLoad": "act-maintenance-metric-load"
       },
       {
         "id": "alerts-metric",
         "type": "metric",
         "title": "Infrastructure alerts",
         "width": "half",
-        "resource": "alerts"
+        "resource": "alerts",
+        "onLoad": "act-alerts-metric-load"
       },
       {
         "id": "iot-metric",
         "type": "metric",
         "title": "IoT sensors",
         "width": "half",
-        "resource": "iot"
+        "resource": "iot",
+        "onLoad": "act-iot-metric-load"
       },
       {
         "id": "budgets-metric",
         "type": "metric",
         "title": "Budgets",
         "width": "half",
-        "resource": "budgets"
+        "resource": "budgets",
+        "onLoad": "act-budgets-metric-load"
       },
       {
         "id": "reports-metric",
         "type": "metric",
         "title": "Operational reports",
         "width": "half",
-        "resource": "reports"
+        "resource": "reports",
+        "onLoad": "act-reports-metric-load"
       },
       {
         "id": "users-metric",
         "type": "metric",
         "title": "City operators",
         "width": "half",
-        "resource": "users"
+        "resource": "users",
+        "onLoad": "act-users-metric-load"
+      },
+      {
+        "id": "assets-map",
+        "type": "map",
+        "title": "Assets · Live map",
+        "width": "full",
+        "resource": "assets",
+        "columns": [
+          "id",
+          "name",
+          "title",
+          "status",
+          "severity",
+          "address",
+          "district",
+          "latitude",
+          "longitude",
+          "geometry",
+          "geometry_json",
+          "location",
+          "current_location",
+          "current_location_json"
+        ],
+        "onLoad": "act-assets-map-load",
+        "onRowClick": "act-assets-map-row",
+        "onExport": "act-assets-map-export"
+      },
+      {
+        "id": "records-section",
+        "type": "divider",
+        "title": "Your infrastructure",
+        "width": "full"
       },
       {
         "id": "assets-table",
@@ -88,7 +161,10 @@
           "lifecycle_stage",
           "address"
         ],
-        "resource": "assets"
+        "resource": "assets",
+        "onLoad": "act-assets-table-load",
+        "onRowClick": "act-assets-table-row",
+        "onExport": "act-assets-table-export"
       },
       {
         "id": "incidents-table",
@@ -104,7 +180,10 @@
           "status",
           "assigned_to"
         ],
-        "resource": "incidents"
+        "resource": "incidents",
+        "onLoad": "act-incidents-table-load",
+        "onRowClick": "act-incidents-table-row",
+        "onExport": "act-incidents-table-export"
       },
       {
         "id": "maintenance-table",
@@ -120,7 +199,10 @@
           "assigned_to",
           "scheduled_date"
         ],
-        "resource": "maintenance"
+        "resource": "maintenance",
+        "onLoad": "act-maintenance-table-load",
+        "onRowClick": "act-maintenance-table-row",
+        "onExport": "act-maintenance-table-export"
       },
       {
         "id": "alerts-table",
@@ -135,7 +217,16 @@
           "message",
           "asset_id"
         ],
-        "resource": "alerts"
+        "resource": "alerts",
+        "onLoad": "act-alerts-table-load",
+        "onRowClick": "act-alerts-table-row",
+        "onExport": "act-alerts-table-export"
+      },
+      {
+        "id": "actions-section",
+        "type": "divider",
+        "title": "Take action",
+        "width": "full"
       },
       {
         "id": "incident-create",
@@ -171,7 +262,8 @@
         "workflowRef": {
           "name": "city-incident-create",
           "checksum": "9950bd892b99cba6ae904d01d474cba11932f9a4dcd33df59d9b4914f9a75d6e"
-        }
+        },
+        "onSubmit": "act-incident-create-submit"
       },
       {
         "id": "maintenance-create",
@@ -212,6 +304,700 @@
         "workflowRef": {
           "name": "city-maintenance-create",
           "checksum": "ad8bf0ddc4557049b7a5485e1494cac7486a00e5fc0e2d3330f85035353d5528"
+        },
+        "onSubmit": "act-maintenance-create-submit"
+      },
+      {
+        "id": "act-workspace-navigation-link1",
+        "type": "action",
+        "title": "Navigate Overview",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "page:city-operations-overview"
+        }
+      },
+      {
+        "id": "act-workspace-navigation-link2",
+        "type": "action",
+        "title": "Navigate Assets",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "page:city-asset-registry"
+        }
+      },
+      {
+        "id": "act-workspace-navigation-link3",
+        "type": "action",
+        "title": "Navigate Incidents",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "page:city-incident-desk"
+        }
+      },
+      {
+        "id": "act-workspace-navigation-link4",
+        "type": "action",
+        "title": "Navigate Maintenance",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "page:city-maintenance-workshop"
+        }
+      },
+      {
+        "id": "act-workspace-navigation-link5",
+        "type": "action",
+        "title": "Navigate Team tasks",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "module:tasks"
+        }
+      },
+      {
+        "id": "act-assets-metric-load",
+        "type": "action",
+        "title": "Read Assets in the registry",
+        "operation": {
+          "kind": "query",
+          "target": "assets-metric",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "assets"
+        }
+      },
+      {
+        "id": "act-incidents-metric-load",
+        "type": "action",
+        "title": "Read Incident queue",
+        "operation": {
+          "kind": "query",
+          "target": "incidents-metric",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "incidents"
+        }
+      },
+      {
+        "id": "act-maintenance-metric-load",
+        "type": "action",
+        "title": "Read Maintenance work orders",
+        "operation": {
+          "kind": "query",
+          "target": "maintenance-metric",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "maintenance"
+        }
+      },
+      {
+        "id": "act-alerts-metric-load",
+        "type": "action",
+        "title": "Read Infrastructure alerts",
+        "operation": {
+          "kind": "query",
+          "target": "alerts-metric",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "alerts"
+        }
+      },
+      {
+        "id": "act-iot-metric-load",
+        "type": "action",
+        "title": "Read IoT sensors",
+        "operation": {
+          "kind": "query",
+          "target": "iot-metric",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "iot"
+        }
+      },
+      {
+        "id": "act-budgets-metric-load",
+        "type": "action",
+        "title": "Read Budgets",
+        "operation": {
+          "kind": "query",
+          "target": "budgets-metric",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "budgets"
+        }
+      },
+      {
+        "id": "act-reports-metric-load",
+        "type": "action",
+        "title": "Read Operational reports",
+        "operation": {
+          "kind": "query",
+          "target": "reports-metric",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "reports"
+        }
+      },
+      {
+        "id": "act-users-metric-load",
+        "type": "action",
+        "title": "Read City operators",
+        "operation": {
+          "kind": "query",
+          "target": "users-metric",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "users"
+        }
+      },
+      {
+        "id": "act-assets-map-load",
+        "type": "action",
+        "title": "Read Assets · Live map",
+        "operation": {
+          "kind": "query",
+          "target": "assets-map",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "assets"
+        }
+      },
+      {
+        "id": "act-assets-map-row",
+        "type": "action",
+        "title": "Inspect Assets · Live map",
+        "operation": {
+          "kind": "showRecord",
+          "target": "assets-map",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-assets-map-export",
+        "type": "action",
+        "title": "Export Assets · Live map",
+        "operation": {
+          "kind": "export",
+          "target": "assets-map",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-assets-table-load",
+        "type": "action",
+        "title": "Read Asset registry snapshot",
+        "operation": {
+          "kind": "query",
+          "target": "assets-table",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "assets"
+        }
+      },
+      {
+        "id": "act-assets-table-row",
+        "type": "action",
+        "title": "Inspect Asset registry snapshot",
+        "operation": {
+          "kind": "showRecord",
+          "target": "assets-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-assets-table-export",
+        "type": "action",
+        "title": "Export Asset registry snapshot",
+        "operation": {
+          "kind": "export",
+          "target": "assets-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incidents-table-load",
+        "type": "action",
+        "title": "Read Incident queue",
+        "operation": {
+          "kind": "query",
+          "target": "incidents-table",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "incidents"
+        }
+      },
+      {
+        "id": "act-incidents-table-row",
+        "type": "action",
+        "title": "Inspect Incident queue",
+        "operation": {
+          "kind": "showRecord",
+          "target": "incidents-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incidents-table-export",
+        "type": "action",
+        "title": "Export Incident queue",
+        "operation": {
+          "kind": "export",
+          "target": "incidents-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-maintenance-table-load",
+        "type": "action",
+        "title": "Read Maintenance work orders",
+        "operation": {
+          "kind": "query",
+          "target": "maintenance-table",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "maintenance"
+        }
+      },
+      {
+        "id": "act-maintenance-table-row",
+        "type": "action",
+        "title": "Inspect Maintenance work orders",
+        "operation": {
+          "kind": "showRecord",
+          "target": "maintenance-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-maintenance-table-export",
+        "type": "action",
+        "title": "Export Maintenance work orders",
+        "operation": {
+          "kind": "export",
+          "target": "maintenance-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-alerts-table-load",
+        "type": "action",
+        "title": "Read Recent alerts",
+        "operation": {
+          "kind": "query",
+          "target": "alerts-table",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "alerts"
+        }
+      },
+      {
+        "id": "act-alerts-table-row",
+        "type": "action",
+        "title": "Inspect Recent alerts",
+        "operation": {
+          "kind": "showRecord",
+          "target": "alerts-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-alerts-table-export",
+        "type": "action",
+        "title": "Export Recent alerts",
+        "operation": {
+          "kind": "export",
+          "target": "alerts-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incident-create-submit",
+        "type": "action",
+        "title": "Submit Report a city incident",
+        "operation": {
+          "kind": "create",
+          "target": "incident-create",
+          "mappings": [
+            {
+              "field": "title",
+              "source": "event",
+              "value": "values.title",
+              "required": true
+            },
+            {
+              "field": "category",
+              "source": "event",
+              "value": "values.category",
+              "required": true
+            },
+            {
+              "field": "severity",
+              "source": "event",
+              "value": "values.severity",
+              "required": false
+            },
+            {
+              "field": "description",
+              "source": "event",
+              "value": "values.description",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incident-create-open",
+        "type": "action",
+        "title": "Open Report a city incident",
+        "operation": {
+          "kind": "openForm",
+          "target": "incident-create",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-maintenance-create-submit",
+        "type": "action",
+        "title": "Submit Create a maintenance work order",
+        "operation": {
+          "kind": "create",
+          "target": "maintenance-create",
+          "mappings": [
+            {
+              "field": "asset_id",
+              "source": "event",
+              "value": "values.asset_id",
+              "required": true
+            },
+            {
+              "field": "title",
+              "source": "event",
+              "value": "values.title",
+              "required": true
+            },
+            {
+              "field": "priority",
+              "source": "event",
+              "value": "values.priority",
+              "required": false
+            },
+            {
+              "field": "scheduled_date",
+              "source": "event",
+              "value": "values.scheduled_date",
+              "required": false
+            },
+            {
+              "field": "description",
+              "source": "event",
+              "value": "values.description",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-maintenance-create-open",
+        "type": "action",
+        "title": "Open Create a maintenance work order",
+        "operation": {
+          "kind": "openForm",
+          "target": "maintenance-create",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
         }
       }
     ]
@@ -219,7 +1005,7 @@
   "source": {
     "repository": "https://github.com/vku-open-source-2026/SynapseCity",
     "path": "plugins/city-operations-overview.plugin.json",
-    "revision": "2026-11-14.3"
+    "revision": "2026-11-15.business"
   },
-  "checksum": "sha256:b18f810a3cd1d7c74a04298fdce3de3b573dbbbed47c4fc32ac66d02b53359ff"
+  "checksum": "sha256:3eea7984f5f5a3129f522d874e40966ee236669b8b012907098147965a3efa4f"
 }

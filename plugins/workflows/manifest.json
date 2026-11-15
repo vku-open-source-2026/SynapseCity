@@ -197,5 +197,21 @@
     },
     "status": "source_ready_pending_credential_binding",
     "generator": "plugins/workflows/generate-workspace-actions.mjs"
-  }
+  },
+  "fileActionWorkflows": [
+    {
+      "workflow": "city-csv-import",
+      "file": "plugins/workflows/city-csv-import.workflow.json",
+      "product": "city",
+      "status": "source_ready",
+      "credentialRef": "synapsedx-organization"
+    },
+    {
+      "workflow": "city-generate-report",
+      "file": "plugins/workflows/city-generate-report.workflow.json",
+      "product": "city",
+      "status": "source_ready",
+      "credentialRef": "synapsedx-organization"
+    }
+  ]
 }

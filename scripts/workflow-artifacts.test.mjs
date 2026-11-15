@@ -14,6 +14,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { validateBundle } from './lib/plugin-bundle.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIR = path.join(ROOT, 'plugins', 'workflows');
@@ -164,16 +165,25 @@ test('transition action design is implemented and keeps invariants', () => {
     }
 });
 
-test('plugin bundles bind every form to an executable declarative workflow', () => {
+test('product forms bind executable workflows; Common forms retain app-scoped capability actions', () => {
     const workflows = new Set([
         ...manifest.workflows.map((entry) => entry.workflow),
         ...(manifest.lifecycleWorkflows || []).map((entry) => entry.workflow),
+        ...(manifest.fileActionWorkflows || []).map((entry) => entry.workflow),
     ]);
     if (manifest.genericActionWorkflow?.workflow) workflows.add(manifest.genericActionWorkflow.workflow);
     const forms = [];
     for (const name of fs.readdirSync(path.join(ROOT, 'plugins')).filter((file) => file.endsWith('.plugin.json'))) {
         const bundle = JSON.parse(fs.readFileSync(path.join(ROOT, 'plugins', name), 'utf8'));
+        assert.deepEqual(validateBundle(bundle).errors, [], name);
         for (const widget of bundle.plugin.widgets.filter((item) => item.type === 'form')) {
+            const submit = bundle.plugin.widgets.find(item => item.id === widget.onSubmit)?.operation;
+            assert.equal(submit?.target, widget.id, `${name}/${widget.id}: missing submit action`);
+            assert.equal(submit?.kind === "batch" ? "execute" : submit?.kind, widget.action, `${name}/${widget.id}: wrong submit operation`);
+            if (widget.resource.startsWith('common')) {
+                assert.equal(widget.workflowRef, undefined, 'Common uses the app-scoped capability, never a product workflow');
+                continue;
+            }
             forms.push(widget);
             assert.ok(widget.workflowRef && widget.workflowRef.name, `${name}/${widget.id} lacks workflowRef`);
             assert.ok(['create', 'update', 'delete', 'execute'].includes(widget.action), `${name}/${widget.id} action`);

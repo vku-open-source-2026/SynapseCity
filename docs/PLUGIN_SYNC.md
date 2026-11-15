@@ -21,8 +21,10 @@ not a second product implementation:
 
 - it never contains tenant ids, tokens, membership, audit or server metadata;
 - it never imports SOS code, roles or resources;
-- it never contains JavaScript, HTML, SQL, URLs or credentials (a
-  `wsp_`-shaped runtime token in any text field is rejected);
+- custom `code` widgets may contain bounded HTML/CSS/JavaScript authored in DX
+  Studio, with same-page query/action IDs; source executes only in the isolated
+  browser worker. Never embed credentials or SQL/URL connectors; a
+  `wsp_`-shaped runtime token in any text field is rejected;
 - the DX renderer maps `resource` keys to its own Tier-2 data bindings and the
   signed-in member's server-side role.
 
@@ -183,3 +185,61 @@ until that binding is verified end to end.
 The CLI does not run git, commit, push, deploy or open a network listener. It
 does not execute bundle or TSX content. Source provenance for the retired
 Tier-3 work routes is archived in `plugins/source/`.
+
+## Common workspace (2026-11-15)
+
+The app includes its own `city-common-workspace.plugin.json`. It is installed
+alongside the 14 operational pages and uses this app's explicit membership.
+Common capabilities reuse DX components, but records and authorization are
+scoped to this app. `X-Workspace-App: city` is forwarded by the DX gateway
+and verified against persisted app grants. No membership or business records
+are imported/exported with the plugin bundle. Organization administration and
+Studio require verified IAM organization administration; an app-admin role does
+not authorize either.
+
+The operational runtime adds record details, contextual action dialogs, search,
+pagination, CSV page export and real map widgets on relevant pages. Advanced
+legacy business features require separate product-owned workflow parity checks;
+a generic CRUD form is not proof of full parity.
+
+### Common LCDP v2 (2026-11-15)
+
+The app-owned Common bundle now has 39 declarative widgets in eight sections.
+Tasks, projects, wiki, inbox, forms/approvals, reports, OCR and assistant no longer
+embed prebuilt Common screens. City and SOS retain distinct installations,
+memberships and capability data. Studio edits/imports preserve sections,
+12-column widths, typed fields, reference options and authorized Kanban actions.
+This layout change does not alter the product's protected workflow bindings.
+
+## Studio code source
+
+Existing installed pages can be edited in DX Studio, including adding custom
+code components. Source/binding lists are retained in export/build/sync with the
+same checksum rules. The CLI validates source bounds and references to data
+widgets/forms in the same plugin. No bundle code is executed by these scripts.
+Runtime sandbox capabilities and workflow editing are documented in SynapseDX's
+`docs/WORKSPACE_STUDIO.md`. Server business logic remains a reviewed workflow
+artifact; export/review/synchronize that workflow separately after Studio edits.
+
+
+The LCDP action contract also preserves `onLoad`, `onSubmit`, `onRowClick`,
+`onChange`, `onExport`, button `onClick`, navigation `actionId` and reference
+`optionsAction`. Every declarative read declares its catalog `source`; every
+business event points to an existing action. The authoring limit is 64 visual
+components plus 128 named actions. Source bundles contain explicit migrated
+registries and resealed checksums. Import remains a draft: review, save and publish
+before release. The City and SOS Common plugins keep separate product membership.
+Chart configuration supports bar, line, area, pie, donut and loaded-page
+aggregation. Query functions can read only their declared page sources; an onLoad
+function cannot declare mutations. Server-side installation, membership, tenant,
+catalog and workflow checks apply even when calling an endpoint directly.
+
+
+### Native structured editors (2026-11-15)
+
+Portable field definitions retain `editor` (`json`, `schema`, `query`,
+`geometry`) and explicit `selectionPath` bindings. Fields such as
+`geometry_json` bind to the stored `geometry` property, including nested paths
+when declared. This is a binding within the same authorized record; it does not
+create a new data source. JSON schema/query controls and map drawing submit
+through the existing named actions and preserve reviewed workflow pins.

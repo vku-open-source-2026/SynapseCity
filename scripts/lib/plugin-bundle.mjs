@@ -1,3 +1,4 @@
+import { studioActionError, actionReferenceErrors } from "./studio-actions.mjs";
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 /**
@@ -54,7 +55,7 @@ export const PRODUCT_SPEC = {
  */
 export const LIMITS = {
     maxFileBytes: 1024 * 1024,
-    maxWidgets: 40,
+    maxWidgets: 64,
     maxColumns: 20,
     maxFields: 30,
     maxRoles: 12,
@@ -65,12 +66,13 @@ export const LIMITS = {
 const BUNDLE_KEYS = new Set(['format', 'formatVersion', 'plugin', 'source', 'checksum']);
 const PLUGIN_KEYS = new Set(['product', 'name', 'slug', 'audience', 'roles', 'widgets']);
 const SOURCE_KEYS = new Set(['repository', 'path', 'revision']);
-const WIDGET_KEYS = new Set(['id', 'type', 'title', 'text', 'resource', 'columns', 'fields', 'action', 'width', 'workflowRef']);
-const FIELD_KEYS = new Set(['name', 'label', 'type', 'required']);
+const COMMON_RESOURCES = ['commonProjects', 'commonTasks', 'commonWorkspaces', 'commonPages', 'commonInbox', 'commonComments', 'commonForms', 'commonProcesses', 'commonProcessInstances', 'commonReports', 'commonDashboards', 'commonFiles', 'commonOcr', 'commonPeople', 'commonKpis', 'commonTimesheets', 'commonAgents', 'commonAgentRuns', 'commonKnowledge', 'commonAssistant', 'commonApprovals'];
+const WIDGET_KEYS = new Set(['onLoad','onSubmit','onRowClick','onChange','onExport','chartType','aggregation','operation','onClick','code','section','presentation','groupBy','groups','updateForm','id', 'type', 'title', 'text', 'resource', 'columns', 'fields', 'action', 'width', 'workflowRef', 'links', 'value', 'module']);
+const FIELD_KEYS = new Set(['name','label','type','required','options','optionsResource','optionsAction','uploadAction','editor','selectionPath','accept','maxBytes','defaultValue']);
 const WORKFLOW_REF_KEYS = new Set(['name', 'slug', 'checksum']);
-const FIELD_TYPES = new Set(['text', 'number', 'textarea']);
+const FIELD_TYPES = new Set(['text','number','textarea','select','date','datetime-local','checkbox','email','json','markdown','file']);
 const WIDGET_ACTIONS = new Set(['create', 'update', 'delete', 'execute']);
-const WIDGET_TYPES = new Set(['text', 'metric', 'table', 'form']);
+const WIDGET_TYPES = new Set(['text', 'metric', 'table', 'form', 'heading', 'divider', 'alert', 'navigation', 'button', 'tabs', 'progress', 'chart', 'list', 'map', 'kanban', 'timeline', 'markdown', 'capability', 'code', 'action']);
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,63}$/;
 const FIELD_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
 const WIDGET_ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
@@ -304,8 +306,56 @@ function validateWidget(widget, index, errors, seenIds) {
     }
     if (!WIDGET_TYPES.has(widget.type)) errors.push(`${label}.type is not supported`);
     if (!isText(widget.title, LIMITS.maxTitleLength)) errors.push(`${label}.title must be plain text`);
-    if (widget.width !== undefined && !['full', 'half'].includes(widget.width)) {
+    if (widget.width !== undefined && !['full','half','third','quarter'].includes(widget.width)) {
         errors.push(`${label}.width must be full or half`);
+    }
+
+    const textTypes = ['text', 'heading', 'alert','markdown'];
+    const navTypes = ['navigation', 'button', 'tabs'];
+    const allowed = new Set(['id','type','title','width','section']);
+    if(widget.section!==undefined&&(typeof widget.section!=='string'||!/^[a-z][a-z0-9-]{0,63}$/.test(widget.section)))errors.push(`${label}.section is invalid`);
+    if(widget.presentation!==undefined&&!['inline','dialog'].includes(widget.presentation))errors.push(`${label}.presentation is invalid`);
+    if(widget.type==='kanban'){for(const key of ['groupBy','groups','updateForm'])allowed.add(key);if(widget.groupBy!==undefined&&(!FIELD_NAME_RE.test(widget.groupBy)||!widget.columns?.includes(widget.groupBy)))errors.push(`${label}.groupBy must name a declared column`);if(widget.updateForm!==undefined&&!WIDGET_ID_RE.test(widget.updateForm))errors.push(`${label}.updateForm is invalid`);if(widget.groups!==undefined&&(!Array.isArray(widget.groups)||widget.groups.length>20||widget.groups.some(value=>!isText(value,80))))errors.push(`${label}.groups is invalid`);}
+    for(const [event,types] of Object.entries({onLoad:['metric','table','chart','list','map','kanban','timeline'],onSubmit:['form'],onRowClick:['table','list','map','kanban','timeline'],onChange:['kanban'],onExport:['table','list','map','kanban','timeline']}))if(types.includes(widget.type)){allowed.add(event);if(widget[event]!==undefined&&(typeof widget[event]!=='string'||!WIDGET_ID_RE.test(widget[event])))errors.push(event+' must reference a named action');}
+    if(widget.type==='chart'){allowed.add('chartType');allowed.add('aggregation');if(widget.chartType!==undefined&&!['bar','line','area','pie','donut'].includes(widget.chartType))errors.push('Invalid chart type');if(widget.aggregation!==undefined&&!['none','count','sum','average'].includes(widget.aggregation))errors.push('Invalid aggregation');}
+    if (textTypes.includes(widget.type)) allowed.add('text');
+    if (navTypes.includes(widget.type)) allowed.add('links');
+    if (widget.type === 'progress') allowed.add('value');
+    if (widget.type === 'action') allowed.add('operation');
+    if (widget.type === 'button') allowed.add('onClick');
+    if (widget.type === 'code') allowed.add('code');
+    if (widget.type === 'capability') allowed.add('module');
+    if (['metric', 'table', 'chart', 'list', 'map', 'kanban', 'timeline', 'form'].includes(widget.type)) allowed.add('resource');
+    if (['table', 'chart', 'list', 'map', 'kanban', 'timeline'].includes(widget.type)) allowed.add('columns');
+    if (widget.type === 'form') for (const key of ['fields','action','workflowRef','presentation']) allowed.add(key);
+    for (const key of Object.keys(widget)) if (!allowed.has(key)) errors.push(`${label} ${widget.type} widget must not define ${key}`);
+    if (widget.type === 'action') {
+      const issue=studioActionError(widget.operation);
+      if(issue) errors.push(issue);
+      return;
+    }
+    if(widget.type==='button' && widget.onClick!==undefined && (typeof widget.onClick!=='string'||!WIDGET_ID_RE.test(widget.onClick)))errors.push('Invalid button action id');
+    if (widget.type === 'code') {
+      const code = widget.code;
+      if (!isPlainObject(code) || !hasOnlyKeys(code,new Set(['html','css','javascript','inputs','actions','height']))) { errors.push(`${label}.code is invalid`); return; }
+      for (const key of ['html','css','javascript']) if(typeof code[key]!=='string' || code[key].length>32768 || code[key].includes('\0')) errors.push(`${label}.code.${key} exceeds source limits`);
+      if(['html','css','javascript'].reduce((n,key)=>n+(typeof code[key]==='string'?code[key].length:0),0)>65536)errors.push(`${label}.code exceeds combined source limit`);
+      for(const key of ['inputs','actions']) if(!Array.isArray(code[key]) || code[key].length>20 || code[key].some(id=>typeof id!=='string'||!WIDGET_ID_RE.test(id)) || new Set(code[key]).size!==code[key].length) errors.push(`${label}.code.${key} must contain up to 20 unique widget ids`);
+      if(!Number.isInteger(code.height)||code.height<120||code.height>1200)errors.push(`${label}.code.height must be 120..1200`);
+      return;
+    }
+    if (widget.type === 'capability') { if (!['inbox', 'workspace', 'people', 'projects', 'tasks', 'forms', 'reports', 'quality', 'ocr', 'agents', 'assistant'].includes(widget.module)) errors.push(`${label}.module is not allowed`); return; }
+    if (['heading', 'alert', 'markdown', 'divider', 'progress', ...navTypes].includes(widget.type)) {
+        if (textTypes.includes(widget.type) && widget.text !== undefined && !isText(widget.text, LIMITS.maxTextLength, { allowEmpty: true })) errors.push(`${label}.text must be plain text`);
+        if (widget.type === 'progress' && (typeof widget.value !== 'number' || !Number.isFinite(widget.value) || widget.value < 0 || widget.value > 100)) errors.push(`${label}.value must be 0..100`);
+        if (navTypes.includes(widget.type) && !widget.onClick) {
+            const modules = ['inbox', 'workspace', 'people', 'projects', 'tasks', 'forms', 'reports', 'quality', 'ocr', 'agents', 'assistant'];
+            if (!Array.isArray(widget.links) || widget.links.length < 1 || widget.links.length > 12) errors.push(`${label}.links must contain 1..12 destinations`);
+            else widget.links.forEach((link) => {
+                if (!isPlainObject(link) || link.actionId!==undefined&&(typeof link.actionId!=='string'||!WIDGET_ID_RE.test(link.actionId)) || !hasOnlyKeys(link, new Set(['label', 'target', 'actionId'])) || !isText(link.label, 80) || typeof link.target !== 'string' || (!/^(page|section):[a-z0-9][a-z0-9-]{1,63}$/.test(link.target) && !(link.target.startsWith('module:') && modules.includes(link.target.slice(7))))) errors.push(`${label} has an invalid navigation destination`);
+            });
+        }
+        return;
     }
 
     if (widget.type === 'text') {
@@ -320,7 +370,7 @@ function validateWidget(widget, index, errors, seenIds) {
     }
 
     if (widget.text !== undefined) errors.push(`${label} ${widget.type} widget must not define text`);
-    if (!PRODUCT_SPEC.resources.includes(widget.resource)) {
+    if (!PRODUCT_SPEC.resources.includes(widget.resource)&&!COMMON_RESOURCES.includes(widget.resource)) {
         errors.push(`${label}.resource must be a ${PRODUCT} catalog key`);
     }
 
@@ -332,7 +382,7 @@ function validateWidget(widget, index, errors, seenIds) {
         return;
     }
 
-    if (widget.type === 'table') {
+    if (['table', 'chart', 'list', 'map', 'kanban', 'timeline'].includes(widget.type)) {
         if (widget.action !== undefined) errors.push(`${label} table widget must not define action`);
         if (widget.fields !== undefined) errors.push(`${label} table widget must not define fields`);
         if (!Array.isArray(widget.columns) || widget.columns.length === 0 || widget.columns.length > LIMITS.maxColumns) {
@@ -371,6 +421,18 @@ function validateWidget(widget, index, errors, seenIds) {
             }
             if (!isText(field.label, LIMITS.maxTitleLength)) errors.push(`${fieldLabel}.label must be plain text`);
             if (!FIELD_TYPES.has(field.type)) errors.push(`${fieldLabel}.type is not supported`);
+            if(field.options!==undefined&&(!Array.isArray(field.options)||field.options.length>100||field.options.some(value=>!isText(value,200))))errors.push(`${fieldLabel}.options is invalid`);
+            if(field.optionsAction!==undefined&&(typeof field.optionsAction!=='string'||!WIDGET_ID_RE.test(field.optionsAction)))errors.push(`${fieldLabel}.optionsAction is invalid`);
+            if(field.optionsResource!==undefined&&!COMMON_RESOURCES.includes(field.optionsResource))errors.push(`${fieldLabel}.optionsResource is invalid`);
+            if(field.type!=='select'&&(field.options!==undefined||field.optionsResource!==undefined))errors.push(`${fieldLabel} options require a select field`);
+            if(['uploadAction','accept','maxBytes'].some(key=>field[key]!==undefined)&&field.type!=='file')errors.push(`${fieldLabel}: upload settings require a file field`);
+            if(field.uploadAction!==undefined&&(typeof field.uploadAction!=='string'||!WIDGET_ID_RE.test(field.uploadAction)))errors.push(`${fieldLabel}: invalid upload action`);
+            if(field.maxBytes!==undefined&&(!Number.isInteger(field.maxBytes)||field.maxBytes<1||field.maxBytes>20971520))errors.push(`${fieldLabel}: invalid upload limit`);
+            if(field.accept!==undefined&&(typeof field.accept!=='string'||field.accept.length>300||!field.accept.split(',').every(type=>/^[a-z0-9!#$&^_.+-]+\/(?:[a-z0-9!#$&^_.+-]+|\*)$/.test(type.trim()))))errors.push(`${fieldLabel}: invalid accepted MIME types`);
+            if(field.selectionPath!==undefined&&(typeof field.selectionPath!=='string'||field.selectionPath.length>200||field.selectionPath.split('.').length>6||!/^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/.test(field.selectionPath)||field.selectionPath.split('.').some(key=>['__proto__','prototype','constructor'].includes(key))))errors.push(`${fieldLabel}: invalid selected-record binding`);
+            if(field.editor!==undefined&&(field.type!=='json'||!['json','schema','query','geometry'].includes(field.editor)))errors.push(`${fieldLabel}: invalid structured editor`);
+            if(field.type==='file'&&field.defaultValue)errors.push(`${fieldLabel}: file fields cannot contain default uploads`);
+            if(field.defaultValue!==undefined&&(typeof field.defaultValue!=='string'||field.defaultValue.length>4000))errors.push(`${fieldLabel}.defaultValue is invalid`);
             if (field.required !== undefined && typeof field.required !== 'boolean') {
                 errors.push(`${fieldLabel}.required must be a boolean`);
             }
@@ -431,11 +493,15 @@ export function validateBundle(raw, options = {}) {
                 }
             }
         }
-        if (!Array.isArray(plugin.widgets) || plugin.widgets.length === 0 || plugin.widgets.length > LIMITS.maxWidgets) {
+        if (!Array.isArray(plugin.widgets) || plugin.widgets.length === 0 || plugin.widgets.filter(w=>w?.type!=="action").length > LIMITS.maxWidgets || (Array.isArray(plugin.widgets) && plugin.widgets.filter(w=>w?.type==="action").length > 128)) {
             errors.push(`plugin.widgets must contain 1..${LIMITS.maxWidgets} widgets`);
         } else {
+            if(plugin.widgets.every(w=>isPlainObject(w))) errors.push(...actionReferenceErrors(plugin.widgets));
             const ids = new Set();
             plugin.widgets.forEach((widget, index) => validateWidget(widget, index, errors, ids));
+            for(const widget of plugin.widgets) if(widget?.type==='code' && isPlainObject(widget.code)) for(const [key,types] of [['inputs',['metric','table','chart','list','map','kanban','timeline']],['actions',['form']]]) {
+              if(Array.isArray(widget.code[key])) for(const id of widget.code[key]) if(!plugin.widgets.some(w=>w?.id===id&&types.includes(w.type)))errors.push(`Code binding ${id} must reference a matching widget in this page`);
+            }
         }
     }
 

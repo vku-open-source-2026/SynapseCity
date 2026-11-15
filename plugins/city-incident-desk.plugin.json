@@ -14,30 +14,98 @@
       {
         "id": "intro",
         "text": "Triage citizen and operator reports, assign an owner, record verification and close the loop. Lifecycle transitions use the reviewed City incident workflows and optimistic record versions.",
-        "type": "text",
+        "type": "heading",
         "title": "Incident intake and resolution",
         "width": "full"
+      },
+      {
+        "id": "workspace-navigation",
+        "type": "navigation",
+        "title": "Quick access",
+        "width": "full",
+        "links": [
+          {
+            "label": "Overview",
+            "target": "page:city-operations-overview",
+            "actionId": "act-workspace-navigation-link1"
+          },
+          {
+            "label": "Assets",
+            "target": "page:city-asset-registry",
+            "actionId": "act-workspace-navigation-link2"
+          },
+          {
+            "label": "Incidents",
+            "target": "page:city-incident-desk",
+            "actionId": "act-workspace-navigation-link3"
+          },
+          {
+            "label": "Maintenance",
+            "target": "page:city-maintenance-workshop",
+            "actionId": "act-workspace-navigation-link4"
+          },
+          {
+            "label": "Team tasks",
+            "target": "module:tasks",
+            "actionId": "act-workspace-navigation-link5"
+          }
+        ]
       },
       {
         "id": "incidents-metric",
         "type": "metric",
         "title": "Incidents",
         "width": "half",
-        "resource": "incidents"
+        "resource": "incidents",
+        "onLoad": "act-incidents-metric-load"
       },
       {
         "id": "alerts-metric",
         "type": "metric",
         "title": "Alerts",
         "width": "half",
-        "resource": "alerts"
+        "resource": "alerts",
+        "onLoad": "act-alerts-metric-load"
       },
       {
         "id": "maintenance-metric",
         "type": "metric",
         "title": "Related work orders",
         "width": "half",
-        "resource": "maintenance"
+        "resource": "maintenance",
+        "onLoad": "act-maintenance-metric-load"
+      },
+      {
+        "id": "incidents-map",
+        "type": "map",
+        "title": "Incidents · Live map",
+        "width": "full",
+        "resource": "incidents",
+        "columns": [
+          "id",
+          "name",
+          "title",
+          "status",
+          "severity",
+          "address",
+          "district",
+          "latitude",
+          "longitude",
+          "geometry",
+          "geometry_json",
+          "location",
+          "current_location",
+          "current_location_json"
+        ],
+        "onLoad": "act-incidents-map-load",
+        "onRowClick": "act-incidents-map-row",
+        "onExport": "act-incidents-map-export"
+      },
+      {
+        "id": "records-section",
+        "type": "divider",
+        "title": "Your infrastructure",
+        "width": "full"
       },
       {
         "id": "incidents-table",
@@ -54,7 +122,10 @@
           "assigned_to",
           "reported_at"
         ],
-        "resource": "incidents"
+        "resource": "incidents",
+        "onLoad": "act-incidents-table-load",
+        "onRowClick": "act-incidents-table-row",
+        "onExport": "act-incidents-table-export"
       },
       {
         "id": "alerts-table",
@@ -69,7 +140,16 @@
           "message",
           "asset_id"
         ],
-        "resource": "alerts"
+        "resource": "alerts",
+        "onLoad": "act-alerts-table-load",
+        "onRowClick": "act-alerts-table-row",
+        "onExport": "act-alerts-table-export"
+      },
+      {
+        "id": "actions-section",
+        "type": "divider",
+        "title": "Take action",
+        "width": "full"
       },
       {
         "id": "incident-create",
@@ -120,7 +200,8 @@
         "workflowRef": {
           "name": "city-incident-create",
           "checksum": "9950bd892b99cba6ae904d01d474cba11932f9a4dcd33df59d9b4914f9a75d6e"
-        }
+        },
+        "onSubmit": "act-incident-create-submit"
       },
       {
         "id": "incident-assign",
@@ -146,7 +227,8 @@
         "workflowRef": {
           "name": "city-incident-assign",
           "checksum": "fdba856b14fc29e9e069a766c1f80bfdc29d6d1909939bd287498c7bf9484365"
-        }
+        },
+        "onSubmit": "act-incident-assign-submit"
       },
       {
         "id": "incident-acknowledge",
@@ -171,7 +253,8 @@
         "workflowRef": {
           "name": "city-incident-acknowledge",
           "checksum": "a34af488f4212b9af90cdab7ceae1a88587f6679cfb5721aeec944399a4376d6"
-        }
+        },
+        "onSubmit": "act-incident-acknowledge-submit"
       },
       {
         "id": "incident-resolve",
@@ -201,7 +284,8 @@
         "workflowRef": {
           "name": "city-incident-resolve",
           "checksum": "7fd679806d1f340b1e6a39f6b70d1bebb1e01aeafe9b3777d97c3a51e242686a"
-        }
+        },
+        "onSubmit": "act-incident-resolve-submit"
       },
       {
         "id": "incident-verify",
@@ -226,7 +310,8 @@
         "workflowRef": {
           "name": "city-incident-verify",
           "checksum": "bd47fa64a2ec0feb99683a998f0724f15a8817639788edefcb8caa63fd69c9a1"
-        }
+        },
+        "onSubmit": "act-incident-verify-submit"
       },
       {
         "id": "incident-reject",
@@ -251,7 +336,8 @@
         "workflowRef": {
           "name": "city-incident-reject",
           "checksum": "019bcd502c5c91e800cf46e18d35de28f64e81510d0ec5e4c13e3fd0185d0814"
-        }
+        },
+        "onSubmit": "act-incident-reject-submit"
       },
       {
         "id": "incident-close",
@@ -276,6 +362,639 @@
         "workflowRef": {
           "name": "city-incident-close",
           "checksum": "3be6563b203d91d88a855a39553ade26561bebb57a5d073332be194e5f86af0d"
+        },
+        "onSubmit": "act-incident-close-submit"
+      },
+      {
+        "id": "act-workspace-navigation-link1",
+        "type": "action",
+        "title": "Navigate Overview",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "page:city-operations-overview"
+        }
+      },
+      {
+        "id": "act-workspace-navigation-link2",
+        "type": "action",
+        "title": "Navigate Assets",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "page:city-asset-registry"
+        }
+      },
+      {
+        "id": "act-workspace-navigation-link3",
+        "type": "action",
+        "title": "Navigate Incidents",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "page:city-incident-desk"
+        }
+      },
+      {
+        "id": "act-workspace-navigation-link4",
+        "type": "action",
+        "title": "Navigate Maintenance",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "page:city-maintenance-workshop"
+        }
+      },
+      {
+        "id": "act-workspace-navigation-link5",
+        "type": "action",
+        "title": "Navigate Team tasks",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "module:tasks"
+        }
+      },
+      {
+        "id": "act-incidents-metric-load",
+        "type": "action",
+        "title": "Read Incidents",
+        "operation": {
+          "kind": "query",
+          "target": "incidents-metric",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "incidents"
+        }
+      },
+      {
+        "id": "act-alerts-metric-load",
+        "type": "action",
+        "title": "Read Alerts",
+        "operation": {
+          "kind": "query",
+          "target": "alerts-metric",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "alerts"
+        }
+      },
+      {
+        "id": "act-maintenance-metric-load",
+        "type": "action",
+        "title": "Read Related work orders",
+        "operation": {
+          "kind": "query",
+          "target": "maintenance-metric",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "maintenance"
+        }
+      },
+      {
+        "id": "act-incidents-map-load",
+        "type": "action",
+        "title": "Read Incidents · Live map",
+        "operation": {
+          "kind": "query",
+          "target": "incidents-map",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "incidents"
+        }
+      },
+      {
+        "id": "act-incidents-map-row",
+        "type": "action",
+        "title": "Inspect Incidents · Live map",
+        "operation": {
+          "kind": "showRecord",
+          "target": "incidents-map",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incidents-map-export",
+        "type": "action",
+        "title": "Export Incidents · Live map",
+        "operation": {
+          "kind": "export",
+          "target": "incidents-map",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incidents-table-load",
+        "type": "action",
+        "title": "Read Incident queue",
+        "operation": {
+          "kind": "query",
+          "target": "incidents-table",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "incidents"
+        }
+      },
+      {
+        "id": "act-incidents-table-row",
+        "type": "action",
+        "title": "Inspect Incident queue",
+        "operation": {
+          "kind": "showRecord",
+          "target": "incidents-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incidents-table-export",
+        "type": "action",
+        "title": "Export Incident queue",
+        "operation": {
+          "kind": "export",
+          "target": "incidents-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-alerts-table-load",
+        "type": "action",
+        "title": "Read Automatic alerts",
+        "operation": {
+          "kind": "query",
+          "target": "alerts-table",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "alerts"
+        }
+      },
+      {
+        "id": "act-alerts-table-row",
+        "type": "action",
+        "title": "Inspect Automatic alerts",
+        "operation": {
+          "kind": "showRecord",
+          "target": "alerts-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-alerts-table-export",
+        "type": "action",
+        "title": "Export Automatic alerts",
+        "operation": {
+          "kind": "export",
+          "target": "alerts-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incident-create-submit",
+        "type": "action",
+        "title": "Submit Report an incident",
+        "operation": {
+          "kind": "create",
+          "target": "incident-create",
+          "mappings": [
+            {
+              "field": "title",
+              "source": "event",
+              "value": "values.title",
+              "required": true
+            },
+            {
+              "field": "category",
+              "source": "event",
+              "value": "values.category",
+              "required": true
+            },
+            {
+              "field": "severity",
+              "source": "event",
+              "value": "values.severity",
+              "required": false
+            },
+            {
+              "field": "description",
+              "source": "event",
+              "value": "values.description",
+              "required": false
+            },
+            {
+              "field": "address",
+              "source": "event",
+              "value": "values.address",
+              "required": false
+            },
+            {
+              "field": "latitude",
+              "source": "event",
+              "value": "values.latitude",
+              "required": false
+            },
+            {
+              "field": "longitude",
+              "source": "event",
+              "value": "values.longitude",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incident-create-open",
+        "type": "action",
+        "title": "Open Report an incident",
+        "operation": {
+          "kind": "openForm",
+          "target": "incident-create",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incident-assign-submit",
+        "type": "action",
+        "title": "Submit Assign an incident",
+        "operation": {
+          "kind": "update",
+          "target": "incident-assign",
+          "mappings": [
+            {
+              "field": "incident_id",
+              "source": "event",
+              "value": "values.incident_id",
+              "required": true
+            },
+            {
+              "field": "assigned_to",
+              "source": "event",
+              "value": "values.assigned_to",
+              "required": true
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incident-assign-open",
+        "type": "action",
+        "title": "Open Assign an incident",
+        "operation": {
+          "kind": "openForm",
+          "target": "incident-assign",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incident-acknowledge-submit",
+        "type": "action",
+        "title": "Submit Acknowledge an incident",
+        "operation": {
+          "kind": "update",
+          "target": "incident-acknowledge",
+          "mappings": [
+            {
+              "field": "incident_id",
+              "source": "event",
+              "value": "values.incident_id",
+              "required": true
+            },
+            {
+              "field": "notes",
+              "source": "event",
+              "value": "values.notes",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incident-acknowledge-open",
+        "type": "action",
+        "title": "Open Acknowledge an incident",
+        "operation": {
+          "kind": "openForm",
+          "target": "incident-acknowledge",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incident-resolve-submit",
+        "type": "action",
+        "title": "Submit Resolve an incident",
+        "operation": {
+          "kind": "update",
+          "target": "incident-resolve",
+          "mappings": [
+            {
+              "field": "incident_id",
+              "source": "event",
+              "value": "values.incident_id",
+              "required": true
+            },
+            {
+              "field": "resolution_type",
+              "source": "event",
+              "value": "values.resolution_type",
+              "required": false
+            },
+            {
+              "field": "resolution_notes",
+              "source": "event",
+              "value": "values.resolution_notes",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incident-resolve-open",
+        "type": "action",
+        "title": "Open Resolve an incident",
+        "operation": {
+          "kind": "openForm",
+          "target": "incident-resolve",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incident-verify-submit",
+        "type": "action",
+        "title": "Submit Verify a resolution",
+        "operation": {
+          "kind": "update",
+          "target": "incident-verify",
+          "mappings": [
+            {
+              "field": "incident_id",
+              "source": "event",
+              "value": "values.incident_id",
+              "required": true
+            },
+            {
+              "field": "notes",
+              "source": "event",
+              "value": "values.notes",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incident-verify-open",
+        "type": "action",
+        "title": "Open Verify a resolution",
+        "operation": {
+          "kind": "openForm",
+          "target": "incident-verify",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incident-reject-submit",
+        "type": "action",
+        "title": "Submit Reject an incident",
+        "operation": {
+          "kind": "update",
+          "target": "incident-reject",
+          "mappings": [
+            {
+              "field": "incident_id",
+              "source": "event",
+              "value": "values.incident_id",
+              "required": true
+            },
+            {
+              "field": "notes",
+              "source": "event",
+              "value": "values.notes",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incident-reject-open",
+        "type": "action",
+        "title": "Open Reject an incident",
+        "operation": {
+          "kind": "openForm",
+          "target": "incident-reject",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incident-close-submit",
+        "type": "action",
+        "title": "Submit Close an incident",
+        "operation": {
+          "kind": "update",
+          "target": "incident-close",
+          "mappings": [
+            {
+              "field": "incident_id",
+              "source": "event",
+              "value": "values.incident_id",
+              "required": true
+            },
+            {
+              "field": "notes",
+              "source": "event",
+              "value": "values.notes",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incident-close-open",
+        "type": "action",
+        "title": "Open Close an incident",
+        "operation": {
+          "kind": "openForm",
+          "target": "incident-close",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
         }
       }
     ]
@@ -283,7 +1002,7 @@
   "source": {
     "repository": "https://github.com/vku-open-source-2026/SynapseCity",
     "path": "plugins/city-incident-desk.plugin.json",
-    "revision": "2026-11-14.3"
+    "revision": "2026-11-15.business"
   },
-  "checksum": "sha256:1bfa9cd536d3414e50bc73b3e0dcaa248e6f39748b5f190e80f98892f5d53337"
+  "checksum": "sha256:3fe8c5a937df9aa31238f1c84b9f3c7bc86212fe3744e429332e841060f4d2ad"
 }

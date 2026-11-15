@@ -189,8 +189,8 @@ test('widget kinds reject fields DX rejects', () => {
 });
 
 test('bounds widget counts, columns and form fields at DX defaults', () => {
-    const widgets = Array.from({ length: 41 }, (_, index) => ({ id: `w${index}`, type: 'text', title: `W${index}`, text: 'x' }));
-    assert.ok(errorsFor({ plugin: { widgets } }).some((error) => error.includes('1..40')));
+    const widgets = Array.from({ length: 65 }, (_, index) => ({ id: `w${index}`, type: 'text', title: `W${index}`, text: 'x' }));
+    assert.ok(errorsFor({ plugin: { widgets } }).some((error) => error.includes('1..64')));
     const twentyOne = Array.from({ length: 21 }, (_, index) => `col${index}`);
     assert.ok(errorsFor({ plugin: { widgets: [{ id: 'table', type: 'table', title: 'T', resource: MAIN_RESOURCE, columns: twentyOne }] } })
         .some((error) => error.includes('1..20')));
@@ -204,7 +204,7 @@ test('bounds widget counts, columns and form fields at DX defaults', () => {
     assert.deepEqual(errorsFor({ plugin: { widgets: [upperColumns] } }), []);
     const badField = {
         id: 'form', type: 'form', title: 'F', resource: MAIN_RESOURCE, action: 'create',
-        fields: [{ name: 'title', label: 'Title', type: 'json' }],
+        fields: [{ name: 'title', label: 'Title', type: 'javascript' }],
     };
     assert.ok(errorsFor({ plugin: { widgets: [badField] } }).some((error) => error.includes('type is not supported')));
     const badAction = {
@@ -523,4 +523,26 @@ test('CLI source never runs git or executes bundle content', () => {
     assert.ok(!/child_process|execSync|spawnSync|\bgit\b\s/.test(source.replace(/never runs git/g, '')));
     assert.ok(!/\bimport\s*\(/.test(source), 'must not dynamically import bundle content');
     assert.ok(!/\beval\s*\(/.test(source));
+});
+
+test('Studio code exports carry bounded source and same-page data/action references', () => {
+    const code = {html:'<button data-event="run">Run</button>',css:'button{color:teal}',javascript:'console.log("authored in Studio")',inputs:['records'],actions:['submit'],height:300};
+    const widgets = [{id:'records',type:'table',title:'Records',resource:MAIN_RESOURCE,columns:['name']},{id:'submit',type:'form',title:'Submit',resource:MAIN_RESOURCE,action:'create',fields:[{name:'name',label:'Name',type:'text'}]},{id:'custom',type:'code',title:'Custom',code}];
+    const bundle=baseBundle({plugin:{widgets}});
+    bundle.checksum=bundleChecksum(bundle);
+    assert.deepEqual(validateBundle(bundle,{product:PRODUCT,requireChecksum:true}).errors,[]);
+    for(const patch of [{inputs:['foreign-widget']},{actions:['records']},{height:2000},{javascript:'x'.repeat(32769)},{inputs:['records','records']},{url:'https://example.com'}]) {
+        const invalid=baseBundle({plugin:{widgets:[...widgets.slice(0,2),{...widgets[2],code:{...code,...patch}}]}});
+        assert.equal(validateBundle(invalid,{product:PRODUCT}).ok,false);
+    }
+});
+
+test('Action Studio presets, functions and button events remain portable and reject broken bindings',()=>{
+    const action={kind:'update',target:'edit',mappings:[{field:'status',source:'input',widgetId:'edit',value:'status'}],javascript:'',inputs:[],actions:[]};
+    const widgets=[{id:'edit',type:'form',title:'Edit',resource:MAIN_RESOURCE,action:'update',fields:[{name:'status',label:'Status',type:'text'}]},{id:'update',type:'action',title:'Update',operation:action},{id:'button',type:'button',title:'Save',onClick:'update'}];
+    assert.deepEqual(validateBundle(baseBundle({plugin:{widgets}})).errors,[]);
+    const fn={...action,kind:'function',target:undefined,mappings:[],javascript:'async function run(input, studio) { return input; }',actions:['edit']};
+    assert.deepEqual(validateBundle(baseBundle({plugin:{widgets:[widgets[0],{...widgets[1],operation:fn},widgets[2]]}})).errors,[]);
+    for(const operation of [{...action,target:'foreign'},{...action,kind:'delete'},{...action,mappings:[{field:'status',source:'input',widgetId:'foreign',value:'status'}]},{...fn,actions:['button']},{...fn,javascript:'x'.repeat(16001)}]) assert.equal(validateBundle(baseBundle({plugin:{widgets:[widgets[0],{...widgets[1],operation},widgets[2]]}})).ok,false);
+    assert.equal(validateBundle(baseBundle({plugin:{widgets:[widgets[0],{...widgets[2],onClick:'foreign'}]}})).ok,false);
 });
