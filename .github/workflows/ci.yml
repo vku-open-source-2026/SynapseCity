@@ -40,6 +40,22 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust service and gateway tests
+        run: |
+          (cd apps/city-service && cargo test --locked)
+          (cd apps/gateway && cargo test --locked)
+          (cd apps/contribution-service && cargo test --locked)
+
+      - name: Plugin, workflow and public-boundary contracts
+        run: |
+          npm run plugins:check
+          npm run plugins:test
+          npm run test:public-only
+          npm run test:workflow-artifacts
+
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=critical
 
