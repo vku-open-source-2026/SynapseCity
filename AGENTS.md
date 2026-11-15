@@ -94,15 +94,10 @@ The gateway must return `404` with `{ "error": "not_found" }` for
 `/v1/emergency*`, `/v1/hazards*` and `/v1/sos*` before proxying. `/v1/users` is
 City operator administration; it is never an SOS identity source.
 
-`/v1/auth/*` verifies credentials through the Tier-2 auth capability by default
-(`CITY_AUTH_MODE=tier2`, Tier-1 IAM backed) and keeps the Tier-1 token inside the
-signed City session. It stores no passwords and creates no shared identity or
-session table. City roles come from City operator profiles or the
-`CITY_BOOTSTRAP_ADMIN_EMAILS` allow-list, never from the request body or an
-unverified claim. `CITY_AUTH_MODE=demo` is the explicit development-only shell
-and is honoured only with `AUTH_DEMO_MODE=true`. `AUTH_SECRET` is optional and
-falls back to an ephemeral start-up secret with a warning. `/v1/users` requires a
-City session and must never accept, store or return password fields.
+Tier-3 login/session management is retired. Every `/v1/auth/*` path answers
+`410 workspace_moved`; login, registration and sessions belong to SynapseDX.
+City stores no password or shared identity table. `/v1/users` is City operator
+administration and must never accept, store or return password fields.
 
 Every operator namespace requires a session **and** a role-derived permission
 (`assets:write`, `budgets:approve`, `files:write`, `users:admin`, ...). Deny by
@@ -146,9 +141,8 @@ Retired work surfaces redirect to `https://synapsedx.sbs/workspace`:
 return `308` from `apps/console/nginx.conf` and `infra/nginx/`, and the root
 route redirects client-side. Route modules are redirect stubs/notices — never
 mount a local dashboard, login form or technician portal again.
-`/v1/auth/login`, `/register` and `/refresh` answer `410 workspace_moved`;
-legacy `/me`/session paths may still answer `401`/`404` but are not a supported
-client surface. DX owns login and sessions.
+Every `/v1/auth/*` path answers `410 workspace_moved`; there is no legacy
+session surface. DX owns login and sessions.
 
 **Release gate (closed for representative operations, 2026-11-14):** the
 redirects are deployed after production DX verification of all 28 pages and

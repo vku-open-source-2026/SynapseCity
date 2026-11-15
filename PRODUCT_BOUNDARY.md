@@ -118,10 +118,8 @@ session; passwords are never accepted, stored or published.
 
 ### Auth retired
 
-Tier-3 login/session management is retired. `/v1/auth/login`,
-`/v1/auth/register` and `/v1/auth/refresh` return `410 workspace_moved`;
-legacy `/me`/session endpoints may answer `401`/`404` during the migration but
-are not a supported client surface. Login, registration, sessions and roles
+Tier-3 login/session management is retired. Every `/v1/auth/*` path returns `410 workspace_moved`; there is no supported
+legacy session surface. Login, registration, sessions and roles
 belong to SynapseDX. City stores no password or identity table and never
 accepts a password on `/v1/users`.
 
@@ -201,8 +199,8 @@ Redirected to `https://synapsedx.sbs/workspace`:
 /workspace/**
 ```
 
-`/v1/auth/login`, `/register` and `/refresh` return `410 workspace_moved`
-before credential handling; legacy read/session paths are not supported. The
+Every `/v1/auth/*` path returns `410 workspace_moved` before credential
+handling. The
 portable City plugin bundles that replace the retired pages live in `plugins/`.
 
 Never add:

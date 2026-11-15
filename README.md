@@ -282,11 +282,12 @@ behind SynapseDX and SynapseOne.
 
 ### Authorization
 
-Every operator namespace requires a signed City session. The gateway rejects an
-operator request without an `Authorization` header before proxying, and the
-service independently verifies the HMAC session and the role-derived
-permission. Deny-by-default: an unknown operator action requires a valid session
-and then returns `404`.
+Operator namespaces are not a supported public client surface after the
+public-only migration; their work interfaces live in SynapseDX. The gateway
+still rejects an operator request without an `Authorization` header before
+proxying, and the service independently verifies a legacy session and the
+role-derived permission when one is presented. Deny-by-default: an unknown
+operator action requires a valid session and then returns `404`.
 
 | Permission | admin | manager | technician | volunteer | citizen |
 | --- | --- | --- | --- | --- | --- |
@@ -304,10 +305,10 @@ and then returns `404`.
 | `ingest:write` | ✓ | ✓ | – | – | – |
 | `geo:read` / `ai:use` | ✓ / ✓ | ✓ / ✓ | ✓ / – | ✓ / – | – / – |
 
-`/v1/users/me`, `/v1/auth/me` and `/v1/auth/verify` require a session but no
-additional permission. A technician only sees work orders assigned to their own
-principal. Anonymous surfaces are `/health`, `/ready`, `/metrics` (optional
-token), `/v1/city`, `/v1/auth/*`, `/v1/public/*` and `/v1/map/*`.
+`/v1/users/me` requires a session but no additional permission. A technician
+only sees work orders assigned to their own principal. Anonymous surfaces are
+`/health`, `/ready`, `/metrics` (optional token), `/v1/city`, `/v1/auth/*`
+(which returns `410`), `/v1/public/*` and `/v1/map/*`.
 
 `/v1/users` requires a Bearer session and never accepts, stores or returns
 password fields.

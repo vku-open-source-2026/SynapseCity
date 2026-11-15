@@ -286,6 +286,9 @@ pub async fn dispatch(State(state): State<AppState>, req: Request) -> ApiResult<
         ("GET", ["ready"]) => health(&ctx, true).await,
         ("GET", ["metrics"]) => metrics(&ctx),
         ("GET", ["v1", "city"]) => Ok(web::json_response(city_metadata(&ctx))),
+        // Every legacy auth path is retired, including read/session paths that
+        // used to answer 401/404. Clients must use the DX workspace login.
+        (_, ["v1", "auth", ..]) => Ok(workspace_moved()),
         ("POST", ["v1", "auth", "login"]) | ("POST", ["v1", "auth", "register"]) => Ok(workspace_moved()),
         (_, ["v1", "auth", "refresh"]) => Ok(workspace_moved()),
         ("POST", ["v1", "auth", "logout"]) => auth_logout(&ctx).await,
