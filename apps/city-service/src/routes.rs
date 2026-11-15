@@ -3486,6 +3486,31 @@ async fn geofence_test(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
     })))
 }
 
+/// Ask Tier-2 for spatially filtered City assets before falling back to the
+/// bounded in-process scan. The dataset binding is server-side (`city-assets`
+/// -> `geometry`); the browser never chooses a dataset or geometry path.
+async fn spatial_asset_rows(ctx: &Ctx<'_>, mut body: Value) -> Option<Vec<Map<String, Value>>> {
+    body["limit"] = json!(500);
+    let opts = ctx.opts();
+    let response = ctx
+        .client()
+        .post(
+            "/v1/capabilities/datasets/city-assets/records/spatial",
+            body,
+            &opts,
+        )
+        .await
+        .ok()?;
+    let items = response.get("items")?.as_array()?;
+    Some(
+        items
+            .iter()
+            .filter_map(|item| item.get("data")?.as_object().cloned())
+            .map(|row| asset_view(&row))
+            .collect(),
+    )
+}
+
 async fn geo_nearby(ctx: &Ctx<'_>) -> ApiResult<Response> {
     let query = json!({
         "lng": ctx.query.get("lng").cloned().unwrap_or_default(),
@@ -3498,7 +3523,16 @@ async fn geo_nearby(ctx: &Ctx<'_>) -> ApiResult<Response> {
     })?;
     let radius = ctx.query.get("radius_meters").and_then(|value| value.parse::<f64>().ok()).unwrap_or(1000.0).clamp(0.0, 50_000.0);
     let feature_type = ctx.query.get("feature_type").map(|value| value.to_ascii_lowercase());
-    let mut rows: Vec<Value> = all_assets(ctx).await?
+    let candidates = match spatial_asset_rows(ctx, json!({
+        "mode": "near",
+        "lat": center.latitude,
+        "lng": center.longitude,
+        "radiusMeters": radius,
+    })).await {
+        Some(rows) => rows,
+        None => all_assets(ctx).await?,
+    };
+    let mut rows: Vec<Value> = candidates
         .into_iter()
         .filter_map(|asset| {
             let point = point_of(&asset)?;
@@ -3534,7 +3568,14 @@ async fn geo_bounds(ctx: &Ctx<'_>) -> ApiResult<Response> {
     };
     let bbox = domain::geo::BoundingBox { min_lng, min_lat, max_lng, max_lat };
     let feature_type = ctx.query.get("feature_type").map(|value| value.to_ascii_lowercase());
-    let rows: Vec<Value> = all_assets(ctx).await?
+    let candidates = match spatial_asset_rows(ctx, json!({
+        "mode": "bbox",
+        "bbox": [min_lng.min(max_lng), min_lat.min(max_lat), min_lng.max(max_lng), min_lat.max(max_lat)],
+    })).await {
+        Some(rows) => rows,
+        None => all_assets(ctx).await?,
+    };
+    let rows: Vec<Value> = candidates
         .into_iter()
         .filter(|asset| point_of(asset).map(|point| domain::geo::point_in_bounding_box(point, bbox)).unwrap_or(false))
         .filter(|asset| feature_type.as_ref().map(|value| asset.get("feature_type").and_then(Value::as_str).unwrap_or("").to_ascii_lowercase() == *value).unwrap_or(true))
@@ -3550,7 +3591,19 @@ async fn geo_polygon(ctx: &Ctx<'_>) -> ApiResult<Response> {
         return Err(ApiError::bad_request("polygon_required", "Send a GeoJSON Polygon or a coordinate ring."));
     };
     let feature_type = body.get("feature_type").and_then(Value::as_str).map(|value| value.to_ascii_lowercase());
-    let rows: Vec<Value> = all_assets(ctx).await?
+    let geometry = if value.get("type").and_then(Value::as_str).is_some() {
+        value.clone()
+    } else {
+        json!({ "type": "Polygon", "coordinates": polygon })
+    };
+    let candidates = match spatial_asset_rows(ctx, json!({
+        "mode": "within",
+        "geometry": geometry,
+    })).await {
+        Some(rows) => rows,
+        None => all_assets(ctx).await?,
+    };
+    let rows: Vec<Value> = candidates
         .into_iter()
         .filter(|asset| point_of(asset).map(|point| domain::geo::point_in_polygon(point, &polygon)).unwrap_or(false))
         .filter(|asset| feature_type.as_ref().map(|value| asset.get("feature_type").and_then(Value::as_str).unwrap_or("").to_ascii_lowercase() == *value).unwrap_or(true))
