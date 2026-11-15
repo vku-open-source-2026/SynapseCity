@@ -145,12 +145,16 @@ Retired work surfaces redirect to `https://synapsedx.sbs/workspace`:
 `/login`, `/register`, `/workspace/**`, `/admin/**`, `/technician/**`. They
 return `308` from `apps/console/nginx.conf` and `infra/nginx/`, and the root
 route redirects client-side. Route modules are redirect stubs/notices — never
-mount a local dashboard, login form or technician portal again. `/v1/auth/*`
-answers `410 workspace_moved` before auth handling.
+mount a local dashboard, login form or technician portal again.
+`/v1/auth/login`, `/register` and `/refresh` answer `410 workspace_moved`;
+legacy `/me`/session paths may still answer `401`/`404` but are not a supported
+client surface. DX owns login and sessions.
 
-**Release gate:** do not deploy the public-only redirects or retire the
-production work pages until the DX workflow binding for incident/maintenance
-actions is verified end to end (see `plugins/workflows/README.md`).
+**Release gate (closed for representative operations, 2026-11-14):** the
+redirects are deployed after production DX verification of all 28 pages and
+representative City/SOS create/update flows. Individual form coverage and the
+remaining action gap are tracked in `plugins/workflows/README.md`; do not
+re-open a local dashboard to work around a missing binding.
 
 Work interfaces are product plugins in DX; portable bundles live in `plugins/`
 with `npm run plugins:check` / `npm run plugins:test` and

@@ -104,10 +104,10 @@ GitHub release: <https://github.com/vku-open-source-2026/SynapseCity/releases/ta
 
 SHA-256: `dce9b691ef578d81370b86d7ef767b3eb12aa96e7c149cd7001698a6c0515aa5`
 
-> **Known issue (0.1.1):** the production public asset-detail lookup by asset
-> code (`GET /v1/public/assets/:code`) returns 404; lookup by record id works.
-> A server-side fix is pending, so the in-app asset detail screen can show
-> "not found" for some assets.
+> **Resolved (verified 2026-11-16):** production public asset-detail lookup by
+> asset code (`GET /v1/public/assets/:code`) returns `200`; the service tries
+> the record id first and then falls back to the asset/feature code. The
+> earlier 0.1.1 APK note is kept only for release history.
 
 CI builds an unsigned APK; the production release job signs it with the
 protected keystore and publishes it through the Tier-2 files capability. See
@@ -401,10 +401,14 @@ The retired paths `/login`, `/register`, `/admin/**`, `/technician/**` and
 console nginx and the public edge, and the console root route redirects
 client-side. No local dashboard can be mounted from a deep link.
 
-**Release gate:** until the DX workflow binding for incident and maintenance create actions is
-verified end to end, the declarative bundles stay read-only and the production
-work pages must not be retired or these redirects deployed. See
-`plugins/workflows/README.md` for the exact gap.
+**Release gate (closed for representative operations, 2026-11-14):** all 28
+workspace pages across City and SOS loaded in production DX with zero page,
+console or HTTP errors; City incident and generic alert create/update executed
+against production and the records were removed; SOS event, dispatch and
+resource create/update also executed. Every one of the 107 forms was not
+submitted individually; the remaining action gap is tracked in
+`plugins/workflows/README.md`. Product-specific policy, approvals and pins stay
+in the owning workflows.
 
 Tier-3 work interfaces are product plugins in DX; their portable source
 artifacts live in `plugins/` and are validated/synced with

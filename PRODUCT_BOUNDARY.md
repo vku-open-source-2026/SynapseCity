@@ -116,18 +116,14 @@ not-owned emergency features. `/v1/users` is City operator administration; it
 is never an identity source for SOS responders. `/v1/users` requires a City
 session; passwords are never accepted, stored or published.
 
-### Auth shell
+### Auth retired
 
-`/v1/auth/*` is a session adapter for the console. In the default `tier2` mode
-credentials are verified by the Tier-2 auth capability (Tier-1 IAM) and the
-Tier-1 token stays inside the signed City session; City stores no password or
-identity table. City roles are resolved from City operator profiles or the
-`CITY_BOOTSTRAP_ADMIN_EMAILS` allow-list — never from the request body or an
-unverified token. `CITY_AUTH_MODE=demo` is the explicit development-only shell,
-honoured only with `AUTH_DEMO_MODE=true`; the demo role comes from
-`AUTH_DEMO_ROLE`. Set `AUTH_SECRET` for stable sessions. `/v1/users` and
-`/v1/auth/me` derive the principal from the signed session, not from the first
-row of a dataset.
+Tier-3 login/session management is retired. `/v1/auth/login`,
+`/v1/auth/register` and `/v1/auth/refresh` return `410 workspace_moved`;
+legacy `/me`/session endpoints may answer `401`/`404` during the migration but
+are not a supported client surface. Login, registration, sessions and roles
+belong to SynapseDX. City stores no password or identity table and never
+accepts a password on `/v1/users`.
 
 Every operator namespace requires a session and the role-derived permission for
 the action (for example `assets:write`, `budgets:approve`, `users:admin`).
@@ -205,7 +201,8 @@ Redirected to `https://synapsedx.sbs/workspace`:
 /workspace/**
 ```
 
-`/v1/auth/*` returns `410 workspace_moved` before credential handling. The
+`/v1/auth/login`, `/register` and `/refresh` return `410 workspace_moved`
+before credential handling; legacy read/session paths are not supported. The
 portable City plugin bundles that replace the retired pages live in `plugins/`.
 
 Never add:

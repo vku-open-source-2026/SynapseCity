@@ -1,8 +1,10 @@
 # City workflow artifacts (operation migration source)
 
-Status: **create and status-transition flows are source-ready and
-engine-tested; credential binding and deployment are not done.** No production
-redirect or page retirement is deployed.
+Status: **create and status-transition flows are source-ready, engine-tested,
+pinned in production DX and representative operations were live-tested on
+2026-11-14.** The public-only redirects are deployed. Individual form coverage
+and the remaining action gap below are still tracked; this is not a claim that
+every operation is migrated.
 
 | Operation | Artifact | Tier-2 dataset | Status |
 | --- | --- | --- | --- |
