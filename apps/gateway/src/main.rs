@@ -279,17 +279,20 @@ async fn health_handler(State(state): State<AppState>) -> Response {
             let code = if is_ok { StatusCode::OK } else { StatusCode::SERVICE_UNAVAILABLE };
             (code, [("content-type", "application/json")], body.to_string()).into_response()
         }
-        Err(err) => (
-            StatusCode::SERVICE_UNAVAILABLE,
-            [("content-type", "application/json")],
-            json!({
-                "status": "degraded",
-                "service": "synapsecity-gateway",
-                "error": err.to_string()
-            })
-            .to_string(),
-        )
-            .into_response(),
+        Err(err) => {
+            tracing::warn!(error = %err, "upstream health request failed");
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                [("content-type", "application/json")],
+                json!({
+                    "status": "degraded",
+                    "service": "synapsecity-gateway",
+                    "error": "upstream_unavailable"
+                })
+                .to_string(),
+            )
+                .into_response()
+        }
     }
 }
 
@@ -310,17 +313,20 @@ async fn ready_handler(State(state): State<AppState>) -> Response {
             let code = if is_ok { StatusCode::OK } else { StatusCode::SERVICE_UNAVAILABLE };
             (code, [("content-type", "application/json")], body.to_string()).into_response()
         }
-        Err(err) => (
-            StatusCode::SERVICE_UNAVAILABLE,
-            [("content-type", "application/json")],
-            json!({
-                "status": "degraded",
-                "service": "synapsecity-gateway",
-                "error": err.to_string()
-            })
-            .to_string(),
-        )
-            .into_response(),
+        Err(err) => {
+            tracing::warn!(error = %err, "upstream health request failed");
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                [("content-type", "application/json")],
+                json!({
+                    "status": "degraded",
+                    "service": "synapsecity-gateway",
+                    "error": "upstream_unavailable"
+                })
+                .to_string(),
+            )
+                .into_response()
+        }
     }
 }
 
