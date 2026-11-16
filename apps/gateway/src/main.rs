@@ -71,14 +71,22 @@ const FORWARDED_REQUEST_HEADERS: &[&str] = &[
     "x-entity-type",
     "x-entity-id",
     "x-request-id",
+    "cf-turnstile-response",
+    "x-report-id",
+    "x-report-edit-token",
 ];
 
 const FORWARDED_RESPONSE_HEADERS: &[&str] = &[
     "content-type",
     "cache-control",
     "x-total-count",
+    "x-scan-truncated",
     "etag",
+    "x-record-version",
     "x-dataset-version",
+    "x-checksum-sha256",
+    "x-content-sha256",
+    "content-security-policy",
     "content-disposition",
 ];
 
@@ -111,7 +119,13 @@ fn decoded_path(value: &str) -> Option<String> {
 }
 
 pub fn canonical_v1_path(raw: &str) -> Option<String> {
-    let without_query = raw.split('?').next().unwrap_or("/").split('#').next().unwrap_or("/");
+    let without_query = raw
+        .split('?')
+        .next()
+        .unwrap_or("/")
+        .split('#')
+        .next()
+        .unwrap_or("/");
     let decoded = decoded_path(without_query)?;
     let mut segments = Vec::new();
     let sanitized = decoded.replace('\\', "/");
@@ -154,13 +168,18 @@ pub fn is_owned_v1_path(raw: &str) -> bool {
 pub fn is_public_v1_path(raw: &str) -> bool {
     let path = normalize_v1_path(raw);
     PUBLIC_AI_PATHS.contains(&path.as_str())
-        || PUBLIC_V1_PREFIXES.iter().any(|prefix| within(&path, prefix))
+        || PUBLIC_V1_PREFIXES
+            .iter()
+            .any(|prefix| within(&path, prefix))
 }
 
 fn assert_upstream(value: &str, var_name: &str, allow_local: bool) -> Result<String, String> {
-    let url = Url::parse(value).map_err(|e| format!("{var_name} is not an absolute URL: {value} ({e})"))?;
+    let url = Url::parse(value)
+        .map_err(|e| format!("{var_name} is not an absolute URL: {value} ({e})"))?;
     let host = url.host_str().unwrap_or("");
-    if (host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1" || host == "::1") && !allow_local {
+    if (host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1" || host == "::1")
+        && !allow_local
+    {
         return Err(format!("{var_name} may not point to localhost"));
     }
     Ok(value.trim_end_matches('/').to_string())
@@ -216,13 +235,16 @@ async fn cors_and_headers_middleware(
         }
         headers.insert(
             "access-control-allow-headers",
-            HeaderValue::from_static("authorization,content-type,x-api-key,x-correlation-id"),
+            HeaderValue::from_static("authorization,content-type,x-api-key,x-correlation-id,cf-turnstile-response,x-report-id,x-report-edit-token"),
         );
         headers.insert(
             "access-control-allow-methods",
             HeaderValue::from_static("GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS"),
         );
-        headers.insert("x-content-type-options", HeaderValue::from_static("nosniff"));
+        headers.insert(
+            "x-content-type-options",
+            HeaderValue::from_static("nosniff"),
+        );
         headers.insert("referrer-policy", HeaderValue::from_static("no-referrer"));
         headers.insert("x-frame-options", HeaderValue::from_static("DENY"));
         headers.insert(
@@ -242,13 +264,16 @@ async fn cors_and_headers_middleware(
     }
     headers.insert(
         "access-control-allow-headers",
-        HeaderValue::from_static("authorization,content-type,x-api-key,x-correlation-id"),
+        HeaderValue::from_static("authorization,content-type,x-api-key,x-correlation-id,cf-turnstile-response,x-report-id,x-report-edit-token"),
     );
     headers.insert(
         "access-control-allow-methods",
         HeaderValue::from_static("GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS"),
     );
-    headers.insert("x-content-type-options", HeaderValue::from_static("nosniff"));
+    headers.insert(
+        "x-content-type-options",
+        HeaderValue::from_static("nosniff"),
+    );
     headers.insert("referrer-policy", HeaderValue::from_static("no-referrer"));
     headers.insert("x-frame-options", HeaderValue::from_static("DENY"));
     headers.insert(
@@ -264,20 +289,35 @@ async fn cors_and_headers_middleware(
 
 async fn health_handler(State(state): State<AppState>) -> Response {
     let url = format!("{}/health", state.city_service_url);
-    match state.client.get(&url).timeout(Duration::from_secs(10)).send().await {
+    match state
+        .client
+        .get(&url)
+        .timeout(Duration::from_secs(10))
+        .send()
+        .await
+    {
         Ok(res) => {
             let is_ok = res.status().is_success();
             let text = res.text().await.unwrap_or_default();
-            let upstream_body: serde_json::Value = serde_json::from_str(&text)
-                .unwrap_or_else(|_| json!({ "raw": text }));
+            let upstream_body: serde_json::Value =
+                serde_json::from_str(&text).unwrap_or_else(|_| json!({ "raw": text }));
 
             let body = json!({
                 "status": if is_ok { "ok" } else { "degraded" },
                 "service": "synapsecity-gateway",
                 "upstream": upstream_body
             });
-            let code = if is_ok { StatusCode::OK } else { StatusCode::SERVICE_UNAVAILABLE };
-            (code, [("content-type", "application/json")], body.to_string()).into_response()
+            let code = if is_ok {
+                StatusCode::OK
+            } else {
+                StatusCode::SERVICE_UNAVAILABLE
+            };
+            (
+                code,
+                [("content-type", "application/json")],
+                body.to_string(),
+            )
+                .into_response()
         }
         Err(err) => {
             tracing::warn!(error = %err, "upstream health request failed");
@@ -298,20 +338,35 @@ async fn health_handler(State(state): State<AppState>) -> Response {
 
 async fn ready_handler(State(state): State<AppState>) -> Response {
     let url = format!("{}/ready", state.city_service_url);
-    match state.client.get(&url).timeout(Duration::from_secs(10)).send().await {
+    match state
+        .client
+        .get(&url)
+        .timeout(Duration::from_secs(10))
+        .send()
+        .await
+    {
         Ok(res) => {
             let is_ok = res.status().is_success();
             let text = res.text().await.unwrap_or_default();
-            let upstream_body: serde_json::Value = serde_json::from_str(&text)
-                .unwrap_or_else(|_| json!({ "raw": text }));
+            let upstream_body: serde_json::Value =
+                serde_json::from_str(&text).unwrap_or_else(|_| json!({ "raw": text }));
 
             let body = json!({
                 "status": if is_ok { "ready" } else { "degraded" },
                 "service": "synapsecity-gateway",
                 "upstream": upstream_body
             });
-            let code = if is_ok { StatusCode::OK } else { StatusCode::SERVICE_UNAVAILABLE };
-            (code, [("content-type", "application/json")], body.to_string()).into_response()
+            let code = if is_ok {
+                StatusCode::OK
+            } else {
+                StatusCode::SERVICE_UNAVAILABLE
+            };
+            (
+                code,
+                [("content-type", "application/json")],
+                body.to_string(),
+            )
+                .into_response()
         }
         Err(err) => {
             tracing::warn!(error = %err, "upstream health request failed");
@@ -466,7 +521,8 @@ async fn proxy_to_city(
         Ok(res) => {
             let upstream_status = res.status();
             let mut response_builder = Response::builder().status(
-                StatusCode::from_u16(upstream_status.as_u16()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                StatusCode::from_u16(upstream_status.as_u16())
+                    .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
             );
 
             let res_headers = response_builder.headers_mut().unwrap();
@@ -522,7 +578,8 @@ async fn proxy_to_console(state: AppState, req: Request, raw_uri: &str) -> Respo
         Ok(res) => {
             let upstream_status = res.status();
             let mut response_builder = Response::builder().status(
-                StatusCode::from_u16(upstream_status.as_u16()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                StatusCode::from_u16(upstream_status.as_u16())
+                    .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
             );
 
             let res_headers = response_builder.headers_mut().unwrap();
@@ -576,8 +633,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info,synapsecity_gateway=info")),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                tracing_subscriber::EnvFilter::new("info,synapsecity_gateway=info")
+            }),
         )
         .init();
 
@@ -586,7 +644,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or(false);
 
     let city_service_url = assert_upstream(
-        &std::env::var("CITY_SERVICE_URL").unwrap_or_else(|_| "http://city-service:8083".to_string()),
+        &std::env::var("CITY_SERVICE_URL")
+            .unwrap_or_else(|_| "http://city-service:8083".to_string()),
         "CITY_SERVICE_URL",
         allow_local,
     )?;
@@ -597,7 +656,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         allow_local,
     )?;
 
-    let cors_origin = std::env::var("CORS_ORIGIN").unwrap_or_else(|_| "https://synapsecity.sbs".to_string());
+    let cors_origin =
+        std::env::var("CORS_ORIGIN").unwrap_or_else(|_| "https://synapsecity.sbs".to_string());
     let upload_limit = std::env::var("GATEWAY_UPLOAD_LIMIT_BYTES")
         .ok()
         .and_then(|s| s.parse::<usize>().ok())
@@ -638,12 +698,37 @@ mod tests {
     use super::*;
 
     #[test]
+    fn turnstile_and_checksum_headers_survive_the_gateway() {
+        for header in [
+            "cf-turnstile-response",
+            "x-report-id",
+            "x-report-edit-token",
+        ] {
+            assert!(FORWARDED_REQUEST_HEADERS.contains(&header), "{header}");
+        }
+        for header in [
+            "x-total-count",
+            "x-scan-truncated",
+            "x-checksum-sha256",
+            "x-content-sha256",
+        ] {
+            assert!(FORWARDED_RESPONSE_HEADERS.contains(&header), "{header}");
+        }
+    }
+
+    #[test]
     fn test_path_normalization_and_ownership() {
         assert_eq!(normalize_v1_path("/v1/EMERGENCY/"), "/v1/emergency");
         assert_eq!(normalize_v1_path("/v1//assets///1"), "/v1/assets/1");
-        assert_eq!(normalize_v1_path("/v1/assets/../emergency"), "/v1/emergency");
+        assert_eq!(
+            normalize_v1_path("/v1/assets/../emergency"),
+            "/v1/emergency"
+        );
         assert_eq!(normalize_v1_path("/v1/%61ssets/1"), "/v1/assets/1");
-        assert_eq!(canonical_v1_path("/%76%31/Assets/AbC-1"), Some("/v1/Assets/AbC-1".to_string()));
+        assert_eq!(
+            canonical_v1_path("/%76%31/Assets/AbC-1"),
+            Some("/v1/Assets/AbC-1".to_string())
+        );
 
         for owned in &[
             "/v1/city",
@@ -656,7 +741,10 @@ mod tests {
             "/v1/ai",
             "/v1/ASSETS/",
         ] {
-            assert!(is_owned_v1_path(owned), "{owned} must be owned by SynapseCity");
+            assert!(
+                is_owned_v1_path(owned),
+                "{owned} must be owned by SynapseCity"
+            );
         }
 
         for foreign in &[
@@ -666,7 +754,10 @@ mod tests {
             "/v1/unknown",
             "/v1/public/unknown",
         ] {
-            assert!(!is_owned_v1_path(foreign), "{foreign} must not be owned by SynapseCity");
+            assert!(
+                !is_owned_v1_path(foreign),
+                "{foreign} must not be owned by SynapseCity"
+            );
         }
 
         for anonymous in &[
@@ -679,7 +770,10 @@ mod tests {
             "/v1/ai/status",
             "/v1/ai/chat",
         ] {
-            assert!(is_public_v1_path(anonymous), "{anonymous} must stay anonymous");
+            assert!(
+                is_public_v1_path(anonymous),
+                "{anonymous} must stay anonymous"
+            );
         }
 
         for operator in &[
@@ -688,8 +782,10 @@ mod tests {
             "/v1/reports/1/download",
             "/v1/ai/decision",
         ] {
-            assert!(!is_public_v1_path(operator), "{operator} must require a session");
+            assert!(
+                !is_public_v1_path(operator),
+                "{operator} must require a session"
+            );
         }
     }
 }
-
