@@ -4,7 +4,7 @@ import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { startMockTier2, type MockTier2 } from './mock-tier2';
+import { startMockTier2, type MockTier2 } from './mock-tier2.js';
 
 process.env.ALLOW_LOCAL_DEPENDENCIES = 'true';
 process.env.AUTH_SECRET = 'city-features-test-secret';
@@ -38,7 +38,7 @@ function json(method: string, body?: unknown, token?: string): RequestInit {
   };
 }
 
-let auth: typeof import('./auth');
+let auth: typeof import('./auth.js');
 
 before(async () => {
   tier2 = await startMockTier2();
@@ -117,7 +117,7 @@ before(async () => {
     reported_at: new Date(now).toISOString(), created_at: new Date(now).toISOString(),
   });
 
-  auth = await import('./auth');
+  auth = await import('./auth.js');
   const tokenFor = (role: 'admin' | 'technician' | 'citizen', username: string) => auth.signToken({
     sub: `user-${username}`, username, email: `${username}@example.com`, full_name: username,
     role, permissions: auth.permissionsForRole(role), typ: 'access',
@@ -126,7 +126,7 @@ before(async () => {
   technicianToken = tokenFor('technician', 'technician-user');
   otherToken = tokenFor('technician', 'other-technician');
 
-  const service = await import('./server');
+  const service = await import('./server.js');
   server = service.createServer().listen(0);
   await new Promise<void>((resolve, reject) => {
     server.once('listening', resolve);

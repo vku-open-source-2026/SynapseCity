@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 import type { CapabilitiesClient } from '@synapsedx/capabilities';
 import { CapabilitiesError } from '@synapsedx/capabilities';
-import { demoModeEnabled, normalizeRole, permissionsForRole, type SessionRole } from './auth';
+import { demoModeEnabled, normalizeRole, permissionsForRole, type SessionRole } from './auth.js';
 
 /**
  * Identity boundary: Tier-2 auth capability -> City session shell.

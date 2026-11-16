@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { missingColumns, parseCsv, REQUIRED_ASSET_COLUMNS } from './csv';
+import { missingColumns, parseCsv, REQUIRED_ASSET_COLUMNS } from './csv.js';
 
 test('parseCsv reads headers, quoted fields and CRLF rows', () => {
   const parsed = parseCsv('\uFEFFasset_code,name,address,properties\r\nA-1,"Lamp, main","1 ""Main"" St","{""lumens"":1200}"\r\nA-2,Hydrant,2 Main St,{}\r\n');

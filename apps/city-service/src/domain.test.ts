@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CapabilitiesError } from '@synapsedx/capabilities';
-import { DATA_LICENSE, DATASETS, ensureDataset } from './domain';
+import { DATA_LICENSE, DATASETS, ensureDataset } from './domain.js';
 
 test('every City dataset uses the PDDL-1.0 data license', () => {
   assert.equal(DATA_LICENSE, 'PDDL-1.0');

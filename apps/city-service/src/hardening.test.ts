@@ -4,8 +4,8 @@ import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import http, { type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { startMockTier2, type MockTier2 } from './mock-tier2';
-import { resetRateLimits } from './security';
+import { startMockTier2, type MockTier2 } from './mock-tier2.js';
+import { resetRateLimits } from './security.js';
 
 // Small limits must be set before the module-level rate limiters are created.
 process.env.ALLOW_LOCAL_DEPENDENCIES = 'true';
@@ -60,7 +60,7 @@ before(async () => {
   });
   turnstileUrl = `http://127.0.0.1:${(turnstile.address() as AddressInfo).port}/siteverify`;
 
-  const service = await import('./server');
+  const service = await import('./server.js');
   server = service.createServer().listen(0);
   await new Promise<void>((resolve, reject) => {
     server.once('listening', resolve);

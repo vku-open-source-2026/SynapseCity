@@ -4,7 +4,7 @@ import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { startMockTier2, type MockTier2 } from './mock-tier2';
+import { startMockTier2, type MockTier2 } from './mock-tier2.js';
 
 process.env.ALLOW_LOCAL_DEPENDENCIES = 'true';
 process.env.AUTH_SECRET = 'city-public-contract-secret';
@@ -15,7 +15,7 @@ let tier2: MockTier2;
 let server: Server;
 let baseUrl: string;
 let adminToken: string;
-let auth: typeof import('./auth');
+let auth: typeof import('./auth.js');
 
 async function request(path: string, init: RequestInit = {}): Promise<{ status: number; body: any; headers: Headers }> {
   const response = await fetch(`${baseUrl}${path}`, init);
@@ -84,12 +84,12 @@ before(async () => {
     assigned_to: 'operator-internal', scheduled_date: new Date(Date.now() + 86_400_000).toISOString(),
   });
 
-  auth = await import('./auth');
+  auth = await import('./auth.js');
   adminToken = auth.signToken({
     sub: 'user-admin', username: 'admin', email: 'admin@example.com', full_name: 'Admin',
     role: 'admin', permissions: ['*'], typ: 'access',
   });
-  const service = await import('./server');
+  const service = await import('./server.js');
   server = service.createServer().listen(0);
   await new Promise<void>((resolve, reject) => {
     server.once('listening', resolve);

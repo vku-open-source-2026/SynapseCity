@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 import { Request } from 'express';
 import { CapabilitiesClient, CapabilitiesError, Dataset } from '@synapsedx/capabilities';
-import { sessionFromRequest } from './auth';
+import { sessionFromRequest } from './auth.js';
 
 /** Published City datasets are dedicated to the public domain under PDDL 1.0. */
 export const DATA_LICENSE = 'PDDL-1.0';

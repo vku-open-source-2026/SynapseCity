@@ -13,7 +13,7 @@ let consoleServer: Server;
 let baseUrl: string;
 let serviceHits: string[] = [];
 let consoleHits: string[] = [];
-let exported: typeof import('./index');
+let exported: typeof import('./index.js');
 
 before(async () => {
   const service = http.createServer(async (req, res) => {
@@ -57,7 +57,7 @@ before(async () => {
   process.env.CITY_SERVICE_URL = `http://0.0.0.0:${servicePort}`;
   process.env.CONSOLE_URL = `http://0.0.0.0:${consolePort}`;
 
-  exported = await import('./index');
+  exported = await import('./index.js');
   gateway = exported.app.listen(0);
   await new Promise<void>((resolve, reject) => {
     gateway.once('listening', resolve);

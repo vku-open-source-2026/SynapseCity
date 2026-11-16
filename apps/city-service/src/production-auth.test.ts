@@ -4,7 +4,7 @@ import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { startMockTier2, type MockTier2 } from './mock-tier2';
+import { startMockTier2, type MockTier2 } from './mock-tier2.js';
 
 // Production must be set before the service module (and its session secret) is
 // imported.
@@ -35,7 +35,7 @@ async function request(path: string, init: RequestInit = {}): Promise<{ status: 
 before(async () => {
   tier2 = await startMockTier2();
   process.env.SYNAPSEDX_BASE_URL = tier2.url;
-  const service = await import('./server');
+  const service = await import('./server.js');
   server = service.createServer().listen(0);
   await new Promise<void>((resolve, reject) => {
     server.once('listening', resolve);
