@@ -119,27 +119,47 @@ pub fn permissions_for_role(role: &str) -> Vec<String> {
     let values: &[&str] = match role {
         ROLE_ADMIN => &["*"],
         ROLE_MANAGER => &[
-            "assets:read", "assets:write",
-            "incidents:read", "incidents:write", "incidents:verify",
-            "maintenance:read", "maintenance:write",
-            "iot:read", "iot:write",
-            "alerts:read", "alerts:write",
-            "budgets:read", "budgets:write", "budgets:approve",
-            "reports:read", "reports:write", "reports:generate",
-            "notifications:read", "notifications:write",
-            "files:read", "files:write",
+            "assets:read",
+            "assets:write",
+            "incidents:read",
+            "incidents:write",
+            "incidents:verify",
+            "maintenance:read",
+            "maintenance:write",
+            "maintenance:approve",
+            "approvals:read",
+            "approvals:decide",
+            "iot:read",
+            "iot:write",
+            "alerts:read",
+            "alerts:write",
+            "budgets:read",
+            "budgets:write",
+            "budgets:approve",
+            "reports:read",
+            "reports:write",
+            "reports:generate",
+            "notifications:read",
+            "notifications:write",
+            "files:read",
+            "files:write",
             "users:read",
-            "geofences:read", "geofences:write",
-            "ingest:write", "geo:read", "ai:use",
+            "geofences:read",
+            "geofences:write",
+            "ingest:write",
+            "geo:read",
+            "ai:use",
         ],
         ROLE_TECHNICIAN => &[
             "assets:read",
             "incidents:read",
-            "maintenance:read", "maintenance:write",
+            "maintenance:read",
+            "maintenance:write",
             "iot:read",
             "alerts:read",
             "notifications:read",
-            "files:read", "files:write",
+            "files:read",
+            "files:write",
             "geo:read",
         ],
         ROLE_VOLUNTEER => &[
@@ -161,7 +181,9 @@ pub fn has_permission(principal: &SessionPrincipal, permission: &str) -> bool {
         return true;
     }
     let granted = permissions_for_role(&principal.role);
-    granted.iter().any(|value| value == "*" || value == permission)
+    granted
+        .iter()
+        .any(|value| value == "*" || value == permission)
 }
 
 pub fn sanitize_user(value: &Map<String, Value>) -> Map<String, Value> {
@@ -169,7 +191,12 @@ pub fn sanitize_user(value: &Map<String, Value>) -> Map<String, Value> {
     for (key, entry) in value {
         if !matches!(
             key.as_str(),
-            "password" | "password_hash" | "passwordHash" | "passwordhash" | "passwordSalt" | "password_salt"
+            "password"
+                | "password_hash"
+                | "passwordHash"
+                | "passwordhash"
+                | "passwordSalt"
+                | "password_salt"
         ) {
             clean.insert(key.clone(), entry.clone());
         }
@@ -181,7 +208,12 @@ pub fn contains_password(value: &Map<String, Value>) -> bool {
     value.keys().any(|key| {
         matches!(
             key.as_str(),
-            "password" | "password_hash" | "passwordHash" | "passwordhash" | "passwordSalt" | "password_salt"
+            "password"
+                | "password_hash"
+                | "passwordHash"
+                | "passwordhash"
+                | "passwordSalt"
+                | "password_salt"
         )
     })
 }
@@ -202,7 +234,12 @@ pub fn sign_token(config: &Config, claims: &SessionPrincipal) -> String {
 pub fn verify_token(config: &Config, token: &str, expected: &str) -> Option<SessionPrincipal> {
     let (payload, provided) = token.split_once('.')?;
     let expected_signature = signature(&config.auth_secret, payload);
-    if provided.as_bytes().ct_eq(expected_signature.as_bytes()).unwrap_u8() != 1 {
+    if provided
+        .as_bytes()
+        .ct_eq(expected_signature.as_bytes())
+        .unwrap_u8()
+        != 1
+    {
         return None;
     }
     let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
@@ -262,7 +299,13 @@ pub fn principal_from_input(
             username
                 .to_ascii_lowercase()
                 .chars()
-                .map(|ch| if ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '-') { ch } else { '-' })
+                .map(
+                    |ch| if ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '-') {
+                        ch
+                    } else {
+                        '-'
+                    }
+                )
                 .collect::<String>()
         ),
         username: username.to_string(),
@@ -328,6 +371,57 @@ pub fn issue_session(config: &Config, mut base: SessionPrincipal, demo: bool) ->
             updated_at: crate::now_iso(),
         },
     }
+}
+
+/// Lifetime of the capability issued to an anonymous reporter. It authorizes
+/// appending photos to that one report and nothing else.
+pub const REPORT_EDIT_TTL_SECONDS: i64 = 24 * 60 * 60;
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ReportEditClaims {
+    incident_id: String,
+    exp: i64,
+    typ: String,
+}
+
+fn report_edit_payload(incident_id: &str, exp: i64) -> String {
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
+        serde_json::to_vec(&ReportEditClaims {
+            incident_id: incident_id.to_string(),
+            exp,
+            typ: "incident_edit".into(),
+        })
+        .unwrap_or_default(),
+    )
+}
+
+/// Issue a short-lived signed capability for the anonymous report creator.
+/// The incident id alone is not a capability: every append must present this
+/// token and only files uploaded for the same report are accepted.
+pub fn issue_report_edit_token(config: &Config, incident_id: &str) -> (String, i64) {
+    let exp = Utc::now().timestamp() + REPORT_EDIT_TTL_SECONDS;
+    let payload = report_edit_payload(incident_id, exp);
+    let signature = signature(&config.auth_secret, &payload);
+    (format!("{payload}.{signature}"), exp)
+}
+
+pub fn verify_report_edit_token(config: &Config, token: &str, incident_id: &str) -> bool {
+    let Some((payload, provided)) = token.split_once('.') else {
+        return false;
+    };
+    let expected = signature(&config.auth_secret, payload);
+    if provided.as_bytes().ct_eq(expected.as_bytes()).unwrap_u8() != 1 {
+        return false;
+    }
+    let Ok(bytes) = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(payload) else {
+        return false;
+    };
+    let Ok(claims) = serde_json::from_slice::<ReportEditClaims>(&bytes) else {
+        return false;
+    };
+    claims.typ == "incident_edit"
+        && claims.incident_id == incident_id
+        && claims.exp > Utc::now().timestamp()
 }
 
 pub fn bearer_token(headers: &HeaderMap) -> Option<String> {

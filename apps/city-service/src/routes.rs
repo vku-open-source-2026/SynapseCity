@@ -106,10 +106,25 @@ fn operator_permission(method: &str, path: &str) -> &'static str {
         if path.ends_with("/verify") {
             return "incidents:verify";
         }
-        return if read { "incidents:read" } else { "incidents:write" };
+        return if read {
+            "incidents:read"
+        } else {
+            "incidents:write"
+        };
     }
     if path.starts_with("/v1/maintenance") || path.starts_with("/v1/preventive-maintenance") {
-        return if read { "maintenance:read" } else { "maintenance:write" };
+        return if read {
+            "maintenance:read"
+        } else {
+            "maintenance:write"
+        };
+    }
+    if path.starts_with("/v1/hitl") {
+        return if read {
+            "approvals:read"
+        } else {
+            "approvals:decide"
+        };
     }
     if path.starts_with("/v1/iot") {
         return if read { "iot:read" } else { "iot:write" };
@@ -121,13 +136,21 @@ fn operator_permission(method: &str, path: &str) -> &'static str {
         if path.ends_with("/approve") {
             return "budgets:approve";
         }
-        return if read { "budgets:read" } else { "budgets:write" };
+        return if read {
+            "budgets:read"
+        } else {
+            "budgets:write"
+        };
     }
     if path.starts_with("/v1/reports") {
         if path.ends_with("/generate") {
             return "reports:generate";
         }
-        return if read { "reports:read" } else { "reports:write" };
+        return if read {
+            "reports:read"
+        } else {
+            "reports:write"
+        };
     }
     if path.starts_with("/v1/notifications") {
         if path.starts_with("/v1/notifications/preferences") {
@@ -142,7 +165,11 @@ fn operator_permission(method: &str, path: &str) -> &'static str {
         return if read { "files:read" } else { "files:write" };
     }
     if path.starts_with("/v1/geofences") {
-        return if read { "geofences:read" } else { "geofences:write" };
+        return if read {
+            "geofences:read"
+        } else {
+            "geofences:write"
+        };
     }
     if path.starts_with("/v1/geo") {
         return "geo:read";
@@ -186,22 +213,37 @@ pub async fn dispatch(State(state): State<AppState>, req: Request) -> ApiResult<
         }
     }
     let query = web::query_map(&uri);
-    let raw_upload = method == "POST"
-        && (path == "/v1/files/upload" || path == "/v1/public/files")
-        || method == "PUT"
-        && (path.starts_with("/v1/files/") && path.ends_with("/content"));
+    let raw_upload = method == "POST" && (path == "/v1/files/upload" || path == "/v1/public/files")
+        || method == "PUT" && (path.starts_with("/v1/files/") && path.ends_with("/content"));
 
     if path.starts_with("/v1/auth") {
-        rate_limit(&state, "auth", &headers, state.config.auth_rate_limit, Duration::from_secs(300))?;
-    }
-    if path.starts_with("/v1/public") {
         rate_limit(
             &state,
-            "public-report",
+            "auth",
             &headers,
-            state.config.public_rate_limit,
-            Duration::from_secs(600),
+            state.config.auth_rate_limit,
+            Duration::from_secs(300),
         )?;
+    }
+    if path.starts_with("/v1/public") {
+        let is_read = method == "GET" || method == "HEAD";
+        if is_read {
+            rate_limit(
+                &state,
+                "public-read",
+                &headers,
+                state.config.public_read_rate_limit,
+                Duration::from_secs(60),
+            )?;
+        } else {
+            rate_limit(
+                &state,
+                "public-report",
+                &headers,
+                state.config.public_rate_limit,
+                Duration::from_secs(600),
+            )?;
+        }
     }
     if path.starts_with("/v1/ai") {
         rate_limit(
@@ -229,9 +271,20 @@ pub async fn dispatch(State(state): State<AppState>, req: Request) -> ApiResult<
             .trim_matches('/')
             .split('/')
             .filter(|value| !value.is_empty())
-            .map(|value| percent_encoding::percent_decode_str(value).decode_utf8_lossy().to_string())
+            .map(|value| {
+                percent_encoding::percent_decode_str(value)
+                    .decode_utf8_lossy()
+                    .to_string()
+            })
             .collect();
-        return match (method, segments.iter().map(String::as_str).collect::<Vec<_>>().as_slice()) {
+        return match (
+            method,
+            segments
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>()
+                .as_slice(),
+        ) {
             ("POST", ["v1", "files", "upload"]) => files_upload_raw(ctx, bytes, false).await,
             ("POST", ["v1", "public", "files"]) => files_upload_raw(ctx, bytes, true).await,
             ("PUT", ["v1", "files", id, "content"]) => files_update_raw(ctx, id, bytes).await,
@@ -246,10 +299,7 @@ pub async fn dispatch(State(state): State<AppState>, req: Request) -> ApiResult<
         Map::new()
     };
     let session = auth::session_from_headers(&state.config, &headers);
-    if path.starts_with("/v1")
-        && !is_anonymous(&path)
-        && session.is_none()
-    {
+    if path.starts_with("/v1") && !is_anonymous(&path) && session.is_none() {
         return Err(ApiError::unauthorized("authentication_required"));
     }
     if path.starts_with("/v1") && !is_anonymous(&path) {
@@ -275,9 +325,16 @@ pub async fn dispatch(State(state): State<AppState>, req: Request) -> ApiResult<
         .trim_matches('/')
         .split('/')
         .filter(|value| !value.is_empty())
-        .map(|value| percent_encoding::percent_decode_str(value).decode_utf8_lossy().to_string())
+        .map(|value| {
+            percent_encoding::percent_decode_str(value)
+                .decode_utf8_lossy()
+                .to_string()
+        })
         .collect();
-    let keys: Vec<String> = segments.iter().map(|value| value.to_ascii_lowercase()).collect();
+    let keys: Vec<String> = segments
+        .iter()
+        .map(|value| value.to_ascii_lowercase())
+        .collect();
     let key_refs: Vec<&str> = keys.iter().map(String::as_str).collect();
     let raw = &segments;
 
@@ -289,7 +346,9 @@ pub async fn dispatch(State(state): State<AppState>, req: Request) -> ApiResult<
         // Every legacy auth path is retired, including read/session paths that
         // used to answer 401/404. Clients must use the DX workspace login.
         (_, ["v1", "auth", ..]) => Ok(workspace_moved()),
-        ("POST", ["v1", "auth", "login"]) | ("POST", ["v1", "auth", "register"]) => Ok(workspace_moved()),
+        ("POST", ["v1", "auth", "login"]) | ("POST", ["v1", "auth", "register"]) => {
+            Ok(workspace_moved())
+        }
         (_, ["v1", "auth", "refresh"]) => Ok(workspace_moved()),
         ("POST", ["v1", "auth", "logout"]) => auth_logout(&ctx).await,
         ("POST", ["v1", "auth", "change-password"]) => auth_change_password(&ctx).await,
@@ -307,41 +366,69 @@ pub async fn dispatch(State(state): State<AppState>, req: Request) -> ApiResult<
         ("GET", ["v1", "assets"]) => assets_list(&ctx).await,
         ("POST", ["v1", "assets"]) => assets_create(&ctx).await,
         ("GET", ["v1", "assets", id]) => assets_get(&ctx, id).await,
-        ("PATCH", ["v1", "assets", id]) | ("PUT", ["v1", "assets", id]) => assets_patch(&ctx, id).await,
+        ("PATCH", ["v1", "assets", id]) | ("PUT", ["v1", "assets", id]) => {
+            assets_patch(&ctx, id).await
+        }
         ("DELETE", ["v1", "assets", id]) => assets_delete(&ctx, id).await,
         ("POST", ["v1", "assets", id, "photos"]) => assets_photos(&ctx, id).await,
         ("POST", ["v1", "assets", id, "attachments"]) => assets_attachments(&ctx, id).await,
-        ("DELETE", ["v1", "assets", id, "attachments", url]) => assets_attachment_delete(&ctx, id, url).await,
+        ("DELETE", ["v1", "assets", id, "attachments", url]) => {
+            assets_attachment_delete(&ctx, id, url).await
+        }
         ("GET", ["v1", "assets", id, "documents"]) => assets_documents(&ctx, id).await,
         ("POST", ["v1", "assets", id, "documents"]) => assets_document_add(&ctx, id).await,
         ("PUT", ["v1", "assets", id, "lifecycle-status"]) => assets_lifecycle(&ctx, id).await,
         ("PUT", ["v1", "assets", id, "criticality"]) => assets_criticality(&ctx, id).await,
         ("GET", ["v1", "assets", id, "risk"]) => assets_risk(&ctx, id).await,
         ("GET", ["v1", "risk", "top"]) => risk_top(&ctx).await,
-        ("POST", ["v1", "assets", id, "risk", "work-order"]) => assets_risk_work_order(&ctx, id).await,
+        ("POST", ["v1", "assets", id, "risk", "work-order"]) => {
+            assets_risk_work_order(&ctx, id).await
+        }
         ("GET", ["v1", "assets", id, "health-score"]) => assets_health(&ctx, id).await,
         ("POST", ["v1", "assets", id, "reports"]) => assets_report(&ctx, id).await,
-        ("GET", ["v1", "assets", id, "preventive-maintenance"]) => assets_preventive(&ctx, id, None).await,
-        ("GET", ["v1", "assets", id, "preventive-maintenance", view]) => assets_preventive(&ctx, id, Some(view)).await,
+        ("GET", ["v1", "assets", id, "preventive-maintenance"]) => {
+            assets_preventive(&ctx, id, None).await
+        }
+        ("GET", ["v1", "assets", id, "preventive-maintenance", view]) => {
+            assets_preventive(&ctx, id, Some(view)).await
+        }
         ("POST", ["v1", "preventive-maintenance"]) => preventive_create(&ctx).await,
-        ("PUT", ["v1", "preventive-maintenance", plan_id]) => preventive_update(&ctx, plan_id).await,
+        ("PUT", ["v1", "preventive-maintenance", plan_id]) => {
+            preventive_update(&ctx, plan_id).await
+        }
         ("GET", ["v1", "incidents"]) => incidents_list(&ctx).await,
         ("POST", ["v1", "incidents"]) => incidents_create(&ctx).await,
         ("GET", ["v1", "incidents", id]) => incidents_get(&ctx, id).await,
-        ("PATCH", ["v1", "incidents", id]) | ("PUT", ["v1", "incidents", id]) => incidents_patch(&ctx, id).await,
-        ("POST", ["v1", "incidents", id, "acknowledge"]) => incidents_action(&ctx, id, "acknowledge").await,
+        ("PATCH", ["v1", "incidents", id]) | ("PUT", ["v1", "incidents", id]) => {
+            incidents_patch(&ctx, id).await
+        }
+        ("POST", ["v1", "incidents", id, "acknowledge"]) => {
+            incidents_action(&ctx, id, "acknowledge").await
+        }
         ("POST", ["v1", "incidents", id, "assign"]) => incidents_action(&ctx, id, "assign").await,
         ("POST", ["v1", "incidents", id, "resolve"]) => incidents_action(&ctx, id, "resolve").await,
-        ("POST", ["v1", "incidents", id, "comments"]) => incidents_action(&ctx, id, "comments").await,
+        ("POST", ["v1", "incidents", id, "comments"]) => {
+            incidents_action(&ctx, id, "comments").await
+        }
         ("POST", ["v1", "incidents", id, "upvote"]) => incidents_action(&ctx, id, "upvote").await,
-        ("POST", ["v1", "incidents", id, "create-maintenance"]) => incidents_action(&ctx, id, "create-maintenance").await,
+        ("POST", ["v1", "incidents", id, "create-maintenance"]) => {
+            incidents_action(&ctx, id, "create-maintenance").await
+        }
         ("POST", ["v1", "incidents", id, "close"]) => incidents_action(&ctx, id, "close").await,
         ("POST", ["v1", "incidents", id, "reject"]) => incidents_action(&ctx, id, "reject").await,
-        ("POST", ["v1", "incidents", id, "cost-approval"]) => incidents_action(&ctx, id, "cost-approval").await,
-        ("POST", ["v1", "incidents", id, "approve-cost"]) => incidents_action(&ctx, id, "approve-cost").await,
+        ("POST", ["v1", "incidents", id, "cost-approval"]) => {
+            incidents_action(&ctx, id, "cost-approval").await
+        }
+        ("POST", ["v1", "incidents", id, "approve-cost"]) => {
+            incidents_action(&ctx, id, "approve-cost").await
+        }
         ("POST", ["v1", "incidents", id, "verify"]) => incidents_action(&ctx, id, "verify").await,
-        ("POST", ["v1", "incidents", id, "check-duplicates"]) => incidents_action(&ctx, id, "check-duplicates").await,
-        ("GET", ["v1", "incidents", id, "merge-suggestions"]) => incidents_action(&ctx, id, "merge-suggestions").await,
+        ("POST", ["v1", "incidents", id, "check-duplicates"]) => {
+            incidents_action(&ctx, id, "check-duplicates").await
+        }
+        ("GET", ["v1", "incidents", id, "merge-suggestions"]) => {
+            incidents_action(&ctx, id, "merge-suggestions").await
+        }
         ("POST", ["v1", "incidents", id, "merge"]) => incidents_action(&ctx, id, "merge").await,
         ("GET", ["v1", "incidents", id, "related"]) => incidents_action(&ctx, id, "related").await,
         ("POST", ["v1", "incidents", "merge-suggestions", _, _]) => Ok(web::status_json(
@@ -351,18 +438,24 @@ pub async fn dispatch(State(state): State<AppState>, req: Request) -> ApiResult<
         ("GET", ["v1", "hitl", "approvals"]) => hitl_list(&ctx).await,
         ("POST", ["v1", "hitl", "approvals", id, "decide"]) => hitl_decide(&ctx, id).await,
         ("GET", ["v1", "maintenance", "upcoming"]) => maintenance_upcoming(&ctx).await,
-        ("GET", ["v1", "maintenance", "asset", asset_id]) => maintenance_asset(&ctx, asset_id).await,
+        ("GET", ["v1", "maintenance", "asset", asset_id]) => {
+            maintenance_asset(&ctx, asset_id).await
+        }
         ("POST", ["v1", "maintenance", id, "approval"]) => maintenance_approval(&ctx, id).await,
         ("POST", ["v1", "maintenance", id, "photos"]) => maintenance_photos(&ctx, id).await,
         ("POST", ["v1", "maintenance", id, action]) => maintenance_action(&ctx, id, action).await,
         ("GET", ["v1", "maintenance"]) => generic_list(&ctx, DatasetKey::Maintenance).await,
         ("POST", ["v1", "maintenance"]) => generic_create(&ctx, DatasetKey::Maintenance).await,
         ("GET", ["v1", "maintenance", id]) => generic_get(&ctx, DatasetKey::Maintenance, id).await,
-        ("PUT", ["v1", "maintenance", id]) => generic_update(&ctx, DatasetKey::Maintenance, id).await,
+        ("PUT", ["v1", "maintenance", id]) => {
+            generic_update(&ctx, DatasetKey::Maintenance, id).await
+        }
         ("GET", ["v1", "iot", "sensors"]) => generic_list(&ctx, DatasetKey::Sensors).await,
         ("POST", ["v1", "iot", "sensors"]) => generic_create(&ctx, DatasetKey::Sensors).await,
         ("GET", ["v1", "iot", "sensors", id]) => generic_get(&ctx, DatasetKey::Sensors, id).await,
-        ("PUT", ["v1", "iot", "sensors", id]) => generic_update(&ctx, DatasetKey::Sensors, id).await,
+        ("PUT", ["v1", "iot", "sensors", id]) => {
+            generic_update(&ctx, DatasetKey::Sensors, id).await
+        }
         ("DELETE", ["v1", "iot", "sensors", id]) => iot_sensor_delete(&ctx, id).await,
         ("GET", ["v1", "iot", "sensors", id, "data"]) => iot_readings(&ctx, id, false).await,
         ("GET", ["v1", "iot", "sensors", id, "readings"]) => iot_readings(&ctx, id, true).await,
@@ -382,9 +475,15 @@ pub async fn dispatch(State(state): State<AppState>, req: Request) -> ApiResult<
         ("GET", ["v1", "budgets", id]) => generic_get(&ctx, DatasetKey::Budgets, id).await,
         ("PUT", ["v1", "budgets", id]) => generic_update(&ctx, DatasetKey::Budgets, id).await,
         ("GET", ["v1", "budgets", id, "transactions"]) => budget_transactions(&ctx, id).await,
-        ("POST", ["v1", "budgets", id, "transactions"]) => budget_transaction_create(&ctx, id).await,
-        ("POST", ["v1", "budgets", "transactions", id, "approval"]) => budget_transaction_approval(&ctx, id).await,
-        ("POST", ["v1", "budgets", "transactions", id, "approve"]) => budget_transaction_approve(&ctx, id).await,
+        ("POST", ["v1", "budgets", id, "transactions"]) => {
+            budget_transaction_create(&ctx, id).await
+        }
+        ("POST", ["v1", "budgets", "transactions", id, "approval"]) => {
+            budget_transaction_approval(&ctx, id).await
+        }
+        ("POST", ["v1", "budgets", "transactions", id, "approve"]) => {
+            budget_transaction_approve(&ctx, id).await
+        }
         ("POST", ["v1", "budgets", id, action]) => budget_action(&ctx, id, action).await,
         ("GET", ["v1", "reports"]) => reports_list(&ctx).await,
         ("POST", ["v1", "reports"]) => reports_create(&ctx, None).await,
@@ -396,10 +495,16 @@ pub async fn dispatch(State(state): State<AppState>, req: Request) -> ApiResult<
         ("POST", ["v1", "notifications"]) => notifications_create(&ctx).await,
         ("GET", ["v1", "notifications", "unread-count"]) => notifications_unread(&ctx).await,
         ("GET", ["v1", "notifications", "capabilities"]) => Ok(web::json_response(json!(
-            domain::notifications::notification_capability_status(ctx.config().notification_external)
+            domain::notifications::notification_capability_status(
+                ctx.config().notification_external
+            )
         ))),
-        ("GET", ["v1", "notifications", "preferences"]) => notifications_preferences_get(&ctx).await,
-        ("PUT", ["v1", "notifications", "preferences"]) => notifications_preferences_put(&ctx).await,
+        ("GET", ["v1", "notifications", "preferences"]) => {
+            notifications_preferences_get(&ctx).await
+        }
+        ("PUT", ["v1", "notifications", "preferences"]) => {
+            notifications_preferences_put(&ctx).await
+        }
         ("POST", ["v1", "notifications", "mark-all-read"]) => notifications_mark_all(&ctx).await,
         ("GET", ["v1", "notifications", id, "delivery"]) => notifications_delivery(&ctx, id).await,
         ("POST", ["v1", "notifications", id, "read"]) => notifications_read(&ctx, id).await,
@@ -428,12 +533,18 @@ pub async fn dispatch(State(state): State<AppState>, req: Request) -> ApiResult<
         ("POST", ["v1", "ingest", "csv"]) => ingest_csv(&ctx).await,
         ("GET", ["v1", "public", "files", id, "content"]) => files_content(&ctx, id, true).await,
         ("GET", ["v1", "public", "assets"]) => public_assets(&ctx).await,
-        ("GET", ["v1", "public", "assets", code, "qr-code"]) => public_asset_aux(&ctx, code, "qr").await,
-        ("GET", ["v1", "public", "assets", code, "maintenance-summary"]) => public_asset_aux(&ctx, code, "maintenance").await,
+        ("GET", ["v1", "public", "assets", code, "qr-code"]) => {
+            public_asset_aux(&ctx, code, "qr").await
+        }
+        ("GET", ["v1", "public", "assets", code, "maintenance-summary"]) => {
+            public_asset_aux(&ctx, code, "maintenance").await
+        }
         ("GET", ["v1", "public", "assets", code]) => public_asset(&ctx, code).await,
         ("GET", ["v1", "public", "incidents"]) => public_incidents(&ctx).await,
         ("POST", ["v1", "public", "incidents"]) => public_incident_create(&ctx).await,
-        ("POST", ["v1", "public", "incidents", id, "photos"]) => public_incident_photos(&ctx, id).await,
+        ("POST", ["v1", "public", "incidents", id, "photos"]) => {
+            public_incident_photos(&ctx, id).await
+        }
         ("GET", ["v1", "public", "incidents", id]) => public_incident(&ctx, id).await,
         ("GET", ["v1", "map", "config"]) => Ok(web::json_response(json!({
             "provider": "synapsedx", "tileUrl": "/v1/map/tiles/{z}/{x}/{y}.png",
@@ -489,9 +600,29 @@ fn query_filters(query: &HashMap<String, String>) -> HashMap<String, String> {
 }
 
 const FILTER_IGNORED: &[&str] = &[
-    "limit", "offset", "skip", "page", "with_total", "sort", "order", "days", "hours", "all",
-    "view", "radius_meters", "lng", "lat", "lon", "longitude", "latitude", "min_lng", "min_lat",
-    "max_lng", "max_lat", "metric", "unread_only",
+    "limit",
+    "offset",
+    "skip",
+    "page",
+    "with_total",
+    "sort",
+    "order",
+    "days",
+    "hours",
+    "all",
+    "view",
+    "radius_meters",
+    "lng",
+    "lat",
+    "lon",
+    "longitude",
+    "latitude",
+    "min_lng",
+    "min_lat",
+    "max_lng",
+    "max_lat",
+    "metric",
+    "unread_only",
 ];
 
 fn matches_filters(row: &Map<String, Value>, filters: &HashMap<String, String>) -> bool {
@@ -539,8 +670,14 @@ fn matches_filters(row: &Map<String, Value>, filters: &HashMap<String, String>) 
         if key == "q" || key == "search" {
             let needle = raw.to_ascii_lowercase();
             let haystack = [
-                "name", "title", "description", "asset_code", "feature_code", "incident_number",
-                "sensor_code", "report_code",
+                "name",
+                "title",
+                "description",
+                "asset_code",
+                "feature_code",
+                "incident_number",
+                "sensor_code",
+                "report_code",
             ]
             .iter()
             .filter_map(|field| row.get(*field).and_then(Value::as_str))
@@ -609,7 +746,10 @@ async fn list_rows(ctx: &Ctx<'_>, spec: DatasetSpec) -> ApiResult<Vec<Map<String
 
 async fn generic_list(ctx: &Ctx<'_>, key: DatasetKey) -> ApiResult<Response> {
     let spec = tier2::spec_for(key);
-    let rows = list_rows(ctx, spec).await?;
+    let mut rows = list_rows(ctx, spec).await?;
+    if key == DatasetKey::Maintenance {
+        rows = maintenance_scope(ctx, rows);
+    }
     let filters = query_filters(ctx.query);
     let filtered: Vec<Value> = rows
         .into_iter()
@@ -623,6 +763,9 @@ async fn generic_get(ctx: &Ctx<'_>, key: DatasetKey, id: &str) -> ApiResult<Resp
     let spec = tier2::spec_for(key);
     let opts = ctx.opts();
     let row = tier2::get(ctx.client(), &opts, spec, id).await?;
+    if key == DatasetKey::Maintenance {
+        maintenance_record_or_404(ctx, row.clone())?;
+    }
     Ok(web::send_record(row))
 }
 
@@ -637,6 +780,10 @@ async fn generic_create(ctx: &Ctx<'_>, key: DatasetKey) -> ApiResult<Response> {
 async fn generic_update(ctx: &Ctx<'_>, key: DatasetKey, id: &str) -> ApiResult<Response> {
     let spec = tier2::spec_for(key);
     let opts = ctx.opts();
+    if key == DatasetKey::Maintenance {
+        let current = tier2::get(ctx.client(), &opts, spec, id).await?;
+        maintenance_record_or_404(ctx, current)?;
+    }
     let version = tier2::requested_version(ctx.headers, Some(ctx.body))?;
     let input = web::private_input(ctx.body);
     let row = tier2::update(ctx.client(), &opts, spec, id, input, version).await?;
@@ -680,25 +827,37 @@ fn asset_view(row: &Map<String, Value>) -> Map<String, Value> {
     let mut data = row.clone();
     let code = asset_code(&data);
     data.entry("id".to_string()).or_insert_with(|| json!(code));
-    data.entry("asset_code".to_string()).or_insert_with(|| json!(code));
-    data.entry("name".to_string()).or_insert_with(|| json!(code));
-    let feature_type = data.get("assetType").cloned().unwrap_or_else(|| json!("infrastructure"));
-    data.entry("feature_type".to_string()).or_insert(feature_type);
-    data.entry("feature_code".to_string()).or_insert_with(|| json!(code));
-    data.entry("status".to_string()).or_insert_with(|| json!("active"));
+    data.entry("asset_code".to_string())
+        .or_insert_with(|| json!(code));
+    data.entry("name".to_string())
+        .or_insert_with(|| json!(code));
+    let feature_type = data
+        .get("assetType")
+        .cloned()
+        .unwrap_or_else(|| json!("infrastructure"));
+    data.entry("feature_type".to_string())
+        .or_insert(feature_type);
+    data.entry("feature_code".to_string())
+        .or_insert_with(|| json!(code));
+    data.entry("status".to_string())
+        .or_insert_with(|| json!("active"));
     let location = data
         .get("location")
         .and_then(Value::as_object)
         .cloned()
         .unwrap_or_default();
+    // Missing coordinates stay missing. A synthetic [0,0] point used to reach
+    // public map/detail clients as a real location.
     let geometry = data
         .get("geometry")
         .cloned()
         .or_else(|| location.get("geometry").cloned())
-        .unwrap_or_else(|| json!({"type":"Point","coordinates":[0,0]}));
+        .unwrap_or(Value::Null);
     data.insert("geometry".into(), geometry.clone());
     let mut location = location;
-    location.insert("geometry".into(), geometry);
+    if !geometry.is_null() {
+        location.insert("geometry".into(), geometry);
+    }
     data.insert("location".into(), Value::Object(location));
     data
 }
@@ -708,7 +867,9 @@ fn coordinates_of(row: &Map<String, Value>) -> Option<(f64, f64)> {
         if geometry.get("type").and_then(Value::as_str) == Some("Point") {
             if let Some(coordinates) = geometry.get("coordinates").and_then(Value::as_array) {
                 if coordinates.len() >= 2 {
-                    if let (Some(lng), Some(lat)) = (coordinates[0].as_f64(), coordinates[1].as_f64()) {
+                    if let (Some(lng), Some(lat)) =
+                        (coordinates[0].as_f64(), coordinates[1].as_f64())
+                    {
                         if lat.abs() <= 90.0 && lng.abs() <= 180.0 && (lat != 0.0 || lng != 0.0) {
                             return Some((lng, lat));
                         }
@@ -752,15 +913,31 @@ fn incident_view(row: &Map<String, Value>) -> Map<String, Value> {
         .unwrap_or("")
         .to_string();
     data.entry("id".to_string()).or_insert_with(|| json!(id));
-    let incident_code = data.get("incident_number").cloned().unwrap_or_else(|| json!(id));
-    data.entry("incident_code".to_string()).or_insert(incident_code);
-    let incident_number = data.get("incident_code").cloned().unwrap_or_else(|| json!(id));
-    data.entry("incident_number".to_string()).or_insert(incident_number);
-    data.entry("reporter_type".to_string()).or_insert_with(|| json!("admin"));
-    data.entry("upvotes".to_string()).or_insert_with(|| json!(0));
-    data.entry("comments".to_string()).or_insert_with(|| json!([]));
-    data.entry("photos".to_string()).or_insert_with(|| json!([]));
-    let reported_at = data.get("occurredAt").cloned().or_else(|| data.get("created_at").cloned()).unwrap_or(Value::Null);
+    let incident_code = data
+        .get("incident_number")
+        .cloned()
+        .unwrap_or_else(|| json!(id));
+    data.entry("incident_code".to_string())
+        .or_insert(incident_code);
+    let incident_number = data
+        .get("incident_code")
+        .cloned()
+        .unwrap_or_else(|| json!(id));
+    data.entry("incident_number".to_string())
+        .or_insert(incident_number);
+    data.entry("reporter_type".to_string())
+        .or_insert_with(|| json!("admin"));
+    data.entry("upvotes".to_string())
+        .or_insert_with(|| json!(0));
+    data.entry("comments".to_string())
+        .or_insert_with(|| json!([]));
+    data.entry("photos".to_string())
+        .or_insert_with(|| json!([]));
+    let reported_at = data
+        .get("occurredAt")
+        .cloned()
+        .or_else(|| data.get("created_at").cloned())
+        .unwrap_or(Value::Null);
     data.entry("reported_at".to_string()).or_insert(reported_at);
     data.entry("created_at".to_string()).or_insert(Value::Null);
     let updated_at = data.get("created_at").cloned().unwrap_or(Value::Null);
@@ -774,7 +951,10 @@ fn file_url(config: &Config, id: &str, public: bool) -> String {
 
 fn file_view(config: &Config, record: &Map<String, Value>) -> Value {
     let id = record.get("id").and_then(Value::as_str).unwrap_or("");
-    let public = record.get("public").and_then(Value::as_bool).unwrap_or(false);
+    let public = record
+        .get("public")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     let mut view = record.clone();
     view.insert("file_id".into(), json!(id));
     view.entry("filename".to_string())
@@ -891,7 +1071,11 @@ fn metrics(ctx: &Ctx<'_>) -> ApiResult<Response> {
 // Auth
 // ---------------------------------------------------------------------------
 
-fn user_from_identity(identity: &VerifiedIdentity, role: &str, profile: Option<&Map<String, Value>>) -> SessionPrincipal {
+fn user_from_identity(
+    identity: &VerifiedIdentity,
+    role: &str,
+    profile: Option<&Map<String, Value>>,
+) -> SessionPrincipal {
     let username = profile
         .and_then(|profile| profile.get("username"))
         .and_then(Value::as_str)
@@ -917,9 +1101,7 @@ fn user_from_identity(identity: &VerifiedIdentity, role: &str, profile: Option<&
             .and_then(|profile| profile.get("full_name"))
             .and_then(Value::as_str)
             .map(str::to_string)
-            .or_else(|| {
-                (!identity.display_name.is_empty()).then(|| identity.display_name.clone())
-            })
+            .or_else(|| (!identity.display_name.is_empty()).then(|| identity.display_name.clone()))
             .unwrap_or_else(|| username.clone()),
         phone: profile
             .and_then(|profile| profile.get("phone"))
@@ -939,12 +1121,17 @@ fn user_from_identity(identity: &VerifiedIdentity, role: &str, profile: Option<&
     }
 }
 
-async fn find_city_profile(ctx: &Ctx<'_>, identity: &VerifiedIdentity) -> Option<Map<String, Value>> {
+async fn find_city_profile(
+    ctx: &Ctx<'_>,
+    identity: &VerifiedIdentity,
+) -> Option<Map<String, Value>> {
     let opts = ctx.opts();
     if let Ok(profile) = tier2::get(ctx.client(), &opts, USERS, &identity.user_id).await {
         return Some(profile);
     }
-    let rows = tier2::list_all(ctx.client(), &opts, USERS, 500).await.ok()?;
+    let rows = tier2::list_all(ctx.client(), &opts, USERS, 500)
+        .await
+        .ok()?;
     let email = identity.email.to_ascii_lowercase();
     rows.items.into_iter().find(|row| {
         row.get("email")
@@ -977,7 +1164,10 @@ async fn auth_login(ctx: &Ctx<'_>) -> ApiResult<Response> {
         return Err(ApiError::bad_request("email_required", "email_required"));
     }
     if password.trim().is_empty() {
-        return Err(ApiError::bad_request("password_required", "password_required"));
+        return Err(ApiError::bad_request(
+            "password_required",
+            "password_required",
+        ));
     }
     if ctx.config().demo_auth_allowed() {
         let role = auth::normalize_role(
@@ -992,7 +1182,9 @@ async fn auth_login(ctx: &Ctx<'_>) -> ApiResult<Response> {
             web::string_field(ctx.body, "phone").as_deref(),
             &role,
         );
-        return Ok(web::json_response(auth::issue_session(ctx.config(), base, true).json()));
+        return Ok(web::json_response(
+            auth::issue_session(ctx.config(), base, true).json(),
+        ));
     }
     if !identifier.contains('@') {
         return Err(ApiError::bad_request(
@@ -1004,24 +1196,37 @@ async fn auth_login(ctx: &Ctx<'_>) -> ApiResult<Response> {
     let session = ctx
         .client()
         .auth()
-        .login(&identifier, Some(&password), web::string_field(ctx.body, "org_slug").as_deref(), &opts)
+        .login(
+            &identifier,
+            Some(&password),
+            web::string_field(ctx.body, "org_slug").as_deref(),
+            &opts,
+        )
         .await
         .map_err(auth::identity_error)?;
     let value = serde_json::to_value(&session).unwrap_or(Value::Null);
     let identity = auth::identity_from_session(&value)?;
     let profile = find_city_profile(ctx, &identity).await;
     let role = auth::role_for_identity(ctx.config(), &identity, profile.as_ref());
-    let response = session_for_identity(ctx, &identity, &role, &auth::Tier2Session {
-        identity: identity.clone(),
-        token: Some(session.access_token.clone()),
-        refresh_token: Some(session.refresh_token.clone()),
-        exchanged: false,
-    }, profile.as_ref())?;
+    let response = session_for_identity(
+        ctx,
+        &identity,
+        &role,
+        &auth::Tier2Session {
+            identity: identity.clone(),
+            token: Some(session.access_token.clone()),
+            refresh_token: Some(session.refresh_token.clone()),
+            exchanged: false,
+        },
+        profile.as_ref(),
+    )?;
     Ok(web::json_response(response))
 }
 
 async fn auth_register(ctx: &Ctx<'_>) -> ApiResult<Response> {
-    let email = web::string_field(ctx.body, "email").unwrap_or_default().to_ascii_lowercase();
+    let email = web::string_field(ctx.body, "email")
+        .unwrap_or_default()
+        .to_ascii_lowercase();
     let password = web::string_field(ctx.body, "password").unwrap_or_default();
     let full_name = web::string_field(ctx.body, "full_name")
         .or_else(|| web::string_field(ctx.body, "display_name"))
@@ -1033,14 +1238,21 @@ async fn auth_register(ctx: &Ctx<'_>) -> ApiResult<Response> {
         return Err(ApiError::bad_request("email_invalid", "email_invalid"));
     }
     if password.len() < 6 {
-        return Err(ApiError::bad_request("password_too_short", "password_too_short"));
+        return Err(ApiError::bad_request(
+            "password_too_short",
+            "password_too_short",
+        ));
     }
     if ctx.config().demo_auth_allowed() {
         let base = auth::principal_from_input(
             ctx.config(),
             &web::string_field(ctx.body, "username").unwrap_or_else(|| email.clone()),
             Some(&email),
-            Some(if full_name.is_empty() { &email } else { &full_name }),
+            Some(if full_name.is_empty() {
+                &email
+            } else {
+                &full_name
+            }),
             web::string_field(ctx.body, "phone").as_deref(),
             auth::ROLE_CITIZEN,
         );
@@ -1064,7 +1276,8 @@ async fn auth_register(ctx: &Ctx<'_>) -> ApiResult<Response> {
         .map_err(auth::identity_error)?;
     let value = serde_json::to_value(&session).unwrap_or(Value::Null);
     let identity = auth::identity_from_session(&value)?;
-    let profile = json!({ "username": if full_name.is_empty() { email.clone() } else { full_name.clone() } });
+    let profile =
+        json!({ "username": if full_name.is_empty() { email.clone() } else { full_name.clone() } });
     let response = session_for_identity(
         ctx,
         &identity,
@@ -1083,7 +1296,11 @@ async fn auth_register(ctx: &Ctx<'_>) -> ApiResult<Response> {
 async fn auth_refresh(ctx: &Ctx<'_>) -> ApiResult<Response> {
     let token = web::string_field(ctx.body, "refresh_token").unwrap_or_default();
     let principal = auth::verify_token(ctx.config(), &token, "refresh").ok_or_else(|| {
-        ApiError::new(StatusCode::UNAUTHORIZED, "invalid_refresh_token", "invalid_refresh_token")
+        ApiError::new(
+            StatusCode::UNAUTHORIZED,
+            "invalid_refresh_token",
+            "invalid_refresh_token",
+        )
     })?;
     if principal.demo == Some(true) && !ctx.config().demo_auth_allowed() {
         return Err(ApiError::unavailable(
@@ -1110,11 +1327,15 @@ async fn auth_refresh(ctx: &Ctx<'_>) -> ApiResult<Response> {
         base.tier2_token = Some(rotated.access_token);
         base.tier2_refresh_token = Some(rotated.refresh_token);
         base.permissions = auth::permissions_for_role(&base.role);
-        return Ok(web::json_response(auth::issue_session(ctx.config(), base, false).json()));
+        return Ok(web::json_response(
+            auth::issue_session(ctx.config(), base, false).json(),
+        ));
     }
     let mut base = principal.clone();
     base.permissions = auth::permissions_for_role(&base.role);
-    Ok(web::json_response(auth::issue_session(ctx.config(), base, principal.demo == Some(true)).json()))
+    Ok(web::json_response(
+        auth::issue_session(ctx.config(), base, principal.demo == Some(true)).json(),
+    ))
 }
 
 async fn auth_logout(ctx: &Ctx<'_>) -> ApiResult<Response> {
@@ -1134,7 +1355,11 @@ async fn auth_logout(ctx: &Ctx<'_>) -> ApiResult<Response> {
 
 async fn auth_change_password(ctx: &Ctx<'_>) -> ApiResult<Response> {
     let principal = ctx.principal().ok_or_else(|| {
-        ApiError::new(StatusCode::UNAUTHORIZED, "unauthorized", "authentication_required")
+        ApiError::new(
+            StatusCode::UNAUTHORIZED,
+            "unauthorized",
+            "authentication_required",
+        )
     })?;
     let current = web::string_field(ctx.body, "current_password").unwrap_or_default();
     let new_password = web::string_field(ctx.body, "new_password").unwrap_or_default();
@@ -1161,14 +1386,24 @@ async fn auth_change_password(ctx: &Ctx<'_>) -> ApiResult<Response> {
 
 fn auth_me(ctx: &Ctx<'_>) -> ApiResult<Response> {
     let principal = ctx.principal().ok_or_else(|| {
-        ApiError::new(StatusCode::UNAUTHORIZED, "unauthorized", "authentication_required")
+        ApiError::new(
+            StatusCode::UNAUTHORIZED,
+            "unauthorized",
+            "authentication_required",
+        )
     })?;
-    Ok(web::json_response(auth::user_json(&auth::user_from_principal(principal))))
+    Ok(web::json_response(auth::user_json(
+        &auth::user_from_principal(principal),
+    )))
 }
 
 fn auth_verify(ctx: &Ctx<'_>) -> ApiResult<Response> {
     let principal = ctx.principal().ok_or_else(|| {
-        ApiError::new(StatusCode::UNAUTHORIZED, "unauthorized", "authentication_required")
+        ApiError::new(
+            StatusCode::UNAUTHORIZED,
+            "unauthorized",
+            "authentication_required",
+        )
     })?;
     Ok(web::json_response(json!({
         "valid": true,
@@ -1184,10 +1419,7 @@ fn auth_verify(ctx: &Ctx<'_>) -> ApiResult<Response> {
 // Files
 // ---------------------------------------------------------------------------
 
-fn requester_can_use_file(principal: Option<&SessionPrincipal>, record: &Map<String, Value>) -> bool {
-    if record.get("public").and_then(Value::as_bool) == Some(true) {
-        return true;
-    }
+fn file_owner_matches(principal: Option<&SessionPrincipal>, record: &Map<String, Value>) -> bool {
     let Some(principal) = principal else {
         return false;
     };
@@ -1200,8 +1432,28 @@ fn requester_can_use_file(principal: Option<&SessionPrincipal>, record: &Map<Str
         .unwrap_or("")
         .to_ascii_lowercase();
     !owner.is_empty()
-        && [principal.sub.to_ascii_lowercase(), principal.username.to_ascii_lowercase()]
-            .contains(&owner)
+        && [
+            principal.sub.to_ascii_lowercase(),
+            principal.username.to_ascii_lowercase(),
+        ]
+        .contains(&owner)
+}
+
+fn requester_can_read_file(
+    principal: Option<&SessionPrincipal>,
+    record: &Map<String, Value>,
+) -> bool {
+    record.get("public").and_then(Value::as_bool) == Some(true)
+        || file_owner_matches(principal, record)
+}
+
+/// Public visibility is a read grant only. Tampering with citizen evidence
+/// still requires ownership or an administrative role.
+fn requester_can_write_file(
+    principal: Option<&SessionPrincipal>,
+    record: &Map<String, Value>,
+) -> bool {
+    file_owner_matches(principal, record)
 }
 
 async fn file_metadata(ctx: &Ctx<'_>, id: &str) -> ApiResult<Option<Map<String, Value>>> {
@@ -1213,15 +1465,27 @@ async fn file_metadata(ctx: &Ctx<'_>, id: &str) -> ApiResult<Option<Map<String, 
     }
 }
 
-async fn save_file_metadata(ctx: &Ctx<'_>, file: Map<String, Value>) -> ApiResult<Map<String, Value>> {
+async fn save_file_metadata(
+    ctx: &Ctx<'_>,
+    file: Map<String, Value>,
+) -> ApiResult<Map<String, Value>> {
     let opts = ctx.opts();
-    let id = file.get("id").and_then(Value::as_str).unwrap_or("").to_string();
+    let id = file
+        .get("id")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
     if id.is_empty() {
-        return Err(ApiError::bad_request("file_id_required", "file id is required"));
+        return Err(ApiError::bad_request(
+            "file_id_required",
+            "file id is required",
+        ));
     }
     match tier2::create(ctx.client(), &opts, tier2::FILES, file.clone(), Some(&id)).await {
         Ok(saved) => Ok(saved),
-        Err(error) if error.status == StatusCode::CONFLICT || error.status == StatusCode::BAD_REQUEST => {
+        Err(error)
+            if error.status == StatusCode::CONFLICT || error.status == StatusCode::BAD_REQUEST =>
+        {
             tier2::update(ctx.client(), &opts, tier2::FILES, &id, file, None).await
         }
         Err(error) => Err(error),
@@ -1230,11 +1494,22 @@ async fn save_file_metadata(ctx: &Ctx<'_>, file: Map<String, Value>) -> ApiResul
 
 async fn files_quota(ctx: &Ctx<'_>) -> ApiResult<Response> {
     let opts = ctx.opts();
-    let quota = ctx.client().files().quota(&opts).await.map_err(ApiError::from)?;
+    let quota = ctx
+        .client()
+        .files()
+        .quota(&opts)
+        .await
+        .map_err(ApiError::from)?;
     let mut value = quota;
     if let Some(object) = value.as_object_mut() {
-        object.insert("cityMaxFileBytes".into(), json!(ctx.config().files_max_bytes));
-        object.insert("allowedTypes".into(), json!(domain::files::UPLOAD_MIME_TYPES));
+        object.insert(
+            "cityMaxFileBytes".into(),
+            json!(ctx.config().files_max_bytes),
+        );
+        object.insert(
+            "allowedTypes".into(),
+            json!(domain::files::UPLOAD_MIME_TYPES),
+        );
     }
     Ok(web::json_response(value))
 }
@@ -1247,7 +1522,7 @@ async fn files_list(ctx: &Ctx<'_>) -> ApiResult<Response> {
     let values: Vec<Value> = rows
         .items
         .into_iter()
-        .filter(|row| requester_can_use_file(principal, row))
+        .filter(|row| requester_can_read_file(principal, row))
         .filter(|row| matches_filters(row, &filters))
         .map(|row| file_view(ctx.config(), &row))
         .collect();
@@ -1255,7 +1530,9 @@ async fn files_list(ctx: &Ctx<'_>) -> ApiResult<Response> {
 }
 
 async fn files_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
-    let principal = ctx.principal().ok_or_else(|| ApiError::unauthorized("authentication_required"))?;
+    let principal = ctx
+        .principal()
+        .ok_or_else(|| ApiError::unauthorized("authentication_required"))?;
     let body = web::private_input(ctx.body);
     if web::bool_field(&body, "is_public") == Some(true)
         && ![auth::ROLE_ADMIN, auth::ROLE_MANAGER].contains(&principal.role.as_str())
@@ -1275,7 +1552,8 @@ async fn files_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
     .map_err(file_error)?;
     let id = uuid::Uuid::new_v4().to_string();
     let checksum = domain::files::normalize_checksum(
-        body.get("checksum_sha256").or_else(|| body.get("checksumSha256")),
+        body.get("checksum_sha256")
+            .or_else(|| body.get("checksumSha256")),
     )
     .map_err(file_error)?;
     let metadata = json!({
@@ -1304,7 +1582,10 @@ async fn files_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
         file.insert("checksumSha256".into(), json!(checksum));
     }
     file.insert("owner".into(), json!(principal.sub));
-    file.insert("public".into(), json!(web::bool_field(&body, "is_public") == Some(true)));
+    file.insert(
+        "public".into(),
+        json!(web::bool_field(&body, "is_public") == Some(true)),
+    );
     file.insert("created_at".into(), json!(now));
     file.insert("updated_at".into(), json!(now));
     file.insert("source".into(), json!("synapsecity"));
@@ -1339,20 +1620,30 @@ async fn files_upload_raw(ctx: Ctx<'_>, bytes: Bytes, public: bool) -> ApiResult
         return Err(ApiError::unauthorized("authentication_required"));
     }
     if public {
-        enforce_turnstile(&ctx)?;
+        enforce_turnstile(&ctx).await?;
     }
     if bytes.is_empty() {
-        return Err(ApiError::bad_request("binary_body_required", "binary body is required"));
+        return Err(ApiError::bad_request(
+            "binary_body_required",
+            "binary body is required",
+        ));
     }
     let filename = ctx
         .headers
         .get("x-file-name")
         .or_else(|| ctx.headers.get("x-filename"))
         .and_then(|value| value.to_str().ok())
-        .map(|value| percent_encoding::percent_decode_str(value).decode_utf8_lossy().to_string())
+        .map(|value| {
+            percent_encoding::percent_decode_str(value)
+                .decode_utf8_lossy()
+                .to_string()
+        })
         .unwrap_or_default();
     if filename.is_empty() {
-        return Err(ApiError::bad_request("x_file_name_required", "X-File-Name is required"));
+        return Err(ApiError::bad_request(
+            "x_file_name_required",
+            "X-File-Name is required",
+        ));
     }
     let content_type = ctx
         .headers
@@ -1363,8 +1654,16 @@ async fn files_upload_raw(ctx: Ctx<'_>, bytes: Bytes, public: bool) -> ApiResult
         .next()
         .unwrap_or("application/octet-stream")
         .to_string();
-    let allowlist = if public { &domain::files::IMAGE_MIME_TYPES[..] } else { &domain::files::UPLOAD_MIME_TYPES[..] };
-    let max_bytes = if public { ctx.config().photo_max_bytes } else { ctx.config().files_max_bytes };
+    let allowlist = if public {
+        &domain::files::IMAGE_MIME_TYPES[..]
+    } else {
+        &domain::files::UPLOAD_MIME_TYPES[..]
+    };
+    let max_bytes = if public {
+        ctx.config().photo_max_bytes
+    } else {
+        ctx.config().files_max_bytes
+    };
     let validated = domain::files::validate_upload(
         Some(&json!(filename)),
         Some(&json!(content_type)),
@@ -1379,10 +1678,42 @@ async fn files_upload_raw(ctx: Ctx<'_>, bytes: Bytes, public: bool) -> ApiResult
         .get("x-checksum-sha256")
         .and_then(|value| value.to_str().ok());
     if let Some(provided) = provided {
-        if let Some(expected) = domain::files::normalize_checksum(Some(&json!(provided))).map_err(file_error)? {
+        if let Some(expected) =
+            domain::files::normalize_checksum(Some(&json!(provided))).map_err(file_error)?
+        {
             if expected != checksum {
-                return Err(ApiError::bad_request("checksum_mismatch", "checksum mismatch"));
+                return Err(ApiError::bad_request(
+                    "checksum_mismatch",
+                    "checksum mismatch",
+                ));
             }
+        }
+    }
+    let report_id = ctx
+        .headers
+        .get("x-report-id")
+        .and_then(|value| value.to_str().ok())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    let report_token = ctx
+        .headers
+        .get("x-report-edit-token")
+        .and_then(|value| value.to_str().ok())
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    if report_id.is_some() || report_token.is_some() {
+        let (Some(report_id), Some(report_token)) = (report_id.as_deref(), report_token) else {
+            return Err(ApiError::forbidden(
+                "report_edit_token_required",
+                "A report id and edit token are required together.",
+            ));
+        };
+        if !public || !auth::verify_report_edit_token(ctx.config(), report_token, report_id) {
+            return Err(ApiError::forbidden(
+                "report_edit_token_invalid",
+                "The report edit token is invalid or expired.",
+            ));
         }
     }
     let id = uuid::Uuid::new_v4().to_string();
@@ -1413,10 +1744,16 @@ async fn files_upload_raw(ctx: Ctx<'_>, bytes: Bytes, public: bool) -> ApiResult
         json!(if public {
             "anonymous"
         } else {
-            principal.as_ref().map(|value| value.sub.as_str()).unwrap_or("anonymous")
+            principal
+                .as_ref()
+                .map(|value| value.sub.as_str())
+                .unwrap_or("anonymous")
         }),
     );
     file.insert("public".into(), json!(public));
+    if let Some(report_id) = report_id {
+        file.insert("report_id".into(), json!(report_id));
+    }
     file.insert("created_at".into(), json!(now));
     file.insert("updated_at".into(), json!(now));
     file.insert("source".into(), json!("synapsecity"));
@@ -1426,15 +1763,21 @@ async fn files_upload_raw(ctx: Ctx<'_>, bytes: Bytes, public: bool) -> ApiResult
 }
 
 async fn files_update_raw(ctx: Ctx<'_>, id: &str, bytes: Bytes) -> ApiResult<Response> {
-    let principal = ctx.principal().cloned().ok_or_else(|| ApiError::unauthorized("authentication_required"))?;
+    let principal = ctx
+        .principal()
+        .cloned()
+        .ok_or_else(|| ApiError::unauthorized("authentication_required"))?;
     let Some(record) = file_metadata(&ctx, id).await? else {
         return Err(ApiError::not_found("file_not_found", "file_not_found"));
     };
-    if !requester_can_use_file(Some(&principal), &record) {
+    if !requester_can_write_file(Some(&principal), &record) {
         return Err(ApiError::not_found("file_not_found", "file_not_found"));
     }
     if bytes.is_empty() {
-        return Err(ApiError::bad_request("binary_body_required", "binary body is required"));
+        return Err(ApiError::bad_request(
+            "binary_body_required",
+            "binary body is required",
+        ));
     }
     let content_type = ctx
         .headers
@@ -1446,16 +1789,48 @@ async fn files_update_raw(ctx: Ctx<'_>, id: &str, bytes: Bytes) -> ApiResult<Res
         .next()
         .unwrap_or("application/octet-stream")
         .to_string();
+    let is_public = record.get("public").and_then(Value::as_bool) == Some(true);
+    let allowlist: &[&str] = if is_public {
+        &domain::files::IMAGE_MIME_TYPES
+    } else {
+        &domain::files::UPLOAD_MIME_TYPES
+    };
+    let max_bytes = if is_public {
+        ctx.config().photo_max_bytes
+    } else {
+        ctx.config().files_max_bytes
+    };
+    // The overwrite path must enforce exactly the same allowlist and size
+    // ceiling as upload; otherwise a public photo could be replaced with HTML.
+    let filename_value = record
+        .get("filename")
+        .or_else(|| record.get("file_name"))
+        .cloned()
+        .unwrap_or_else(|| json!(id));
+    let validated = domain::files::validate_upload(
+        Some(&filename_value),
+        Some(&json!(content_type)),
+        Some(&json!(bytes.len())),
+        Some(allowlist),
+        Some(max_bytes as i64),
+    )
+    .map_err(file_error)?;
     let checksum = domain::files::checksum_of(&bytes);
     let opts = ctx.opts();
     ctx.client()
         .files()
-        .upload_bytes(id, bytes.clone(), &content_type, Some(&checksum), &opts)
+        .upload_bytes(
+            id,
+            bytes.clone(),
+            &validated.content_type,
+            Some(&checksum),
+            &opts,
+        )
         .await
         .map_err(ApiError::from)?;
     let mut file = record;
-    file.insert("contentType".into(), json!(content_type));
-    file.insert("size".into(), json!(bytes.len()));
+    file.insert("contentType".into(), json!(validated.content_type));
+    file.insert("size".into(), json!(validated.size));
     file.insert("checksumSha256".into(), json!(checksum));
     file.insert("updated_at".into(), json!(crate::now_iso()));
     let saved = save_file_metadata(&ctx, file).await?;
@@ -1466,7 +1841,7 @@ async fn files_get(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
     let Some(record) = file_metadata(ctx, id).await? else {
         return Err(ApiError::not_found("file_not_found", "file_not_found"));
     };
-    if !requester_can_use_file(ctx.principal(), &record) {
+    if !requester_can_read_file(ctx.principal(), &record) {
         return Err(ApiError::not_found("file_not_found", "file_not_found"));
     }
     Ok(web::json_response(file_view(ctx.config(), &record)))
@@ -1480,21 +1855,40 @@ async fn files_content(ctx: &Ctx<'_>, id: &str, public: bool) -> ApiResult<Respo
         if record.get("public").and_then(Value::as_bool) != Some(true) {
             return Err(ApiError::not_found("file_not_found", "file_not_found"));
         }
-    } else if !requester_can_use_file(ctx.principal(), &record) {
+    } else if !requester_can_read_file(ctx.principal(), &record) {
         return Err(ApiError::not_found("file_not_found", "file_not_found"));
     }
     let opts = ctx.opts();
-    let download = ctx.client().files().download(id, &opts).await.map_err(ApiError::from)?;
+    let download = ctx
+        .client()
+        .files()
+        .download(id, &opts)
+        .await
+        .map_err(ApiError::from)?;
     let content_type = download
         .header("content-type")
         .map(str::to_string)
-        .or_else(|| record.get("contentType").and_then(Value::as_str).map(str::to_string))
+        .or_else(|| {
+            record
+                .get("contentType")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
         .unwrap_or_else(|| "application/octet-stream".into());
-    let checksum = download.header("x-checksum-sha256").map(str::to_string).or_else(|| record.get("checksumSha256").and_then(Value::as_str).map(str::to_string));
+    let checksum = download
+        .header("x-checksum-sha256")
+        .map(str::to_string)
+        .or_else(|| {
+            record
+                .get("checksumSha256")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        });
     let mut response = Response::new(axum::body::Body::from(download.data));
     response.headers_mut().insert(
         "content-type",
-        HeaderValue::from_str(&content_type).unwrap_or(HeaderValue::from_static("application/octet-stream")),
+        HeaderValue::from_str(&content_type)
+            .unwrap_or(HeaderValue::from_static("application/octet-stream")),
     );
     if let Some(checksum) = checksum {
         if let Ok(value) = HeaderValue::from_str(&checksum) {
@@ -1503,7 +1897,17 @@ async fn files_content(ctx: &Ctx<'_>, id: &str, public: bool) -> ApiResult<Respo
     }
     response.headers_mut().insert(
         "cache-control",
-        HeaderValue::from_static(if public { "public, max-age=300" } else { "private, no-store" }),
+        HeaderValue::from_static(if public {
+            "public, max-age=300"
+        } else {
+            "private, no-store"
+        }),
+    );
+    // Even a legacy HTML file must not execute in the City origin; uploads are
+    // already restricted to an image/document allowlist.
+    response.headers_mut().insert(
+        "content-security-policy",
+        HeaderValue::from_static("default-src 'none'; sandbox"),
     );
     Ok(response)
 }
@@ -1512,17 +1916,32 @@ async fn files_presign(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
     let Some(record) = file_metadata(ctx, id).await? else {
         return Err(ApiError::not_found("file_not_found", "file_not_found"));
     };
-    if !requester_can_use_file(ctx.principal(), &record) {
+    if !requester_can_read_file(ctx.principal(), &record) {
         return Err(ApiError::not_found("file_not_found", "file_not_found"));
     }
-    let method = web::string_field(ctx.body, "method").unwrap_or_else(|| "GET".into()).to_ascii_uppercase();
-    let method = if ["GET", "HEAD", "PUT", "DELETE"].contains(&method.as_str()) { method } else { "GET".into() };
+    let method = web::string_field(ctx.body, "method")
+        .unwrap_or_else(|| "GET".into())
+        .to_ascii_uppercase();
+    let method = if ["GET", "HEAD", "PUT", "DELETE"].contains(&method.as_str()) {
+        method
+    } else {
+        "GET".into()
+    };
+    if matches!(method.as_str(), "PUT" | "DELETE")
+        && !requester_can_write_file(ctx.principal(), &record)
+    {
+        return Err(ApiError::forbidden(
+            "file_write_forbidden",
+            "Only the owner or an administrator may mutate this file.",
+        ));
+    }
     let expires = ctx
         .body
         .get("expires_in")
         .or_else(|| ctx.body.get("expiresIn"))
         .and_then(Value::as_i64)
-        .unwrap_or(900);
+        .unwrap_or(900)
+        .clamp(60, 3600);
     let opts = ctx.opts();
     let signed = ctx
         .client()
@@ -1536,7 +1955,9 @@ async fn files_presign(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
         "url": signed.get("url"),
         "expires_in": signed.get("expiresIn").or_else(|| signed.get("expires_in")).cloned().unwrap_or(json!(expires)),
     }));
-    response.headers_mut().insert("cache-control", HeaderValue::from_static("no-store"));
+    response
+        .headers_mut()
+        .insert("cache-control", HeaderValue::from_static("no-store"));
     Ok(response)
 }
 
@@ -1544,12 +1965,17 @@ async fn files_complete(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
     let Some(record) = file_metadata(ctx, id).await? else {
         return Err(ApiError::not_found("file_not_found", "file_not_found"));
     };
-    if !requester_can_use_file(ctx.principal(), &record) {
+    if !requester_can_write_file(ctx.principal(), &record) {
         return Err(ApiError::not_found("file_not_found", "file_not_found"));
     }
     let size = ctx.body.get("size").and_then(Value::as_i64);
     let opts = ctx.opts();
-    let completed = ctx.client().files().complete(id, size, &opts).await.map_err(ApiError::from)?;
+    let completed = ctx
+        .client()
+        .files()
+        .complete(id, size, &opts)
+        .await
+        .map_err(ApiError::from)?;
     let mut file = record;
     if let Some(size) = completed.size {
         file.insert("size".into(), json!(size));
@@ -1569,7 +1995,7 @@ async fn files_delete(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
     let Some(record) = file_metadata(ctx, id).await? else {
         return Err(ApiError::not_found("file_not_found", "file_not_found"));
     };
-    if !requester_can_use_file(ctx.principal(), &record) {
+    if !requester_can_write_file(ctx.principal(), &record) {
         return Err(ApiError::not_found("file_not_found", "file_not_found"));
     }
     let opts = ctx.opts();
@@ -1582,10 +2008,24 @@ async fn files_delete(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
 // Assets
 // ---------------------------------------------------------------------------
 
-async fn all_assets(ctx: &Ctx<'_>) -> ApiResult<Vec<Map<String, Value>>> {
+struct AssetRows {
+    items: Vec<Map<String, Value>>,
+    scanned: usize,
+    truncated: bool,
+}
+
+async fn all_asset_rows(ctx: &Ctx<'_>) -> ApiResult<AssetRows> {
     let opts = ctx.opts();
     let rows = tier2::list_all(ctx.client(), &opts, ASSETS, 5000).await?;
-    Ok(rows.items.into_iter().map(|row| asset_view(&row)).collect())
+    Ok(AssetRows {
+        items: rows.items.into_iter().map(|row| asset_view(&row)).collect(),
+        scanned: rows.scanned,
+        truncated: rows.truncated,
+    })
+}
+
+async fn all_assets(ctx: &Ctx<'_>) -> ApiResult<Vec<Map<String, Value>>> {
+    Ok(all_asset_rows(ctx).await?.items)
 }
 
 async fn find_asset(ctx: &Ctx<'_>, reference: &str) -> ApiResult<Option<Map<String, Value>>> {
@@ -1595,11 +2035,20 @@ async fn find_asset(ctx: &Ctx<'_>, reference: &str) -> ApiResult<Option<Map<Stri
     }
     let rows = tier2::list_all(ctx.client(), &opts, ASSETS, 5000).await?;
     let needle = reference.to_ascii_lowercase();
-    Ok(rows.items.into_iter().find(|row| {
-        ["asset_code", "feature_code", "assetId", "id"]
-            .iter()
-            .any(|key| row.get(*key).and_then(Value::as_str).map(|value| value.eq_ignore_ascii_case(&needle)).unwrap_or(false))
-    }).map(|row| asset_view(&row)))
+    Ok(rows
+        .items
+        .into_iter()
+        .find(|row| {
+            ["asset_code", "feature_code", "assetId", "id"]
+                .iter()
+                .any(|key| {
+                    row.get(*key)
+                        .and_then(Value::as_str)
+                        .map(|value| value.eq_ignore_ascii_case(&needle))
+                        .unwrap_or(false)
+                })
+        })
+        .map(|row| asset_view(&row)))
 }
 
 async fn assets_list(ctx: &Ctx<'_>) -> ApiResult<Response> {
@@ -1620,25 +2069,73 @@ async fn assets_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
         .or_else(|| web::string_field(&body, "feature_code"))
         .or_else(|| web::string_field(&body, "assetCode"))
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-    let geometry = body.get("geometry").cloned().unwrap_or_else(|| json!({"type":"Point","coordinates":[0,0]}));
-    if !geometry.is_object() || !geometry.get("type").and_then(Value::as_str).is_some() || geometry.get("coordinates").and_then(Value::as_array).is_none() {
-        return Err(ApiError::bad_request("geometry_must_be_geojson", "geometry_must_be_geojson"));
+    let geometry = body
+        .get("geometry")
+        .cloned()
+        .unwrap_or_else(|| json!({"type":"Point","coordinates":[0,0]}));
+    if !geometry.is_object()
+        || !geometry.get("type").and_then(Value::as_str).is_some()
+        || geometry
+            .get("coordinates")
+            .and_then(Value::as_array)
+            .is_none()
+    {
+        return Err(ApiError::bad_request(
+            "geometry_must_be_geojson",
+            "geometry_must_be_geojson",
+        ));
     }
     let mut asset = Map::new();
-    asset.insert("id".into(), json!(web::string_field(&body, "id").unwrap_or_else(|| code.clone())));
-    asset.insert("assetId".into(), json!(web::string_field(&body, "assetId").unwrap_or_else(|| code.clone())));
+    asset.insert(
+        "id".into(),
+        json!(web::string_field(&body, "id").unwrap_or_else(|| code.clone())),
+    );
+    asset.insert(
+        "assetId".into(),
+        json!(web::string_field(&body, "assetId").unwrap_or_else(|| code.clone())),
+    );
     asset.insert("asset_code".into(), json!(code));
     asset.insert("name".into(), json!(name));
-    asset.insert("assetType".into(), json!(web::string_field(&body, "assetType").or_else(|| web::string_field(&body, "feature_type")).unwrap_or_else(|| "infrastructure".into())));
-    asset.insert("feature_type".into(), json!(web::string_field(&body, "feature_type").or_else(|| web::string_field(&body, "assetType")).unwrap_or_else(|| "infrastructure".into())));
-    asset.insert("feature_code".into(), json!(web::string_field(&body, "feature_code").unwrap_or_else(|| code.clone())));
-    asset.insert("status".into(), json!(web::string_field(&body, "status").unwrap_or_else(|| "active".into())));
+    asset.insert(
+        "assetType".into(),
+        json!(web::string_field(&body, "assetType")
+            .or_else(|| web::string_field(&body, "feature_type"))
+            .unwrap_or_else(|| "infrastructure".into())),
+    );
+    asset.insert(
+        "feature_type".into(),
+        json!(web::string_field(&body, "feature_type")
+            .or_else(|| web::string_field(&body, "assetType"))
+            .unwrap_or_else(|| "infrastructure".into())),
+    );
+    asset.insert(
+        "feature_code".into(),
+        json!(web::string_field(&body, "feature_code").unwrap_or_else(|| code.clone())),
+    );
+    asset.insert(
+        "status".into(),
+        json!(web::string_field(&body, "status").unwrap_or_else(|| "active".into())),
+    );
     asset.insert("geometry".into(), geometry.clone());
-    asset.insert("location".into(), body.get("location").cloned().unwrap_or_else(|| json!({"geometry": geometry})));
-    asset.insert("public_visible".into(), json!(web::bool_field(&body, "public_visible") != Some(false)));
+    asset.insert(
+        "location".into(),
+        body.get("location")
+            .cloned()
+            .unwrap_or_else(|| json!({"geometry": geometry})),
+    );
+    asset.insert(
+        "public_visible".into(),
+        json!(web::bool_field(&body, "public_visible") != Some(false)),
+    );
     asset.insert("source".into(), json!("synapsecity"));
     asset.insert("sourceVersion".into(), json!("1.0.0"));
-    for key in ["category", "condition", "lifecycle_stage", "municipality", "owner"] {
+    for key in [
+        "category",
+        "condition",
+        "lifecycle_stage",
+        "municipality",
+        "owner",
+    ] {
         if let Some(value) = body.get(key) {
             asset.insert(key.into(), value.clone());
         }
@@ -1649,8 +2146,15 @@ async fn assets_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
         }
     }
     let opts = ctx.opts();
-    let id = asset.get("id").and_then(Value::as_str).unwrap_or(&code).to_string();
-    let created = tier2::create(ctx.client(), &opts, ASSETS, asset, Some(&id)).await?;
+    let id = asset
+        .get("id")
+        .and_then(Value::as_str)
+        .unwrap_or(&code)
+        .to_string();
+    let publish = web::bool_field(&body, "public_visible") != Some(false);
+    let created =
+        tier2::create_with_visibility(ctx.client(), &opts, ASSETS, asset, Some(&id), publish)
+            .await?;
     Ok(web::created(Value::Object(asset_view(&created))))
 }
 
@@ -1661,10 +2165,20 @@ async fn assets_get(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
     Ok(web::json_response(Value::Object(asset)))
 }
 
-async fn update_asset(ctx: &Ctx<'_>, id: &str, patch: Map<String, Value>) -> ApiResult<Map<String, Value>> {
+async fn update_asset(
+    ctx: &Ctx<'_>,
+    id: &str,
+    patch: Map<String, Value>,
+) -> ApiResult<Map<String, Value>> {
     let opts = ctx.opts();
-    let mut current = find_asset(ctx, id).await?.ok_or_else(|| ApiError::not_found("asset_not_found", "asset_not_found"))?;
-    let record_id = current.get("id").and_then(Value::as_str).unwrap_or(id).to_string();
+    let mut current = find_asset(ctx, id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("asset_not_found", "asset_not_found"))?;
+    let record_id = current
+        .get("id")
+        .and_then(Value::as_str)
+        .unwrap_or(id)
+        .to_string();
     for (key, value) in patch {
         current.insert(key, value);
     }
@@ -1672,7 +2186,18 @@ async fn update_asset(ctx: &Ctx<'_>, id: &str, patch: Map<String, Value>) -> Api
     current.insert("source".into(), json!("synapsecity"));
     current.insert("updatedBy".into(), json!("domain-api"));
     current.insert("updated_at".into(), json!(crate::now_iso()));
-    let row = tier2::update(ctx.client(), &opts, ASSETS, &record_id, current, None).await?;
+    let publish = current.get("public_visible").and_then(Value::as_bool) != Some(false)
+        && current.get("deleted_at").is_none();
+    let row = tier2::update_with_visibility(
+        ctx.client(),
+        &opts,
+        ASSETS,
+        &record_id,
+        current,
+        None,
+        publish,
+    )
+    .await?;
     Ok(asset_view(&row))
 }
 
@@ -1680,7 +2205,10 @@ async fn assets_patch(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
     let body = web::private_input(ctx.body);
     if let Some(name) = body.get("name").and_then(Value::as_str) {
         if name.trim().is_empty() {
-            return Err(ApiError::bad_request("name_must_not_be_empty", "name_must_not_be_empty"));
+            return Err(ApiError::bad_request(
+                "name_must_not_be_empty",
+                "name_must_not_be_empty",
+            ));
         }
     }
     let updated = update_asset(ctx, id, body).await?;
@@ -1717,10 +2245,26 @@ async fn assets_photos(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
     let Some(existing) = find_asset(ctx, id).await? else {
         return Err(ApiError::not_found("asset_not_found", "asset_not_found"));
     };
-    let mut photos: Vec<Value> = existing.get("photos").and_then(Value::as_array).cloned().unwrap_or_default();
-    photos.extend(resolved.iter().map(|entry| json!(entry.get("url").and_then(Value::as_str).unwrap_or(""))));
-    let mut attachments: Vec<Value> = existing.get("attachments").and_then(Value::as_array).cloned().unwrap_or_default();
-    attachments.extend(resolved.iter().filter_map(|entry| entry.get("attachment").cloned()));
+    let mut photos: Vec<Value> = existing
+        .get("photos")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    photos.extend(
+        resolved
+            .iter()
+            .map(|entry| json!(entry.get("url").and_then(Value::as_str).unwrap_or(""))),
+    );
+    let mut attachments: Vec<Value> = existing
+        .get("attachments")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    attachments.extend(
+        resolved
+            .iter()
+            .filter_map(|entry| entry.get("attachment").cloned()),
+    );
     let mut patch = Map::new();
     patch.insert("photos".into(), Value::Array(photos));
     patch.insert("attachments".into(), Value::Array(attachments));
@@ -1734,7 +2278,11 @@ async fn assets_attachments(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
     let Some(existing) = find_asset(ctx, id).await? else {
         return Err(ApiError::not_found("asset_not_found", "asset_not_found"));
     };
-    let mut current = existing.get("attachments").and_then(Value::as_array).cloned().unwrap_or_default();
+    let mut current = existing
+        .get("attachments")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
     current.push(Value::Object(attachment.clone()));
     let mut patch = Map::new();
     patch.insert("attachments".into(), Value::Array(current));
@@ -1744,7 +2292,9 @@ async fn assets_attachments(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
 }
 
 async fn assets_attachment_delete(ctx: &Ctx<'_>, id: &str, url: &str) -> ApiResult<Response> {
-    let target = percent_encoding::percent_decode_str(url).decode_utf8_lossy().to_string();
+    let target = percent_encoding::percent_decode_str(url)
+        .decode_utf8_lossy()
+        .to_string();
     let Some(existing) = find_asset(ctx, id).await? else {
         return Err(ApiError::not_found("asset_not_found", "asset_not_found"));
     };
@@ -1755,8 +2305,14 @@ async fn assets_attachment_delete(ctx: &Ctx<'_>, id: &str, url: &str) -> ApiResu
         .unwrap_or_default()
         .into_iter()
         .filter(|attachment| {
-            let file_url = attachment.get("file_url").and_then(Value::as_str).unwrap_or("");
-            let file_name = attachment.get("file_name").and_then(Value::as_str).unwrap_or("");
+            let file_url = attachment
+                .get("file_url")
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            let file_name = attachment
+                .get("file_name")
+                .and_then(Value::as_str)
+                .unwrap_or("");
             file_url != target && file_name != target
         })
         .collect();
@@ -1779,7 +2335,12 @@ async fn assets_documents(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
     let Some(existing) = find_asset(ctx, id).await? else {
         return Err(ApiError::not_found("asset_not_found", "asset_not_found"));
     };
-    Ok(web::json_response(existing.get("attachments").cloned().unwrap_or_else(|| json!([]))))
+    Ok(web::json_response(
+        existing
+            .get("attachments")
+            .cloned()
+            .unwrap_or_else(|| json!([])),
+    ))
 }
 
 async fn assets_document_add(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
@@ -1788,7 +2349,11 @@ async fn assets_document_add(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
     let Some(existing) = find_asset(ctx, id).await? else {
         return Err(ApiError::not_found("asset_not_found", "asset_not_found"));
     };
-    let mut current = existing.get("attachments").and_then(Value::as_array).cloned().unwrap_or_default();
+    let mut current = existing
+        .get("attachments")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
     current.push(Value::Object(attachment.clone()));
     let mut patch = Map::new();
     patch.insert("attachments".into(), Value::Array(current));
@@ -1803,17 +2368,29 @@ async fn assets_lifecycle(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
         "operational" => "active",
         "under_repair" | "damaged" => "maintenance",
         "decommissioned" => "decommissioned",
-        _ => return Err(ApiError::bad_request("invalid_lifecycle_status", "invalid_lifecycle_status")),
+        _ => {
+            return Err(ApiError::bad_request(
+                "invalid_lifecycle_status",
+                "invalid_lifecycle_status",
+            ))
+        }
     };
     let Some(existing) = find_asset(ctx, id).await? else {
         return Err(ApiError::not_found("asset_not_found", "asset_not_found"));
     };
-    let mut lifecycle = existing.get("lifecycle").and_then(Value::as_object).cloned().unwrap_or_default();
+    let mut lifecycle = existing
+        .get("lifecycle")
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
     lifecycle.insert("lifecycle_status".into(), json!(status));
     let mut patch = Map::new();
     patch.insert("lifecycle".into(), Value::Object(lifecycle));
     patch.insert("lifecycle_stage".into(), json!(status));
     patch.insert("status".into(), json!(mapped));
+    if mapped == "decommissioned" {
+        patch.insert("public_visible".into(), json!(false));
+    }
     let updated = update_asset(ctx, id, patch).await?;
     Ok(web::json_response(Value::Object(updated)))
 }
@@ -1833,19 +2410,49 @@ async fn assets_criticality(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
     patch.insert("criticality".into(), criticality.clone());
     let updated = update_asset(ctx, id, patch).await?;
     let _ = existing;
-    Ok(web::json_response(json!({ "asset": updated, "criticality": criticality })))
+    Ok(web::json_response(
+        json!({ "asset": updated, "criticality": criticality }),
+    ))
 }
 
-async fn asset_risk_result(ctx: &Ctx<'_>, asset_id: &str) -> ApiResult<Option<domain::risk::AssetRiskResult>> {
-    let Some(asset) = find_asset(ctx, asset_id).await? else {
-        return Ok(None);
-    };
+/// The four risk inputs are loaded once per request. Scoring happens fully in
+/// memory, so the request cost is bounded by one list per dataset instead of
+/// four lists per asset.
+struct RiskDatasets {
+    incidents: Vec<Map<String, Value>>,
+    maintenance: Vec<Map<String, Value>>,
+    sensors: Vec<Map<String, Value>>,
+    readings: Vec<Map<String, Value>>,
+}
+
+async fn load_risk_datasets(ctx: &Ctx<'_>) -> ApiResult<RiskDatasets> {
     let opts = ctx.opts();
-    let incident_rows = tier2::list_all(ctx.client(), &opts, INCIDENTS, 5000).await?;
-    let maintenance_rows = tier2::list_all(ctx.client(), &opts, MAINTENANCE, 5000).await?;
-    let sensor_rows = tier2::list_all(ctx.client(), &opts, tier2::SENSORS, 5000).await?;
-    let reading_rows = tier2::list_all(ctx.client(), &opts, tier2::SENSOR_DATA, 5000).await?;
-    let key = asset.get("id").and_then(Value::as_str).unwrap_or(asset_id).to_string();
+    Ok(RiskDatasets {
+        incidents: tier2::list_all(ctx.client(), &opts, INCIDENTS, 5000)
+            .await?
+            .items,
+        maintenance: tier2::list_all(ctx.client(), &opts, MAINTENANCE, 5000)
+            .await?
+            .items,
+        sensors: tier2::list_all(ctx.client(), &opts, tier2::SENSORS, 5000)
+            .await?
+            .items,
+        readings: tier2::list_all(ctx.client(), &opts, tier2::SENSOR_DATA, 5000)
+            .await?
+            .items,
+    })
+}
+
+fn score_asset_with_datasets(
+    asset: Map<String, Value>,
+    datasets: &RiskDatasets,
+    fallback_id: &str,
+) -> domain::risk::AssetRiskResult {
+    let key = asset
+        .get("id")
+        .and_then(Value::as_str)
+        .unwrap_or(fallback_id)
+        .to_string();
     let code = asset_code(&asset);
     let matches_asset = |row: &Map<String, Value>| {
         ["asset_id", "assetId", "asset_code"].iter().any(|field| {
@@ -1855,62 +2462,118 @@ async fn asset_risk_result(ctx: &Ctx<'_>, asset_id: &str) -> ApiResult<Option<do
                 .unwrap_or(false)
         })
     };
-    let incidents: Vec<Map<String, Value>> = incident_rows.items.into_iter().filter(|row| matches_asset(row)).map(|row| incident_view(&row)).collect();
-    let maintenance: Vec<Map<String, Value>> = maintenance_rows.items.into_iter().filter(|row| matches_asset(row)).collect();
-    let sensor_ids: HashSet<String> = sensor_rows
-        .items
+    let incidents: Vec<Map<String, Value>> = datasets
+        .incidents
         .iter()
         .filter(|row| matches_asset(row))
-        .filter_map(|row| row.get("id").or_else(|| row.get("sensor_id")).and_then(Value::as_str).map(str::to_string))
+        .map(incident_view)
         .collect();
-    let sensors: Vec<domain::risk::RiskSensorReading> = reading_rows
-        .items
-        .into_iter()
-        .filter(|row| sensor_ids.is_empty() || row.get("sensor_id").or_else(|| row.get("sensorId")).and_then(Value::as_str).map(|id| sensor_ids.contains(id)).unwrap_or(false))
+    let maintenance: Vec<Map<String, Value>> = datasets
+        .maintenance
+        .iter()
+        .filter(|row| matches_asset(row))
+        .cloned()
+        .collect();
+    let sensor_ids: HashSet<String> = datasets
+        .sensors
+        .iter()
+        .filter(|row| matches_asset(row))
+        .filter_map(|row| {
+            row.get("id")
+                .or_else(|| row.get("sensor_id"))
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
+        .collect();
+    let sensors: Vec<domain::risk::RiskSensorReading> = datasets
+        .readings
+        .iter()
+        .filter(|row| {
+            sensor_ids.is_empty()
+                || row
+                    .get("sensor_id")
+                    .or_else(|| row.get("sensorId"))
+                    .and_then(Value::as_str)
+                    .map(|id| sensor_ids.contains(id))
+                    .unwrap_or(false)
+        })
         .map(|row| domain::risk::RiskSensorReading {
-            metric: row.get("metric").and_then(Value::as_str).map(str::to_string),
+            metric: row
+                .get("metric")
+                .and_then(Value::as_str)
+                .map(str::to_string),
             value: row.get("value").and_then(Value::as_f64),
             unit: row.get("unit").and_then(Value::as_str).map(str::to_string),
             min: row.get("min").and_then(Value::as_f64),
             max: row.get("max").and_then(Value::as_f64),
-            observed_at: row.get("observed_at").or_else(|| row.get("timestamp")).and_then(Value::as_str).map(str::to_string),
+            observed_at: row
+                .get("observed_at")
+                .or_else(|| row.get("timestamp"))
+                .and_then(Value::as_str)
+                .map(str::to_string),
         })
         .collect();
     let mut asset_for_risk = asset;
     asset_for_risk.insert("id".into(), json!(key));
-    Ok(Some(domain::risk::score_asset_risk(domain::risk::ScoreAssetRiskInput {
+    domain::risk::score_asset_risk(domain::risk::ScoreAssetRiskInput {
         asset: asset_for_risk,
         incidents,
         maintenance,
         sensors,
         now: None,
         stale_after_minutes: None,
-    })))
+    })
+}
+
+async fn asset_risk_result(
+    ctx: &Ctx<'_>,
+    asset_id: &str,
+) -> ApiResult<Option<domain::risk::AssetRiskResult>> {
+    let Some(asset) = find_asset(ctx, asset_id).await? else {
+        return Ok(None);
+    };
+    let datasets = load_risk_datasets(ctx).await?;
+    Ok(Some(score_asset_with_datasets(asset, &datasets, asset_id)))
 }
 
 async fn assets_risk(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
     let Some(result) = asset_risk_result(ctx, id).await? else {
         return Err(ApiError::not_found("asset_not_found", "asset_not_found"));
     };
-    Ok(web::json_response(serde_json::to_value(result).unwrap_or(Value::Null)))
+    Ok(web::json_response(
+        serde_json::to_value(result).unwrap_or(Value::Null),
+    ))
 }
 
 async fn risk_top(ctx: &Ctx<'_>) -> ApiResult<Response> {
-    let limit = ctx.query.get("limit").and_then(|value| value.parse::<usize>().ok()).unwrap_or(10).clamp(1, 100);
-    let assets = all_assets(ctx).await?;
-    let mut results = Vec::new();
-    for asset in assets.iter().take(500) {
-        if let Some(id) = asset.get("id").and_then(Value::as_str) {
-            if let Ok(Some(result)) = asset_risk_result(ctx, id).await {
-                results.push(result);
-            }
-        }
-    }
+    let limit = ctx
+        .query
+        .get("limit")
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(10)
+        .clamp(1, 100);
+    let asset_rows = all_asset_rows(ctx).await?;
+    let truncated = asset_rows.truncated;
+    let scanned = asset_rows.scanned;
+    let datasets = load_risk_datasets(ctx).await?;
+    // Score every asset returned by the asset projection. There is no silent
+    // `take(500)`; if the projection itself had to stop early, the response
+    // reports that explicitly.
+    let results: Vec<domain::risk::AssetRiskResult> = asset_rows
+        .items
+        .into_iter()
+        .map(|asset| {
+            let fallback = asset_code(&asset);
+            score_asset_with_datasets(asset, &datasets, &fallback)
+        })
+        .collect();
     let total = results.len();
     let ranked = domain::risk::rank_assets_by_risk(results);
     Ok(web::json_response(json!({
         "items": ranked.into_iter().take(limit).map(|result| serde_json::to_value(result).unwrap_or(Value::Null)).collect::<Vec<_>>(),
         "total": total,
+        "scanned": scanned,
+        "truncated": truncated,
     })))
 }
 
@@ -1919,8 +2582,12 @@ async fn assets_risk_work_order(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> 
         return Err(ApiError::not_found("asset_not_found", "asset_not_found"));
     };
     let body = web::private_input(ctx.body);
-    let actor = ctx.principal().map(|principal| principal.username.clone()).unwrap_or_else(|| "city-user".into());
-    let approval_id = web::string_field(&body, "approval_id").or_else(|| web::string_field(&body, "approvalId"));
+    let actor = ctx
+        .principal()
+        .map(|principal| principal.username.clone())
+        .unwrap_or_else(|| "city-user".into());
+    let approval_id =
+        web::string_field(&body, "approval_id").or_else(|| web::string_field(&body, "approvalId"));
     if ctx.config().hitl_required && approval_id.is_none() {
         let approval = create_approval(
             ctx,
@@ -1931,26 +2598,47 @@ async fn assets_risk_work_order(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> 
             id,
             json!({ "risk_score": risk.score, "band": risk.band, "confidence": risk.confidence }),
             &actor,
-        ).await?;
-        return Ok(web::accepted(json!({ "approval": approval, "hitl_required": true, "risk": risk })));
+        )
+        .await?;
+        return Ok(web::accepted(
+            json!({ "approval": approval, "hitl_required": true, "risk": risk }),
+        ));
     }
     let approved = approval_id.is_some();
     if let Some(approval_id) = &approval_id {
         assert_approved(ctx, approval_id, id, "maintenance.approve", &actor).await?;
     }
     let mut input = Map::new();
-    input.insert("title".into(), json!(web::string_field(&body, "title").unwrap_or_else(|| format!("Predictive maintenance: {}", risk.asset_id))));
+    input.insert(
+        "title".into(),
+        json!(web::string_field(&body, "title")
+            .unwrap_or_else(|| format!("Predictive maintenance: {}", risk.asset_id))),
+    );
     input.insert("asset_id".into(), json!(id));
     input.insert("type".into(), json!("preventive"));
     input.insert("source".into(), json!("predictive-risk"));
-    input.insert("priority".into(), json!(if risk.score >= 75.0 { "critical" } else if risk.score >= 55.0 { "high" } else { "medium" }));
-    input.insert("status".into(), json!(if approved { "scheduled" } else { "recommended" }));
+    input.insert(
+        "priority".into(),
+        json!(if risk.score >= 75.0 {
+            "critical"
+        } else if risk.score >= 55.0 {
+            "high"
+        } else {
+            "medium"
+        }),
+    );
+    input.insert(
+        "status".into(),
+        json!(if approved { "scheduled" } else { "recommended" }),
+    );
     input.insert("risk_score".into(), json!(risk.score));
     input.insert("risk_band".into(), json!(risk.band));
     input.insert("scheduled_date".into(), json!(crate::now_iso()));
     let opts = ctx.opts();
     let work_order = tier2::create(ctx.client(), &opts, MAINTENANCE, input, None).await?;
-    Ok(web::created(json!({ "work_order": work_order, "risk": risk })))
+    Ok(web::created(
+        json!({ "work_order": work_order, "risk": risk }),
+    ))
 }
 
 async fn assets_health(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
@@ -1963,10 +2651,23 @@ async fn assets_health(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
     let open = incidents
         .items
         .iter()
-        .filter(|incident| incident.get("asset_id").or_else(|| incident.get("assetId")).and_then(Value::as_str) == Some(asset_id))
-        .filter(|incident| !["resolved", "closed"].contains(&incident.get("status").and_then(Value::as_str).unwrap_or("")))
+        .filter(|incident| {
+            incident
+                .get("asset_id")
+                .or_else(|| incident.get("assetId"))
+                .and_then(Value::as_str)
+                == Some(asset_id)
+        })
+        .filter(|incident| {
+            !["resolved", "closed"]
+                .contains(&incident.get("status").and_then(Value::as_str).unwrap_or(""))
+        })
         .count();
-    let condition = asset.get("condition").and_then(Value::as_str).unwrap_or("").to_ascii_lowercase();
+    let condition = asset
+        .get("condition")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_ascii_lowercase();
     let condition_score = match condition.as_str() {
         "excellent" => 95.0,
         "good" => 85.0,
@@ -1975,7 +2676,11 @@ async fn assets_health(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
         "critical" => 20.0,
         _ => 75.0,
     };
-    let status = asset.get("status").and_then(Value::as_str).unwrap_or("").to_ascii_lowercase();
+    let status = asset
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_ascii_lowercase();
     let status_score = match status.as_str() {
         "active" | "operational" => 100.0,
         "maintenance" | "under_repair" => 60.0,
@@ -1986,8 +2691,21 @@ async fn assets_health(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
     };
     let maintenance_score = 75.0;
     let incident_score = (100.0 - open as f64 * 15.0).max(0.0);
-    let overall = (condition_score * 0.3 + status_score * 0.2 + maintenance_score * 0.25 + incident_score * 0.15 + 75.0 * 0.1).round();
-    let health_status = if overall >= 80.0 { "excellent" } else if overall >= 60.0 { "good" } else if overall >= 40.0 { "fair" } else { "poor" };
+    let overall = (condition_score * 0.3
+        + status_score * 0.2
+        + maintenance_score * 0.25
+        + incident_score * 0.15
+        + 75.0 * 0.1)
+        .round();
+    let health_status = if overall >= 80.0 {
+        "excellent"
+    } else if overall >= 60.0 {
+        "good"
+    } else if overall >= 40.0 {
+        "fair"
+    } else {
+        "poor"
+    };
     Ok(web::json_response(json!({
         "health_score": overall,
         "health_status": health_status,
@@ -2006,7 +2724,12 @@ async fn assets_report(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
         return Err(ApiError::not_found("asset_not_found", "asset_not_found"));
     };
     let body = web::private_input(ctx.body);
-    let report = create_report(ctx, body, Some(asset.get("id").and_then(Value::as_str).unwrap_or(id))).await?;
+    let report = create_report(
+        ctx,
+        body,
+        Some(asset.get("id").and_then(Value::as_str).unwrap_or(id)),
+    )
+    .await?;
     Ok(web::created(json!({
         "report_id": report.get("id"),
         "report_url": report.get("download_url"),
@@ -2020,14 +2743,24 @@ async fn assets_preventive(ctx: &Ctx<'_>, id: &str, view: Option<&str>) -> ApiRe
         return Err(ApiError::not_found("asset_not_found", "asset_not_found"));
     };
     if view.is_none() {
-        return Ok(web::json_response(asset.get("preventive_maintenance_plan").cloned().unwrap_or(Value::Null)));
+        return Ok(web::json_response(
+            asset
+                .get("preventive_maintenance_plan")
+                .cloned()
+                .unwrap_or(Value::Null),
+        ));
     }
     let view = view.unwrap_or("tasks").to_ascii_lowercase();
     let view = match view.as_str() {
         "tasks" => domain::preventive::PreventiveView::Tasks,
         "upcoming" => domain::preventive::PreventiveView::Upcoming,
         "overdue" => domain::preventive::PreventiveView::Overdue,
-        _ => return Err(ApiError::not_found("preventive_view_not_found", "preventive_view_not_found")),
+        _ => {
+            return Err(ApiError::not_found(
+                "preventive_view_not_found",
+                "preventive_view_not_found",
+            ))
+        }
     };
     let opts = ctx.opts();
     let orders = tier2::list_all(ctx.client(), &opts, MAINTENANCE, 5000).await?;
@@ -2041,13 +2774,23 @@ async fn assets_preventive(ctx: &Ctx<'_>, id: &str, view: Option<&str>) -> ApiRe
         .items
         .into_iter()
         .filter(|order| {
-            order.get("asset_id").or_else(|| order.get("assetId")).and_then(Value::as_str).map(|id| asset_ids.contains(id)).unwrap_or(false)
+            order
+                .get("asset_id")
+                .or_else(|| order.get("assetId"))
+                .and_then(Value::as_str)
+                .map(|id| asset_ids.contains(id))
+                .unwrap_or(false)
         })
         .collect();
-    let plan = asset.get("preventive_maintenance_plan").and_then(Value::as_object);
+    let plan = asset
+        .get("preventive_maintenance_plan")
+        .and_then(Value::as_object);
     let tasks = domain::preventive::derive_preventive_tasks(plan, &work_orders, None);
     let tasks = domain::preventive::filter_preventive_tasks(&tasks, view);
-    let values: Vec<Value> = tasks.into_iter().filter_map(|task| serde_json::to_value(task).ok()).collect();
+    let values: Vec<Value> = tasks
+        .into_iter()
+        .filter_map(|task| serde_json::to_value(task).ok())
+        .collect();
     Ok(web::send_page(values, ctx.query, 100))
 }
 
@@ -2059,7 +2802,10 @@ fn incident_internal_id(incident_id: &str) -> String {
     format!("internal-{incident_id}")
 }
 
-async fn find_incident_internal(ctx: &Ctx<'_>, incident_id: &str) -> ApiResult<Option<Map<String, Value>>> {
+async fn find_incident_internal(
+    ctx: &Ctx<'_>,
+    incident_id: &str,
+) -> ApiResult<Option<Map<String, Value>>> {
     let opts = ctx.opts();
     for id in [incident_internal_id(incident_id), incident_id.to_string()] {
         if let Ok(row) = tier2::get(ctx.client(), &opts, INCIDENT_INTERNAL, &id).await {
@@ -2069,7 +2815,11 @@ async fn find_incident_internal(ctx: &Ctx<'_>, incident_id: &str) -> ApiResult<O
     Ok(None)
 }
 
-async fn write_incident_internal(ctx: &Ctx<'_>, incident_id: &str, record: &Map<String, Value>) -> ApiResult<()> {
+async fn write_incident_internal(
+    ctx: &Ctx<'_>,
+    incident_id: &str,
+    record: &Map<String, Value>,
+) -> ApiResult<()> {
     let Some(internal) = domain::incidents::to_internal_incident(record) else {
         return Ok(());
     };
@@ -2078,7 +2828,16 @@ async fn write_incident_internal(ctx: &Ctx<'_>, incident_id: &str, record: &Map<
     let mut payload = internal;
     payload.insert("id".into(), json!(id));
     payload.insert("incident_id".into(), json!(incident_id));
-    match tier2::update(ctx.client(), &opts, INCIDENT_INTERNAL, &id, payload.clone(), None).await {
+    match tier2::update(
+        ctx.client(),
+        &opts,
+        INCIDENT_INTERNAL,
+        &id,
+        payload.clone(),
+        None,
+    )
+    .await
+    {
         Ok(_) => Ok(()),
         Err(error) if error.status == StatusCode::NOT_FOUND => {
             tier2::create(ctx.client(), &opts, INCIDENT_INTERNAL, payload, Some(&id)).await?;
@@ -2088,24 +2847,78 @@ async fn write_incident_internal(ctx: &Ctx<'_>, incident_id: &str, record: &Map<
     }
 }
 
+async fn restore_incident_internal(
+    ctx: &Ctx<'_>,
+    incident_id: &str,
+    previous: Option<&Map<String, Value>>,
+) {
+    let opts = ctx.opts();
+    let id = incident_internal_id(incident_id);
+    match previous {
+        Some(previous) => {
+            let mut payload = previous.clone();
+            payload.insert("id".into(), json!(id));
+            payload.insert("incident_id".into(), json!(incident_id));
+            let _ = tier2::update(ctx.client(), &opts, INCIDENT_INTERNAL, &id, payload, None).await;
+        }
+        None => {
+            let _ = tier2::delete(ctx.client(), &opts, INCIDENT_INTERNAL, &id).await;
+        }
+    }
+}
+
 async fn find_incident(ctx: &Ctx<'_>, reference: &str) -> ApiResult<Option<Map<String, Value>>> {
-    let Some(found) = find_record(ctx, INCIDENTS, reference, &["incident_number", "incident_code", "incidentId", "id"]).await? else {
+    let Some(found) = find_record(
+        ctx,
+        INCIDENTS,
+        reference,
+        &["incident_number", "incident_code", "incidentId", "id"],
+    )
+    .await?
+    else {
         return Ok(None);
     };
-    let internal = find_incident_internal(ctx, found.get("id").and_then(Value::as_str).unwrap_or(reference)).await?;
-    Ok(Some(domain::incidents::merge_incident_internal(&found, internal.as_ref())))
+    let internal = find_incident_internal(
+        ctx,
+        found.get("id").and_then(Value::as_str).unwrap_or(reference),
+    )
+    .await?;
+    Ok(Some(domain::incidents::merge_incident_internal(
+        &found,
+        internal.as_ref(),
+    )))
 }
 
-async fn find_public_incident(ctx: &Ctx<'_>, reference: &str) -> ApiResult<Option<Map<String, Value>>> {
-    find_record(ctx, INCIDENTS, reference, &["incident_number", "incident_code", "incidentId", "id"]).await
+async fn find_public_incident(
+    ctx: &Ctx<'_>,
+    reference: &str,
+) -> ApiResult<Option<Map<String, Value>>> {
+    find_record(
+        ctx,
+        INCIDENTS,
+        reference,
+        &["incident_number", "incident_code", "incidentId", "id"],
+    )
+    .await
 }
 
-async fn update_incident(ctx: &Ctx<'_>, reference: &str, patch: Map<String, Value>) -> ApiResult<Map<String, Value>> {
+async fn update_incident(
+    ctx: &Ctx<'_>,
+    reference: &str,
+    patch: Map<String, Value>,
+) -> ApiResult<Map<String, Value>> {
     let Some(found) = find_incident(ctx, reference).await? else {
-        return Err(ApiError::not_found("incident_not_found", "incident_not_found"));
+        return Err(ApiError::not_found(
+            "incident_not_found",
+            "incident_not_found",
+        ));
     };
     let current = incident_view(&found);
-    let id = current.get("id").and_then(Value::as_str).unwrap_or(reference).to_string();
+    let id = current
+        .get("id")
+        .and_then(Value::as_str)
+        .unwrap_or(reference)
+        .to_string();
     let mut merged = current.clone();
     for (key, value) in patch {
         merged.insert(key, value);
@@ -2114,11 +2927,38 @@ async fn update_incident(ctx: &Ctx<'_>, reference: &str, patch: Map<String, Valu
     merged.insert("source".into(), json!("synapsecity"));
     merged.insert("updated_at".into(), json!(crate::now_iso()));
     let published = domain::incidents::to_published_incident(&merged);
-    let opts = ctx.opts();
-    let updated = tier2::update(ctx.client(), &opts, INCIDENTS, &id, published, None).await?;
+    let is_citizen_report = merged.get("source").and_then(Value::as_str)
+        == Some("synapsecity-public")
+        || merged.get("reported_by").and_then(Value::as_str) == Some("anonymous");
+    let publish =
+        merged.get("public_visible").and_then(Value::as_bool) != Some(false) && !is_citizen_report;
+    let previous_internal = find_incident_internal(ctx, &id).await?;
+    // Private sidecar first: if the public write fails we can restore the
+    // previous sidecar instead of leaving reporter data half-updated.
     write_incident_internal(ctx, &id, &merged).await?;
+    let opts = ctx.opts();
+    let updated = match tier2::update_with_visibility(
+        ctx.client(),
+        &opts,
+        INCIDENTS,
+        &id,
+        published,
+        None,
+        publish,
+    )
+    .await
+    {
+        Ok(updated) => updated,
+        Err(error) => {
+            restore_incident_internal(ctx, &id, previous_internal.as_ref()).await;
+            return Err(error);
+        }
+    };
     let internal = domain::incidents::to_internal_incident(&merged);
-    Ok(incident_view(&domain::incidents::merge_incident_internal(&updated, internal.as_ref())))
+    Ok(incident_view(&domain::incidents::merge_incident_internal(
+        &updated,
+        internal.as_ref(),
+    )))
 }
 
 async fn incidents_list(ctx: &Ctx<'_>) -> ApiResult<Response> {
@@ -2137,7 +2977,8 @@ async fn incidents_list(ctx: &Ctx<'_>) -> ApiResult<Response> {
 
 async fn incidents_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
     let body = web::private_input(ctx.body);
-    let incident_id = web::string_field(&body, "incidentId").unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    let incident_id =
+        web::string_field(&body, "incidentId").unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     let number = web::string_field(&body, "incident_number")
         .or_else(|| web::string_field(&body, "incident_code"))
         .unwrap_or_else(incident_number);
@@ -2151,7 +2992,11 @@ async fn incidents_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
     let photos: Vec<Value> = if photos_values.is_empty() {
         Vec::new()
     } else {
-        resolve_photos(ctx, &photos_values, true).await?.into_iter().map(|entry| json!(entry.get("url").and_then(Value::as_str).unwrap_or(""))).collect()
+        resolve_photos(ctx, &photos_values, true)
+            .await?
+            .into_iter()
+            .map(|entry| json!(entry.get("url").and_then(Value::as_str).unwrap_or("")))
+            .collect()
     };
     let now = crate::now_iso();
     let mut incident = Map::new();
@@ -2159,47 +3004,96 @@ async fn incidents_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
     incident.insert("incident_number".into(), json!(number));
     incident.insert("incident_code".into(), json!(number));
     incident.insert("title".into(), json!(web::required_string(&body, "title")?));
-    incident.insert("description".into(), json!(web::string_field(&body, "description").unwrap_or_default()));
-    incident.insert("category".into(), json!(web::required_string(&body, "category")?));
-    incident.insert("severity".into(), json!(web::string_field(&body, "severity").unwrap_or_else(|| "medium".into())));
-    incident.insert("status".into(), json!(web::string_field(&body, "status").unwrap_or_else(|| "open".into())));
-    incident.insert("occurredAt".into(), json!(web::string_field(&body, "occurredAt").unwrap_or_else(|| now.clone())));
+    incident.insert(
+        "description".into(),
+        json!(web::string_field(&body, "description").unwrap_or_default()),
+    );
+    incident.insert(
+        "category".into(),
+        json!(web::required_string(&body, "category")?),
+    );
+    incident.insert(
+        "severity".into(),
+        json!(web::string_field(&body, "severity").unwrap_or_else(|| "medium".into())),
+    );
+    incident.insert(
+        "status".into(),
+        json!(web::string_field(&body, "status").unwrap_or_else(|| "open".into())),
+    );
+    incident.insert(
+        "occurredAt".into(),
+        json!(web::string_field(&body, "occurredAt").unwrap_or_else(|| now.clone())),
+    );
     incident.insert("reported_at".into(), json!(now));
     incident.insert("created_at".into(), json!(now));
     incident.insert("updated_at".into(), json!(now));
     incident.insert("upvotes".into(), json!(0));
     incident.insert("comments".into(), json!([]));
-    incident.insert("public_visible".into(), json!(web::bool_field(&body, "public_visible") != Some(false)));
+    incident.insert(
+        "public_visible".into(),
+        json!(web::bool_field(&body, "public_visible") != Some(false)),
+    );
     incident.insert("source".into(), json!("synapsecity"));
     incident.insert("sourceVersion".into(), json!("1.0.0"));
-    for key in ["location", "asset_id", "reported_by", "reporter_type", "contact_info"] {
+    for key in [
+        "location",
+        "asset_id",
+        "reported_by",
+        "reporter_type",
+        "contact_info",
+    ] {
         if let Some(value) = body.get(key) {
             incident.insert(key.into(), value.clone());
         }
     }
     if let Some(asset_id) = body.get("assetId") {
-        incident.entry("asset_id".to_string()).or_insert_with(|| asset_id.clone());
+        incident
+            .entry("asset_id".to_string())
+            .or_insert_with(|| asset_id.clone());
     }
     if !photos.is_empty() {
         incident.insert("photos".into(), Value::Array(photos));
     }
     let published = domain::incidents::to_published_incident(&incident);
+    let publish = incident.get("public_visible").and_then(Value::as_bool) != Some(false);
     let opts = ctx.opts();
-    let created = tier2::create(
+    // Sidecar first for atomicity: a private-data failure must abort before a
+    // public record exists, and a public failure removes the orphan sidecar.
+    write_incident_internal(ctx, &incident_id, &incident).await?;
+    let created = match tier2::create_with_visibility(
         ctx.client(),
         &opts,
         INCIDENTS,
-        published.clone(),
+        published,
         Some(&incident_id),
-    ).await?;
-    write_incident_internal(ctx, &incident_id, &incident).await?;
+        publish,
+    )
+    .await
+    {
+        Ok(created) => created,
+        Err(error) => {
+            let _ = tier2::delete(
+                ctx.client(),
+                &opts,
+                INCIDENT_INTERNAL,
+                &incident_internal_id(&incident_id),
+            )
+            .await;
+            return Err(error);
+        }
+    };
     let internal = domain::incidents::to_internal_incident(&incident);
-    Ok(web::created(Value::Object(incident_view(&domain::incidents::merge_incident_internal(&created, internal.as_ref())))))
+    Ok(web::created(Value::Object(incident_view(
+        &domain::incidents::merge_incident_internal(&created, internal.as_ref()),
+    ))))
 }
 
 async fn incidents_get(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
     let Some(incident) = find_incident(ctx, id).await? else {
-        return Err(ApiError::not_found("incident_not_found", "incident_not_found"));
+        return Err(ApiError::not_found(
+            "incident_not_found",
+            "incident_not_found",
+        ));
     };
     Ok(web::json_response(Value::Object(incident_view(&incident))))
 }
@@ -2213,7 +3107,10 @@ async fn incidents_patch(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
 async fn incidents_action(ctx: &Ctx<'_>, id: &str, action: &str) -> ApiResult<Response> {
     let body = web::private_input(ctx.body);
     let Some(existing) = find_incident(ctx, id).await? else {
-        return Err(ApiError::not_found("incident_not_found", "incident_not_found"));
+        return Err(ApiError::not_found(
+            "incident_not_found",
+            "incident_not_found",
+        ));
     };
     let now = crate::now_iso();
     match action {
@@ -2223,7 +3120,8 @@ async fn incidents_action(ctx: &Ctx<'_>, id: &str, action: &str) -> ApiResult<Re
                 patch.insert("status".into(), json!("acknowledged"));
                 patch.insert("acknowledged_at".into(), json!(now));
                 patch
-            }).await?;
+            })
+            .await?;
             Ok(web::json_response(Value::Object(updated)))
         }
         "assign" => {
@@ -2231,7 +3129,10 @@ async fn incidents_action(ctx: &Ctx<'_>, id: &str, action: &str) -> ApiResult<Re
                 .or_else(|| ctx.query.get("assigned_to").cloned())
                 .unwrap_or_default();
             if assigned.is_empty() {
-                return Err(ApiError::bad_request("assigned_to_required", "assigned_to_required"));
+                return Err(ApiError::bad_request(
+                    "assigned_to_required",
+                    "assigned_to_required",
+                ));
             }
             let mut patch = Map::new();
             patch.insert("assigned_to".into(), json!(assigned));
@@ -2251,8 +3152,12 @@ async fn incidents_action(ctx: &Ctx<'_>, id: &str, action: &str) -> ApiResult<Re
             Ok(web::json_response(Value::Object(updated)))
         }
         "resolve" => {
-            let notes = web::string_field(&body, "resolution_notes").or_else(|| ctx.query.get("resolution_notes").cloned()).unwrap_or_default();
-            let kind = web::string_field(&body, "resolution_type").or_else(|| ctx.query.get("resolution_type").cloned()).unwrap_or_else(|| "fixed".into());
+            let notes = web::string_field(&body, "resolution_notes")
+                .or_else(|| ctx.query.get("resolution_notes").cloned())
+                .unwrap_or_default();
+            let kind = web::string_field(&body, "resolution_type")
+                .or_else(|| ctx.query.get("resolution_type").cloned())
+                .unwrap_or_else(|| "fixed".into());
             let mut patch = Map::new();
             patch.insert("status".into(), json!("resolved"));
             patch.insert("resolution_notes".into(), json!(notes));
@@ -2276,9 +3181,16 @@ async fn incidents_action(ctx: &Ctx<'_>, id: &str, action: &str) -> ApiResult<Re
         "comments" => {
             let text = web::string_field(&body, "comment").unwrap_or_default();
             if text.is_empty() {
-                return Err(ApiError::bad_request("comment_required", "comment_required"));
+                return Err(ApiError::bad_request(
+                    "comment_required",
+                    "comment_required",
+                ));
             }
-            let mut comments = existing.get("comments").and_then(Value::as_array).cloned().unwrap_or_default();
+            let mut comments = existing
+                .get("comments")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
             let principal = ctx.principal();
             comments.push(json!({
                 "id": uuid::Uuid::new_v4().to_string(),
@@ -2296,7 +3208,10 @@ async fn incidents_action(ctx: &Ctx<'_>, id: &str, action: &str) -> ApiResult<Re
         }
         "upvote" => {
             let mut patch = Map::new();
-            patch.insert("upvotes".into(), json!(existing.get("upvotes").and_then(Value::as_i64).unwrap_or(0) + 1));
+            patch.insert(
+                "upvotes".into(),
+                json!(existing.get("upvotes").and_then(Value::as_i64).unwrap_or(0) + 1),
+            );
             let updated = update_incident(ctx, id, patch).await?;
             Ok(web::json_response(Value::Object(updated)))
         }
@@ -2304,22 +3219,59 @@ async fn incidents_action(ctx: &Ctx<'_>, id: &str, action: &str) -> ApiResult<Re
             let maintenance_id = uuid::Uuid::new_v4().to_string();
             let mut order = Map::new();
             order.insert("id".into(), json!(maintenance_id));
-            order.insert("asset_id".into(), existing.get("asset_id").cloned().unwrap_or(Value::Null));
-            order.insert("incident_id".into(), existing.get("id").cloned().unwrap_or(Value::Null));
-            order.insert("title".into(), json!(format!("Incident {}: {}", existing.get("incident_number").and_then(Value::as_str).unwrap_or(id), existing.get("title").and_then(Value::as_str).unwrap_or(""))));
-            order.insert("description".into(), existing.get("description").cloned().unwrap_or_else(|| json!("")));
+            order.insert(
+                "asset_id".into(),
+                existing.get("asset_id").cloned().unwrap_or(Value::Null),
+            );
+            order.insert(
+                "incident_id".into(),
+                existing.get("id").cloned().unwrap_or(Value::Null),
+            );
+            order.insert(
+                "title".into(),
+                json!(format!(
+                    "Incident {}: {}",
+                    existing
+                        .get("incident_number")
+                        .and_then(Value::as_str)
+                        .unwrap_or(id),
+                    existing.get("title").and_then(Value::as_str).unwrap_or("")
+                )),
+            );
+            order.insert(
+                "description".into(),
+                existing
+                    .get("description")
+                    .cloned()
+                    .unwrap_or_else(|| json!("")),
+            );
             order.insert("status".into(), json!("scheduled"));
-            order.insert("priority".into(), existing.get("severity").cloned().unwrap_or_else(|| json!("medium")));
+            order.insert(
+                "priority".into(),
+                existing
+                    .get("severity")
+                    .cloned()
+                    .unwrap_or_else(|| json!("medium")),
+            );
             order.insert("type".into(), json!("corrective"));
             order.insert("scheduled_date".into(), json!(now));
             order.insert("created_at".into(), json!(now));
             order.insert("source".into(), json!("synapsecity"));
-            if let Some(tech) = web::string_field(&body, "technician_id").or_else(|| ctx.query.get("technician_id").cloned()) {
+            if let Some(tech) = web::string_field(&body, "technician_id")
+                .or_else(|| ctx.query.get("technician_id").cloned())
+            {
                 order.insert("assigned_to".into(), json!(tech));
                 order.insert("technician".into(), json!(tech));
             }
             let opts = ctx.opts();
-            tier2::create(ctx.client(), &opts, MAINTENANCE, order, Some(&maintenance_id)).await?;
+            tier2::create(
+                ctx.client(),
+                &opts,
+                MAINTENANCE,
+                order,
+                Some(&maintenance_id),
+            )
+            .await?;
             let mut patch = Map::new();
             patch.insert("maintenance_record_id".into(), json!(maintenance_id));
             patch.insert("status".into(), json!("in_progress"));
@@ -2332,7 +3284,9 @@ async fn incidents_action(ctx: &Ctx<'_>, id: &str, action: &str) -> ApiResult<Re
             })))
         }
         "close" => {
-            let notes = web::string_field(&body, "notes").or_else(|| ctx.query.get("notes").cloned()).unwrap_or_default();
+            let notes = web::string_field(&body, "notes")
+                .or_else(|| ctx.query.get("notes").cloned())
+                .unwrap_or_default();
             let mut patch = Map::new();
             patch.insert("status".into(), json!("closed"));
             patch.insert("closed_at".into(), json!(now));
@@ -2343,7 +3297,9 @@ async fn incidents_action(ctx: &Ctx<'_>, id: &str, action: &str) -> ApiResult<Re
             Ok(web::json_response(Value::Object(updated)))
         }
         "reject" => {
-            let reason = web::string_field(&body, "reason").or_else(|| ctx.query.get("reason").cloned()).unwrap_or_default();
+            let reason = web::string_field(&body, "reason")
+                .or_else(|| ctx.query.get("reason").cloned())
+                .unwrap_or_default();
             let mut patch = Map::new();
             patch.insert("status".into(), json!("closed"));
             patch.insert("resolution_type".into(), json!("not_an_issue"));
@@ -2353,7 +3309,10 @@ async fn incidents_action(ctx: &Ctx<'_>, id: &str, action: &str) -> ApiResult<Re
             Ok(web::json_response(Value::Object(updated)))
         }
         "cost-approval" => {
-            let actor = ctx.principal().map(|value| value.username.clone()).unwrap_or_else(|| "city-user".into());
+            let actor = ctx
+                .principal()
+                .map(|value| value.username.clone())
+                .unwrap_or_else(|| "city-user".into());
             let approval = create_approval(
                 ctx,
                 format!("Incident cost approval: {}", existing.get("title").and_then(Value::as_str).unwrap_or(id)),
@@ -2364,14 +3323,25 @@ async fn incidents_action(ctx: &Ctx<'_>, id: &str, action: &str) -> ApiResult<Re
                 json!({ "cost": existing.get("cost"), "estimated_cost": existing.get("estimated_cost"), "severity": existing.get("severity") }),
                 &actor,
             ).await?;
-            Ok(web::accepted(json!({ "approval": approval, "hitl_required": true })))
+            Ok(web::accepted(
+                json!({ "approval": approval, "hitl_required": true }),
+            ))
         }
         "approve-cost" => {
-            let approval_id = web::string_field(&body, "approval_id").or_else(|| web::string_field(&body, "approvalId")).unwrap_or_default();
-            let actor = ctx.principal().map(|value| value.username.clone()).unwrap_or_else(|| "city-user".into());
+            let approval_id = web::string_field(&body, "approval_id")
+                .or_else(|| web::string_field(&body, "approvalId"))
+                .unwrap_or_default();
+            let actor = ctx
+                .principal()
+                .map(|value| value.username.clone())
+                .unwrap_or_else(|| "city-user".into());
             if ctx.config().hitl_required || !approval_id.is_empty() {
                 if approval_id.is_empty() {
-                    return Err(ApiError::new(StatusCode::PRECONDITION_REQUIRED, "approval_required", "create a cost approval first"));
+                    return Err(ApiError::new(
+                        StatusCode::PRECONDITION_REQUIRED,
+                        "approval_required",
+                        "create a cost approval first",
+                    ));
                 }
                 assert_approved(ctx, &approval_id, id, "city.cost.approve", &actor).await?;
             }
@@ -2389,28 +3359,62 @@ async fn incidents_action(ctx: &Ctx<'_>, id: &str, action: &str) -> ApiResult<Re
             let mut patch = Map::new();
             patch.insert("ai_verification_status".into(), json!("verified"));
             patch.insert("ai_confidence_score".into(), json!(1));
-            patch.insert("ai_verification_reason".into(), json!("verified_by_city_operator"));
+            patch.insert(
+                "ai_verification_reason".into(),
+                json!("verified_by_city_operator"),
+            );
             patch.insert("ai_verified_at".into(), json!(now));
             let updated = update_incident(ctx, id, patch).await?;
             Ok(web::json_response(Value::Object(updated)))
         }
         "check-duplicates" | "merge-suggestions" => Ok(web::json_response(json!([]))),
         "merge" => {
-            let duplicate_ids: Vec<String> = body.get("duplicate_ids").and_then(Value::as_array).cloned().unwrap_or_default().into_iter().filter_map(|value| value.as_str().map(str::to_string)).collect();
+            let duplicate_ids: Vec<String> = body
+                .get("duplicate_ids")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|value| value.as_str().map(str::to_string))
+                .collect();
             if duplicate_ids.is_empty() {
-                return Err(ApiError::bad_request("duplicate_ids_required", "duplicate_ids_required"));
+                return Err(ApiError::bad_request(
+                    "duplicate_ids_required",
+                    "duplicate_ids_required",
+                ));
             }
             for duplicate_id in &duplicate_ids {
                 if find_incident(ctx, duplicate_id).await?.is_some() {
                     let mut patch = Map::new();
                     patch.insert("status".into(), json!("closed"));
                     patch.insert("resolution_type".into(), json!("duplicate"));
-                    patch.insert("merged_into".into(), existing.get("id").cloned().unwrap_or(Value::Null));
-                    patch.insert("resolution_notes".into(), json!(web::string_field(&body, "merge_notes").unwrap_or_else(|| format!("Merged into {}", existing.get("incident_number").and_then(Value::as_str).unwrap_or(id)))));
+                    patch.insert(
+                        "merged_into".into(),
+                        existing.get("id").cloned().unwrap_or(Value::Null),
+                    );
+                    patch.insert(
+                        "resolution_notes".into(),
+                        json!(
+                            web::string_field(&body, "merge_notes").unwrap_or_else(|| format!(
+                                "Merged into {}",
+                                existing
+                                    .get("incident_number")
+                                    .and_then(Value::as_str)
+                                    .unwrap_or(id)
+                            ))
+                        ),
+                    );
                     let _ = update_incident(ctx, duplicate_id, patch).await;
                 }
             }
-            let mut merged: Vec<String> = existing.get("merged_reporter_ids").and_then(Value::as_array).cloned().unwrap_or_default().into_iter().filter_map(|value| value.as_str().map(str::to_string)).collect();
+            let mut merged: Vec<String> = existing
+                .get("merged_reporter_ids")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|value| value.as_str().map(str::to_string))
+                .collect();
             merged.extend(duplicate_ids);
             merged.sort();
             merged.dedup();
@@ -2422,13 +3426,34 @@ async fn incidents_action(ctx: &Ctx<'_>, id: &str, action: &str) -> ApiResult<Re
         "related" => {
             let opts = ctx.opts();
             let rows = tier2::list_all(ctx.client(), &opts, INCIDENTS, 5000).await?;
-            let asset_id = existing.get("asset_id").and_then(Value::as_str).unwrap_or("");
-            let merged: Vec<String> = existing.get("merged_reporter_ids").and_then(Value::as_array).cloned().unwrap_or_default().into_iter().filter_map(|value| value.as_str().map(str::to_string)).collect();
-            let related: Vec<Value> = rows.items.into_iter().map(|row| incident_view(&row)).filter(|row| {
-                row.get("id").and_then(Value::as_str) != existing.get("id").and_then(Value::as_str)
-                    && ((!asset_id.is_empty() && row.get("asset_id").and_then(Value::as_str) == Some(asset_id))
-                        || merged.iter().any(|id| row.get("id").and_then(Value::as_str) == Some(id)))
-            }).take(20).map(Value::Object).collect();
+            let asset_id = existing
+                .get("asset_id")
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            let merged: Vec<String> = existing
+                .get("merged_reporter_ids")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|value| value.as_str().map(str::to_string))
+                .collect();
+            let related: Vec<Value> = rows
+                .items
+                .into_iter()
+                .map(|row| incident_view(&row))
+                .filter(|row| {
+                    row.get("id").and_then(Value::as_str)
+                        != existing.get("id").and_then(Value::as_str)
+                        && ((!asset_id.is_empty()
+                            && row.get("asset_id").and_then(Value::as_str) == Some(asset_id))
+                            || merged
+                                .iter()
+                                .any(|id| row.get("id").and_then(Value::as_str) == Some(id)))
+                })
+                .take(20)
+                .map(Value::Object)
+                .collect();
             Ok(web::json_response(json!(related)))
         }
         _ => Err(ApiError::not_found("not_found", "not_found")),
@@ -2443,12 +3468,41 @@ async fn preventive_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
     let body = web::private_input(ctx.body);
     let asset_id = web::string_field(&body, "asset_id").unwrap_or_default();
     if asset_id.is_empty() {
-        return Err(ApiError::bad_request("asset_id_required", "asset_id_required"));
+        return Err(ApiError::bad_request(
+            "asset_id_required",
+            "asset_id_required",
+        ));
     }
+    // Reject instead of saturating the i64 cast: 1e30 used to reach
+    // `TimeDelta::days(i64::MAX)` and abort the process under panic=abort.
+    let cycle = match body.get("cycle_days") {
+        None | Some(Value::Null) => 180.0,
+        Some(value) => {
+            let parsed = value.as_f64().or_else(|| {
+                value
+                    .as_str()
+                    .and_then(|text| text.trim().parse::<f64>().ok())
+            });
+            match parsed {
+                Some(cycle)
+                    if cycle.is_finite()
+                        && (1.0..=3650.0).contains(&cycle)
+                        && cycle.fract() == 0.0 =>
+                {
+                    cycle
+                }
+                _ => {
+                    return Err(ApiError::bad_request(
+                        "cycle_days_out_of_range",
+                        "cycle_days must be an integer between 1 and 3650.",
+                    ))
+                }
+            }
+        }
+    };
     let Some(existing) = find_asset(ctx, &asset_id).await? else {
         return Err(ApiError::not_found("asset_not_found", "asset_not_found"));
     };
-    let cycle = web::number_field(&body, "cycle_days").unwrap_or(180.0);
     let now = Utc::now();
     let plan = json!({
         "id": uuid::Uuid::new_v4().to_string(),
@@ -2472,20 +3526,42 @@ async fn preventive_update(ctx: &Ctx<'_>, plan_id: &str) -> ApiResult<Response> 
     let body = web::private_input(ctx.body);
     let assets = all_assets(ctx).await?;
     let Some(asset) = assets.into_iter().find(|asset| {
-        asset.get("preventive_maintenance_plan").and_then(|value| value.get("id")).and_then(Value::as_str) == Some(plan_id)
+        asset
+            .get("preventive_maintenance_plan")
+            .and_then(|value| value.get("id"))
+            .and_then(Value::as_str)
+            == Some(plan_id)
     }) else {
-        return Err(ApiError::not_found("preventive_plan_not_found", "preventive_plan_not_found"));
+        return Err(ApiError::not_found(
+            "preventive_plan_not_found",
+            "preventive_plan_not_found",
+        ));
     };
-    let mut plan = asset.get("preventive_maintenance_plan").and_then(Value::as_object).cloned().unwrap_or_default();
+    let mut plan = asset
+        .get("preventive_maintenance_plan")
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
     for (key, value) in body {
         plan.insert(key, value);
     }
     plan.insert("id".into(), json!(plan_id));
-    plan.insert("asset_id".into(), asset.get("id").cloned().unwrap_or(Value::Null));
+    plan.insert(
+        "asset_id".into(),
+        asset.get("id").cloned().unwrap_or(Value::Null),
+    );
     plan.insert("updated_at".into(), json!(crate::now_iso()));
     let mut patch = Map::new();
-    patch.insert("preventive_maintenance_plan".into(), Value::Object(plan.clone()));
-    update_asset(ctx, asset.get("id").and_then(Value::as_str).unwrap_or(""), patch).await?;
+    patch.insert(
+        "preventive_maintenance_plan".into(),
+        Value::Object(plan.clone()),
+    );
+    update_asset(
+        ctx,
+        asset.get("id").and_then(Value::as_str).unwrap_or(""),
+        patch,
+    )
+    .await?;
     Ok(web::json_response(Value::Object(plan)))
 }
 
@@ -2497,32 +3573,104 @@ fn maintenance_scope(ctx: &Ctx<'_>, rows: Vec<Map<String, Value>>) -> Vec<Map<St
     let Some(principal) = ctx.principal() else {
         return Vec::new();
     };
-    if [auth::ROLE_ADMIN, auth::ROLE_MANAGER, auth::ROLE_VOLUNTEER].contains(&principal.role.as_str()) {
+    if [auth::ROLE_ADMIN, auth::ROLE_MANAGER, auth::ROLE_VOLUNTEER]
+        .contains(&principal.role.as_str())
+    {
         return rows;
     }
-    let identities: HashSet<String> = [principal.sub.to_ascii_lowercase(), principal.username.to_ascii_lowercase()].into_iter().collect();
+    let identities: HashSet<String> = [
+        principal.sub.to_ascii_lowercase(),
+        principal.username.to_ascii_lowercase(),
+    ]
+    .into_iter()
+    .collect();
     rows.into_iter()
         .filter(|row| {
-            let assigned = row.get("assigned_to").or_else(|| row.get("technician")).and_then(Value::as_str).unwrap_or("").to_ascii_lowercase();
+            let assigned = row
+                .get("assigned_to")
+                .or_else(|| row.get("technician"))
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_ascii_lowercase();
             identities.contains(&assigned)
         })
         .collect()
 }
 
+fn maintenance_row_allowed(ctx: &Ctx<'_>, row: &Map<String, Value>) -> bool {
+    let Some(principal) = ctx.principal() else {
+        return false;
+    };
+    if [auth::ROLE_ADMIN, auth::ROLE_MANAGER, auth::ROLE_VOLUNTEER]
+        .contains(&principal.role.as_str())
+    {
+        return true;
+    }
+    let identities: HashSet<String> = [
+        principal.sub.to_ascii_lowercase(),
+        principal.username.to_ascii_lowercase(),
+    ]
+    .into_iter()
+    .collect();
+    let assigned = row
+        .get("assigned_to")
+        .or_else(|| row.get("technician"))
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    identities.contains(&assigned)
+}
+
+fn maintenance_record_or_404(
+    ctx: &Ctx<'_>,
+    row: Map<String, Value>,
+) -> ApiResult<Map<String, Value>> {
+    if !maintenance_row_allowed(ctx, &row) {
+        return Err(ApiError::not_found(
+            "work_order_not_found",
+            "work_order_not_found",
+        ));
+    }
+    Ok(row)
+}
+
+async fn get_scoped_maintenance(ctx: &Ctx<'_>, id: &str) -> ApiResult<Map<String, Value>> {
+    let opts = ctx.opts();
+    let row = tier2::get(ctx.client(), &opts, MAINTENANCE, id).await?;
+    maintenance_record_or_404(ctx, row)
+}
+
 async fn maintenance_upcoming(ctx: &Ctx<'_>) -> ApiResult<Response> {
-    let days = ctx.query.get("days").and_then(|value| value.parse::<i64>().ok()).unwrap_or(7).clamp(0, 30);
+    let days = ctx
+        .query
+        .get("days")
+        .and_then(|value| value.parse::<i64>().ok())
+        .unwrap_or(7)
+        .clamp(0, 30);
     let horizon = Utc::now().timestamp_millis() + days * 86_400_000;
     let opts = ctx.opts();
     let rows = tier2::list_all(ctx.client(), &opts, MAINTENANCE, 5000).await?;
     let rows = maintenance_scope(ctx, rows.items);
-    let values: Vec<Value> = rows.into_iter().filter(|row| {
-        let status = row.get("status").and_then(Value::as_str).unwrap_or("").to_ascii_lowercase();
-        if ["completed", "cancelled", "closed"].contains(&status.as_str()) {
-            return false;
-        }
-        let scheduled = row.get("scheduled_date").or_else(|| row.get("scheduledDate")).and_then(Value::as_str).and_then(compare_timestamp);
-        scheduled.map(|value| value <= horizon).unwrap_or(true)
-    }).map(Value::Object).collect();
+    let values: Vec<Value> = rows
+        .into_iter()
+        .filter(|row| {
+            let status = row
+                .get("status")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_ascii_lowercase();
+            if ["completed", "cancelled", "closed"].contains(&status.as_str()) {
+                return false;
+            }
+            let scheduled = row
+                .get("scheduled_date")
+                .or_else(|| row.get("scheduledDate"))
+                .and_then(Value::as_str)
+                .and_then(compare_timestamp);
+            scheduled.map(|value| value <= horizon).unwrap_or(true)
+        })
+        .map(Value::Object)
+        .collect();
     Ok(web::send_page(values, ctx.query, 100))
 }
 
@@ -2531,16 +3679,23 @@ async fn maintenance_asset(ctx: &Ctx<'_>, asset_id: &str) -> ApiResult<Response>
     let rows = tier2::list_all(ctx.client(), &opts, MAINTENANCE, 5000).await?;
     let values: Vec<Value> = maintenance_scope(ctx, rows.items)
         .into_iter()
-        .filter(|row| row.get("asset_id").or_else(|| row.get("assetId")).and_then(Value::as_str) == Some(asset_id))
+        .filter(|row| {
+            row.get("asset_id")
+                .or_else(|| row.get("assetId"))
+                .and_then(Value::as_str)
+                == Some(asset_id)
+        })
         .map(Value::Object)
         .collect();
     Ok(web::send_page(values, ctx.query, 100))
 }
 
 async fn maintenance_approval(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
-    let opts = ctx.opts();
-    let work_order = tier2::get(ctx.client(), &opts, MAINTENANCE, id).await?;
-    let actor = ctx.principal().map(|value| value.username.clone()).unwrap_or_else(|| "city-user".into());
+    let work_order = get_scoped_maintenance(ctx, id).await?;
+    let actor = ctx
+        .principal()
+        .map(|value| value.username.clone())
+        .unwrap_or_else(|| "city-user".into());
     let approval = create_approval(
         ctx,
         format!("Maintenance approval: {}", work_order.get("title").and_then(Value::as_str).unwrap_or(id)),
@@ -2551,10 +3706,13 @@ async fn maintenance_approval(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
         json!({ "priority": work_order.get("priority"), "cost": work_order.get("cost"), "asset_id": work_order.get("asset_id") }),
         &actor,
     ).await?;
-    Ok(web::accepted(json!({ "approval": approval, "hitl_required": true })))
+    Ok(web::accepted(
+        json!({ "approval": approval, "hitl_required": true }),
+    ))
 }
 
 async fn maintenance_action(ctx: &Ctx<'_>, id: &str, action: &str) -> ApiResult<Response> {
+    get_scoped_maintenance(ctx, id).await?;
     let body = web::private_input(ctx.body);
     let now = crate::now_iso();
     let mut patch = body;
@@ -2571,11 +3729,20 @@ async fn maintenance_action(ctx: &Ctx<'_>, id: &str, action: &str) -> ApiResult<
             patch.insert("status".into(), json!("cancelled"));
         }
         "approve" => {
-            let approval_id = web::string_field(&patch, "approval_id").or_else(|| web::string_field(&patch, "approvalId")).unwrap_or_default();
-            let actor = ctx.principal().map(|value| value.username.clone()).unwrap_or_else(|| "city-user".into());
+            let approval_id = web::string_field(&patch, "approval_id")
+                .or_else(|| web::string_field(&patch, "approvalId"))
+                .unwrap_or_default();
+            let actor = ctx
+                .principal()
+                .map(|value| value.username.clone())
+                .unwrap_or_else(|| "city-user".into());
             if ctx.config().hitl_required || !approval_id.is_empty() {
                 if approval_id.is_empty() {
-                    return Err(ApiError::new(StatusCode::PRECONDITION_REQUIRED, "approval_required", "create a maintenance approval first"));
+                    return Err(ApiError::new(
+                        StatusCode::PRECONDITION_REQUIRED,
+                        "approval_required",
+                        "create a maintenance approval first",
+                    ));
                 }
                 assert_approved(ctx, &approval_id, id, "maintenance.approve", &actor).await?;
                 patch.insert("approval_id".into(), json!(approval_id));
@@ -2606,12 +3773,22 @@ async fn maintenance_photos(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
     if values.is_empty() {
         return Err(ApiError::bad_request("photos_required", "photos_required"));
     }
+    let current = get_scoped_maintenance(ctx, id).await?;
     let opts = ctx.opts();
-    let current = tier2::get(ctx.client(), &opts, MAINTENANCE, id).await?;
-    let mut attachments = current.get("attachments").and_then(Value::as_array).cloned().unwrap_or_default();
+    let mut attachments = current
+        .get("attachments")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
     for value in values {
-        let entry = if value.is_string() { json!({ "file_url": value }) } else { value };
-        let attachment = attachment_from_body(ctx, entry.as_object().unwrap_or(&Map::new()), "photo", true).await?;
+        let entry = if value.is_string() {
+            json!({ "file_url": value })
+        } else {
+            value
+        };
+        let attachment =
+            attachment_from_body(ctx, entry.as_object().unwrap_or(&Map::new()), "photo", true)
+                .await?;
         attachments.push(Value::Object(attachment));
     }
     let mut patch = Map::new();
@@ -2628,20 +3805,36 @@ fn reading_value(row: &Map<String, Value>, metric: Option<&str>) -> Option<f64> 
     if let Some(metric) = metric {
         let readings = row.get("readings").and_then(Value::as_object);
         let measurements = row.get("measurements").and_then(Value::as_object);
-        return row.get(metric).and_then(Value::as_f64)
-            .or_else(|| readings.and_then(|value| value.get(metric)).and_then(Value::as_f64))
-            .or_else(|| measurements.and_then(|value| value.get(metric)).and_then(Value::as_f64));
+        return row
+            .get(metric)
+            .and_then(Value::as_f64)
+            .or_else(|| {
+                readings
+                    .and_then(|value| value.get(metric))
+                    .and_then(Value::as_f64)
+            })
+            .or_else(|| {
+                measurements
+                    .and_then(|value| value.get(metric))
+                    .and_then(Value::as_f64)
+            });
     }
     for key in ["value", "reading", "measurement"] {
         if let Some(value) = row.get(key).and_then(Value::as_f64) {
             return Some(value);
         }
     }
-    row.get("readings").and_then(Value::as_object).and_then(|readings| readings.values().find_map(Value::as_f64))
+    row.get("readings")
+        .and_then(Value::as_object)
+        .and_then(|readings| readings.values().find_map(Value::as_f64))
 }
 
 fn sensor_status(sensor: &Map<String, Value>, latest: Option<&Map<String, Value>>) -> String {
-    let declared = sensor.get("status").and_then(Value::as_str).unwrap_or("").to_ascii_lowercase();
+    let declared = sensor
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_ascii_lowercase();
     if ["inactive", "decommissioned", "maintenance"].contains(&declared.as_str()) {
         return declared;
     }
@@ -2675,13 +3868,39 @@ async fn iot_sensor_delete(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
 }
 
 async fn iot_readings(ctx: &Ctx<'_>, sensor_id: &str, alias: bool) -> ApiResult<Response> {
-    let hours = ctx.query.get("hours").and_then(|value| value.parse::<i64>().ok()).unwrap_or(24).clamp(0, 24 * 365);
-    let limit = ctx.query.get("limit").and_then(|value| value.parse::<i64>().ok()).unwrap_or(100).clamp(1, 500);
-    let offset = ctx.query.get("offset").or_else(|| ctx.query.get("skip")).and_then(|value| value.parse::<i64>().ok()).unwrap_or(0).max(0);
-    let since = (Utc::now() - chrono::Duration::hours(hours)).to_rfc3339_opts(SecondsFormat::Millis, true);
+    let hours = ctx
+        .query
+        .get("hours")
+        .and_then(|value| value.parse::<i64>().ok())
+        .unwrap_or(24)
+        .clamp(0, 24 * 365);
+    let limit = ctx
+        .query
+        .get("limit")
+        .and_then(|value| value.parse::<i64>().ok())
+        .unwrap_or(100)
+        .clamp(1, 500);
+    let offset = ctx
+        .query
+        .get("offset")
+        .or_else(|| ctx.query.get("skip"))
+        .and_then(|value| value.parse::<i64>().ok())
+        .unwrap_or(0)
+        .max(0);
+    let since =
+        (Utc::now() - chrono::Duration::hours(hours)).to_rfc3339_opts(SecondsFormat::Millis, true);
     let opts = ctx.opts();
     let filter = json!({ "sensor_id": sensor_id, "timestamp": { "gte": since } });
-    let (items, total) = tier2::query_records(ctx.client(), &opts, tier2::SENSOR_DATA, filter, limit, offset, Some("timestamp:desc".into())).await?;
+    let (items, total) = tier2::query_records(
+        ctx.client(),
+        &opts,
+        tier2::SENSOR_DATA,
+        filter,
+        limit,
+        offset,
+        Some("timestamp:desc".into()),
+    )
+    .await?;
     let values = values_from_rows(items);
     let mut response = if alias {
         web::json_response(json!({ "readings": values, "total": total, "sensor_id": sensor_id }))
@@ -2704,12 +3923,19 @@ async fn iot_write(ctx: &Ctx<'_>, sensor_id: &str) -> ApiResult<Response> {
 }
 
 async fn iot_batch(ctx: &Ctx<'_>) -> ApiResult<Response> {
-    let values: Vec<Value> = ctx.body.get("readings").and_then(Value::as_array).cloned().unwrap_or_default();
+    let values: Vec<Value> = ctx
+        .body
+        .get("readings")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
     let opts = ctx.opts();
     let mut created = Vec::new();
     for row in values {
         if let Some(map) = row.as_object() {
-            created.push(Value::Object(tier2::create(ctx.client(), &opts, tier2::SENSOR_DATA, map.clone(), None).await?));
+            created.push(Value::Object(
+                tier2::create(ctx.client(), &opts, tier2::SENSOR_DATA, map.clone(), None).await?,
+            ));
         }
     }
     Ok(web::created(Value::Array(created)))
@@ -2718,22 +3944,55 @@ async fn iot_batch(ctx: &Ctx<'_>) -> ApiResult<Response> {
 async fn iot_status(ctx: &Ctx<'_>, sensor_id: &str) -> ApiResult<Response> {
     let opts = ctx.opts();
     let sensor = tier2::get(ctx.client(), &opts, tier2::SENSORS, sensor_id).await?;
-    let (items, _) = tier2::query_records(ctx.client(), &opts, tier2::SENSOR_DATA, json!({ "sensor_id": sensor_id }), 1, 0, Some("timestamp:desc".into())).await?;
+    let (items, _) = tier2::query_records(
+        ctx.client(),
+        &opts,
+        tier2::SENSOR_DATA,
+        json!({ "sensor_id": sensor_id }),
+        1,
+        0,
+        Some("timestamp:desc".into()),
+    )
+    .await?;
     let latest = items.first();
     let mut view = sensor;
     view.insert("status".into(), json!(sensor_status(&view, latest)));
-    view.insert("last_reading_at".into(), latest.and_then(|row| row.get("timestamp")).cloned().unwrap_or(Value::Null));
+    view.insert(
+        "last_reading_at".into(),
+        latest
+            .and_then(|row| row.get("timestamp"))
+            .cloned()
+            .unwrap_or(Value::Null),
+    );
     Ok(web::json_response(Value::Object(view)))
 }
 
 async fn iot_statistics(ctx: &Ctx<'_>, sensor_id: &str) -> ApiResult<Response> {
     let metric = ctx.query.get("metric").map(String::as_str);
-    let hours = ctx.query.get("hours").and_then(|value| value.parse::<i64>().ok()).unwrap_or(24).clamp(0, 24 * 365);
-    let since = (Utc::now() - chrono::Duration::hours(hours)).to_rfc3339_opts(SecondsFormat::Millis, true);
+    let hours = ctx
+        .query
+        .get("hours")
+        .and_then(|value| value.parse::<i64>().ok())
+        .unwrap_or(24)
+        .clamp(0, 24 * 365);
+    let since =
+        (Utc::now() - chrono::Duration::hours(hours)).to_rfc3339_opts(SecondsFormat::Millis, true);
     let opts = ctx.opts();
     let filter = json!({ "sensor_id": sensor_id, "timestamp": { "gte": since } });
-    let (readings, _) = tier2::query_records(ctx.client(), &opts, tier2::SENSOR_DATA, filter, 1000, 0, Some("timestamp:desc".into())).await?;
-    let values: Vec<f64> = readings.iter().filter_map(|row| reading_value(row, metric)).collect();
+    let (readings, _) = tier2::query_records(
+        ctx.client(),
+        &opts,
+        tier2::SENSOR_DATA,
+        filter,
+        1000,
+        0,
+        Some("timestamp:desc".into()),
+    )
+    .await?;
+    let values: Vec<f64> = readings
+        .iter()
+        .filter_map(|row| reading_value(row, metric))
+        .collect();
     let sensor = tier2::get(ctx.client(), &opts, tier2::SENSORS, sensor_id).await?;
     let sum: f64 = values.iter().sum();
     Ok(web::json_response(json!({
@@ -2753,30 +4012,82 @@ async fn iot_statistics(ctx: &Ctx<'_>, sensor_id: &str) -> ApiResult<Response> {
 }
 
 async fn iot_asset(ctx: &Ctx<'_>, asset_id: &str) -> ApiResult<Response> {
-    let hours = ctx.query.get("hours").and_then(|value| value.parse::<i64>().ok()).unwrap_or(24).clamp(0, 24 * 365);
+    let hours = ctx
+        .query
+        .get("hours")
+        .and_then(|value| value.parse::<i64>().ok())
+        .unwrap_or(24)
+        .clamp(0, 24 * 365);
     let opts = ctx.opts();
-    let (sensors, _) = tier2::query_records(ctx.client(), &opts, tier2::SENSORS, json!({ "asset_id": asset_id }), 500, 0, None).await?;
-    let sensor_ids: Vec<String> = sensors.iter().filter_map(|sensor| sensor.get("id").and_then(Value::as_str).map(str::to_string)).collect();
-    let since = (Utc::now() - chrono::Duration::hours(hours)).to_rfc3339_opts(SecondsFormat::Millis, true);
+    let (sensors, _) = tier2::query_records(
+        ctx.client(),
+        &opts,
+        tier2::SENSORS,
+        json!({ "asset_id": asset_id }),
+        500,
+        0,
+        None,
+    )
+    .await?;
+    let sensor_ids: Vec<String> = sensors
+        .iter()
+        .filter_map(|sensor| sensor.get("id").and_then(Value::as_str).map(str::to_string))
+        .collect();
+    let since =
+        (Utc::now() - chrono::Duration::hours(hours)).to_rfc3339_opts(SecondsFormat::Millis, true);
     let mut readings = Vec::new();
     let mut total_readings = 0;
     if !sensor_ids.is_empty() {
         let filter = json!({ "sensor_id": { "in": sensor_ids }, "timestamp": { "gte": since } });
-        let (items, total) = tier2::query_records(ctx.client(), &opts, tier2::SENSOR_DATA, filter, 500, 0, Some("timestamp:desc".into())).await?;
+        let (items, total) = tier2::query_records(
+            ctx.client(),
+            &opts,
+            tier2::SENSOR_DATA,
+            filter,
+            500,
+            0,
+            Some("timestamp:desc".into()),
+        )
+        .await?;
         readings = items;
         total_readings = total;
     }
-    let (alerts, _) = tier2::query_records(ctx.client(), &opts, tier2::ALERTS, json!({ "asset_id": asset_id }), 500, 0, None).await?;
-    let active_alerts: Vec<Map<String, Value>> = alerts.into_iter().filter(|alert| {
-        !["resolved", "dismissed", "closed"].contains(&alert.get("status").and_then(Value::as_str).unwrap_or("").to_ascii_lowercase().as_str())
-    }).collect();
+    let (alerts, _) = tier2::query_records(
+        ctx.client(),
+        &opts,
+        tier2::ALERTS,
+        json!({ "asset_id": asset_id }),
+        500,
+        0,
+        None,
+    )
+    .await?;
+    let active_alerts: Vec<Map<String, Value>> = alerts
+        .into_iter()
+        .filter(|alert| {
+            !["resolved", "dismissed", "closed"].contains(
+                &alert
+                    .get("status")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_ascii_lowercase()
+                    .as_str(),
+            )
+        })
+        .collect();
     let active_alert_count = active_alerts.len();
-    let sensors_view: Vec<Value> = sensors.iter().map(|sensor| {
-        let latest = readings.iter().find(|reading| reading.get("sensor_id").and_then(Value::as_str) == sensor.get("id").and_then(Value::as_str));
-        let mut view = sensor.clone();
-        view.insert("status".into(), json!(sensor_status(sensor, latest)));
-        Value::Object(view)
-    }).collect();
+    let sensors_view: Vec<Value> = sensors
+        .iter()
+        .map(|sensor| {
+            let latest = readings.iter().find(|reading| {
+                reading.get("sensor_id").and_then(Value::as_str)
+                    == sensor.get("id").and_then(Value::as_str)
+            });
+            let mut view = sensor.clone();
+            view.insert("status".into(), json!(sensor_status(sensor, latest)));
+            Value::Object(view)
+        })
+        .collect();
     Ok(web::json_response(json!({
         "asset_id": asset_id,
         "asset": {
@@ -2805,17 +4116,33 @@ async fn alerts_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
     let opts = ctx.opts();
     let body = web::private_input(ctx.body);
     let created = tier2::create(ctx.client(), &opts, tier2::ALERTS, body, None).await?;
-    let severity = created.get("severity").and_then(Value::as_str).unwrap_or("").to_ascii_lowercase();
+    let severity = created
+        .get("severity")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_ascii_lowercase();
     if ["critical", "high"].contains(&severity.as_str()) {
         let _ = notify_operators(
             ctx,
             "alert_raised",
-            format!("Alert: {}", created.get("title").and_then(Value::as_str).unwrap_or("")),
-            created.get("description").and_then(Value::as_str).unwrap_or("").to_string(),
-            if severity == "critical" { "critical" } else { "warning" },
+            format!(
+                "Alert: {}",
+                created.get("title").and_then(Value::as_str).unwrap_or("")
+            ),
+            created
+                .get("description")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string(),
+            if severity == "critical" {
+                "critical"
+            } else {
+                "warning"
+            },
             "alert",
             created.get("id").and_then(Value::as_str).unwrap_or(""),
-        ).await;
+        )
+        .await;
     }
     Ok(web::created(Value::Object(created)))
 }
@@ -2832,19 +4159,38 @@ async fn alerts_ack(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
         alert.insert(key.clone(), value.clone());
     }
     if domain::alerts::should_create_maintenance(&alert) {
-        let maintenance_id = format!("alert-{}", id);
-        let existing = tier2::list_all(ctx.client(), &opts, MAINTENANCE, 5000).await?
+        let existing = tier2::list_all(ctx.client(), &opts, MAINTENANCE, 5000)
+            .await?
             .items
             .into_iter()
             .find(|row| row.get("source_alert_id").and_then(Value::as_str) == Some(id));
-        if existing.is_none() {
-            let order = domain::alerts::maintenance_from_alert(&alert, None);
-            let _ = tier2::create(ctx.client(), &opts, MAINTENANCE, order, Some(&maintenance_id)).await;
+        // Only link an id that actually exists. A failed work-order create must
+        // surface instead of silently storing a dangling reference.
+        let maintenance_id = match existing {
+            Some(row) => row
+                .get("id")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string(),
+            None => {
+                let candidate = format!("alert-{}", id);
+                let order = domain::alerts::maintenance_from_alert(&alert, None);
+                let created =
+                    tier2::create(ctx.client(), &opts, MAINTENANCE, order, Some(&candidate))
+                        .await?;
+                created
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .unwrap_or(&candidate)
+                    .to_string()
+            }
+        };
+        if !maintenance_id.is_empty() {
+            let mut patch = Map::new();
+            patch.insert("maintenance_id".into(), json!(maintenance_id));
+            patch.insert("maintenance_created_at".into(), json!(crate::now_iso()));
+            updated = tier2::update(ctx.client(), &opts, tier2::ALERTS, id, patch, None).await?;
         }
-        let mut patch = Map::new();
-        patch.insert("maintenance_id".into(), json!(maintenance_id));
-        patch.insert("maintenance_created_at".into(), json!(crate::now_iso()));
-        updated = tier2::update(ctx.client(), &opts, tier2::ALERTS, id, patch, None).await?;
     }
     Ok(web::json_response(Value::Object(updated)))
 }
@@ -2855,7 +4201,14 @@ async fn alerts_action(ctx: &Ctx<'_>, id: &str, action: &str) -> ApiResult<Respo
     }
     let opts = ctx.opts();
     let mut patch = web::private_input(ctx.body);
-    patch.insert("status".into(), json!(if action == "resolve" { "resolved" } else { "dismissed" }));
+    patch.insert(
+        "status".into(),
+        json!(if action == "resolve" {
+            "resolved"
+        } else {
+            "dismissed"
+        }),
+    );
     patch.insert(format!("{action}d_at"), json!(crate::now_iso()));
     let updated = tier2::update(ctx.client(), &opts, tier2::ALERTS, id, patch, None).await?;
     Ok(web::json_response(Value::Object(updated)))
@@ -2873,7 +4226,11 @@ async fn budget_action(ctx: &Ctx<'_>, id: &str, action: &str) -> ApiResult<Respo
     let mut patch = Map::new();
     patch.insert(
         "status".into(),
-        json!(if action == "submit" { "submitted" } else { "approved" }),
+        json!(if action == "submit" {
+            "submitted"
+        } else {
+            "approved"
+        }),
     );
     let updated = tier2::update(ctx.client(), &opts, tier2::BUDGETS, id, patch, None).await?;
     Ok(web::json_response(Value::Object(updated)))
@@ -2882,7 +4239,9 @@ async fn budget_action(ctx: &Ctx<'_>, id: &str, action: &str) -> ApiResult<Respo
 async fn budget_transactions(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
     let opts = ctx.opts();
     let rows = tier2::list_all(ctx.client(), &opts, tier2::TRANSACTIONS, 5000).await?;
-    let values: Vec<Value> = rows.items.into_iter()
+    let values: Vec<Value> = rows
+        .items
+        .into_iter()
         .filter(|row| row.get("budget_id").and_then(Value::as_str) == Some(id))
         .map(Value::Object)
         .collect();
@@ -2900,33 +4259,61 @@ async fn budget_transaction_create(ctx: &Ctx<'_>, id: &str) -> ApiResult<Respons
 async fn budget_transaction_approval(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
     let opts = ctx.opts();
     let transaction = tier2::get(ctx.client(), &opts, tier2::TRANSACTIONS, id).await?;
-    let actor = ctx.principal().map(|value| value.username.clone()).unwrap_or_else(|| "city-user".into());
+    let actor = ctx
+        .principal()
+        .map(|value| value.username.clone())
+        .unwrap_or_else(|| "city-user".into());
     let approval = create_approval(
         ctx,
-        format!("Budget transaction approval: {}", transaction.get("description").and_then(Value::as_str).unwrap_or(id)),
+        format!(
+            "Budget transaction approval: {}",
+            transaction
+                .get("description")
+                .and_then(Value::as_str)
+                .unwrap_or(id)
+        ),
         "city.budget",
         "budget.transaction.approve",
         "budget_transaction",
         id,
         json!({ "amount": transaction.get("amount"), "budget_id": transaction.get("budget_id") }),
         &actor,
-    ).await?;
-    Ok(web::accepted(json!({ "approval": approval, "hitl_required": true })))
+    )
+    .await?;
+    Ok(web::accepted(
+        json!({ "approval": approval, "hitl_required": true }),
+    ))
 }
 
 async fn budget_transaction_approve(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
     let body = web::private_input(ctx.body);
-    let approval_id = web::string_field(&body, "approval_id").or_else(|| web::string_field(&body, "approvalId")).unwrap_or_default();
-    let actor = ctx.principal().map(|value| value.username.clone()).unwrap_or_else(|| "city-user".into());
+    let approval_id = web::string_field(&body, "approval_id")
+        .or_else(|| web::string_field(&body, "approvalId"))
+        .unwrap_or_default();
+    let actor = ctx
+        .principal()
+        .map(|value| value.username.clone())
+        .unwrap_or_else(|| "city-user".into());
     let mut patch = Map::new();
     if ctx.config().hitl_required || !approval_id.is_empty() {
         if approval_id.is_empty() {
-            return Err(ApiError::new(StatusCode::PRECONDITION_REQUIRED, "approval_required", "create a transaction approval first"));
+            return Err(ApiError::new(
+                StatusCode::PRECONDITION_REQUIRED,
+                "approval_required",
+                "create a transaction approval first",
+            ));
         }
-        let approval = assert_approved(ctx, &approval_id, id, "budget.transaction.approve", &actor).await?;
+        let approval =
+            assert_approved(ctx, &approval_id, id, "budget.transaction.approve", &actor).await?;
         patch.insert("approval_id".into(), json!(approval_id));
         patch.insert("approved_by".into(), json!(actor));
-        patch.insert("approval_roles".into(), approval.get("approverRoles").cloned().unwrap_or(Value::Null));
+        patch.insert(
+            "approval_roles".into(),
+            approval
+                .get("approverRoles")
+                .cloned()
+                .unwrap_or(Value::Null),
+        );
     }
     patch.insert("status".into(), json!("approved"));
     patch.insert("approved_at".into(), json!(crate::now_iso()));
@@ -2939,6 +4326,13 @@ async fn budget_transaction_approve(ctx: &Ctx<'_>, id: &str) -> ApiResult<Respon
 // Reports
 // ---------------------------------------------------------------------------
 
+fn report_code_for(id: &str) -> String {
+    format!(
+        "RPT-{}",
+        id.chars().take(8).collect::<String>().to_uppercase()
+    )
+}
+
 fn report_error(error: domain::reports::ReportError) -> ApiError {
     let status = error.status();
     ApiError::new(
@@ -2948,20 +4342,29 @@ fn report_error(error: domain::reports::ReportError) -> ApiError {
     )
 }
 
-async fn load_report_context(ctx: &Ctx<'_>, asset_id: Option<&str>) -> ApiResult<(domain::reports::ReportContext, Option<Map<String, Value>>)> {
+async fn load_report_context(
+    ctx: &Ctx<'_>,
+    asset_id: Option<&str>,
+) -> ApiResult<(domain::reports::ReportContext, Option<Map<String, Value>>)> {
     let opts = ctx.opts();
     let assets = all_assets(ctx).await?;
-    let incidents = tier2::list_all(ctx.client(), &opts, INCIDENTS, 5000).await?
+    let incidents = tier2::list_all(ctx.client(), &opts, INCIDENTS, 5000)
+        .await?
         .items
         .into_iter()
         .map(|row| incident_view(&row))
         .collect();
-    let maintenance = tier2::list_all(ctx.client(), &opts, MAINTENANCE, 5000).await?.items;
+    let maintenance = tier2::list_all(ctx.client(), &opts, MAINTENANCE, 5000)
+        .await?
+        .items;
     let asset = asset_id.and_then(|id| {
-        assets.iter().find(|asset| {
-            asset.get("id").and_then(Value::as_str) == Some(id)
-                || asset.get("asset_code").and_then(Value::as_str) == Some(id)
-        }).cloned()
+        assets
+            .iter()
+            .find(|asset| {
+                asset.get("id").and_then(Value::as_str) == Some(id)
+                    || asset.get("asset_code").and_then(Value::as_str) == Some(id)
+            })
+            .cloned()
     });
     Ok((
         domain::reports::ReportContext {
@@ -2974,10 +4377,22 @@ async fn load_report_context(ctx: &Ctx<'_>, asset_id: Option<&str>) -> ApiResult
     ))
 }
 
-async fn create_report(ctx: &Ctx<'_>, body: Map<String, Value>, asset_id: Option<&str>) -> ApiResult<Map<String, Value>> {
-    let report_type = domain::reports::normalize_report_type(body.get("report_type").or_else(|| body.get("type"))).map_err(report_error)?;
-    let format = domain::reports::normalize_report_format(body.get("format")).map_err(report_error)?;
-    let mut filters = body.get("filters").and_then(Value::as_object).cloned().unwrap_or_default();
+async fn create_report(
+    ctx: &Ctx<'_>,
+    body: Map<String, Value>,
+    asset_id: Option<&str>,
+) -> ApiResult<Map<String, Value>> {
+    let report_type = domain::reports::normalize_report_type(
+        body.get("report_type").or_else(|| body.get("type")),
+    )
+    .map_err(report_error)?;
+    let format =
+        domain::reports::normalize_report_format(body.get("format")).map_err(report_error)?;
+    let mut filters = body
+        .get("filters")
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
     if let Some(asset_id) = asset_id {
         filters.insert("asset_id".into(), json!(asset_id));
     }
@@ -2986,14 +4401,31 @@ async fn create_report(ctx: &Ctx<'_>, body: Map<String, Value>, asset_id: Option
         return Err(ApiError::not_found("asset_not_found", "asset_not_found"));
     }
     let artifact = domain::reports::generate_report(report_type, format, &context, &filters);
-    let id = body.get("id").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    let id = body
+        .get("id")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     let now = crate::now_iso();
     let mut record = Map::new();
     record.insert("id".into(), json!(id));
-    record.insert("report_code".into(), json!(body.get("report_code").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| format!("RPT-{}", &id[..id.len().min(8)].to_ascii_uppercase()))));
+    record.insert(
+        "report_code".into(),
+        json!(body
+            .get("report_code")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .unwrap_or_else(|| report_code_for(&id))),
+    );
     if let Some(asset) = &asset {
-        record.insert("asset_id".into(), asset.get("id").cloned().unwrap_or(Value::Null));
-        record.insert("asset_code".into(), asset.get("asset_code").cloned().unwrap_or(Value::Null));
+        record.insert(
+            "asset_id".into(),
+            asset.get("id").cloned().unwrap_or(Value::Null),
+        );
+        record.insert(
+            "asset_code".into(),
+            asset.get("asset_code").cloned().unwrap_or(Value::Null),
+        );
     }
     record.insert("report_type".into(), json!(report_type.as_str()));
     record.insert("type".into(), json!(report_type.as_str()));
@@ -3013,9 +4445,12 @@ async fn create_report(ctx: &Ctx<'_>, body: Map<String, Value>, asset_id: Option
     record.insert("file_url".into(), json!(url));
     record.insert("source".into(), json!("synapsecity"));
     let opts = ctx.opts();
-    let created = match tier2::create(ctx.client(), &opts, REPORTS, record.clone(), Some(&id)).await {
+    let created = match tier2::create(ctx.client(), &opts, REPORTS, record.clone(), Some(&id)).await
+    {
         Ok(row) => row,
-        Err(error) if error.status == StatusCode::CONFLICT || error.status == StatusCode::BAD_REQUEST => {
+        Err(error)
+            if error.status == StatusCode::CONFLICT || error.status == StatusCode::BAD_REQUEST =>
+        {
             tier2::update(ctx.client(), &opts, REPORTS, &id, record, None).await?
         }
         Err(error) => return Err(error),
@@ -3040,7 +4475,9 @@ async fn reports_list(ctx: &Ctx<'_>) -> ApiResult<Response> {
     let opts = ctx.opts();
     let rows = tier2::list_all(ctx.client(), &opts, REPORTS, 5000).await?;
     let filters = query_filters(ctx.query);
-    let values: Vec<Value> = rows.items.into_iter()
+    let values: Vec<Value> = rows
+        .items
+        .into_iter()
         .filter(|row| matches_filters(row, &filters))
         .map(|mut row| {
             row.remove("content");
@@ -3067,12 +4504,27 @@ async fn reports_generate(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
     let opts = ctx.opts();
     let current = tier2::get(ctx.client(), &opts, REPORTS, id).await?;
     let mut body = Map::new();
-    body.insert("report_type".into(), current.get("report_type").cloned().unwrap_or(Value::Null));
-    body.insert("format".into(), current.get("format").cloned().unwrap_or(Value::Null));
-    body.insert("filters".into(), current.get("filters").cloned().unwrap_or_else(|| json!({})));
+    body.insert(
+        "report_type".into(),
+        current.get("report_type").cloned().unwrap_or(Value::Null),
+    );
+    body.insert(
+        "format".into(),
+        current.get("format").cloned().unwrap_or(Value::Null),
+    );
+    body.insert(
+        "filters".into(),
+        current.get("filters").cloned().unwrap_or_else(|| json!({})),
+    );
     body.insert("id".into(), json!(id));
-    body.insert("report_code".into(), current.get("report_code").cloned().unwrap_or(Value::Null));
-    body.insert("asset_id".into(), current.get("asset_id").cloned().unwrap_or(Value::Null));
+    body.insert(
+        "report_code".into(),
+        current.get("report_code").cloned().unwrap_or(Value::Null),
+    );
+    body.insert(
+        "asset_id".into(),
+        current.get("asset_id").cloned().unwrap_or(Value::Null),
+    );
     let report = create_report(ctx, body, current.get("asset_id").and_then(Value::as_str)).await?;
     Ok(web::json_response(Value::Object(report)))
 }
@@ -3080,18 +4532,44 @@ async fn reports_generate(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
 async fn reports_download(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
     let opts = ctx.opts();
     let report = tier2::get(ctx.client(), &opts, REPORTS, id).await?;
-    if report.get("status").and_then(Value::as_str) != Some("completed") || report.get("content").and_then(Value::as_str).is_none() {
-        return Err(ApiError::conflict("report_not_generated", "POST /v1/reports/:id/generate first."));
+    if report.get("status").and_then(Value::as_str) != Some("completed")
+        || report.get("content").and_then(Value::as_str).is_none()
+    {
+        return Err(ApiError::conflict(
+            "report_not_generated",
+            "POST /v1/reports/:id/generate first.",
+        ));
     }
-    let format = report.get("format").and_then(Value::as_str).unwrap_or("csv");
+    let format = report
+        .get("format")
+        .and_then(Value::as_str)
+        .unwrap_or("csv");
     let filename = format!(
         "{}.{}",
-        report.get("report_code").and_then(Value::as_str).unwrap_or(id).replace(|ch: char| !ch.is_ascii_alphanumeric() && !matches!(ch, '.' | '_' | '-'), "_"),
+        report
+            .get("report_code")
+            .and_then(Value::as_str)
+            .unwrap_or(id)
+            .replace(
+                |ch: char| !ch.is_ascii_alphanumeric() && !matches!(ch, '.' | '_' | '-'),
+                "_"
+            ),
         if format == "json" { "json" } else { "csv" }
     );
-    let content = report.get("content").and_then(Value::as_str).unwrap_or("").to_string();
+    let content = report
+        .get("content")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
     let mut response = web::text_response(
-        report.get("content_type").and_then(Value::as_str).unwrap_or(if format == "json" { "application/json; charset=utf-8" } else { "text/csv; charset=utf-8" }),
+        report
+            .get("content_type")
+            .and_then(Value::as_str)
+            .unwrap_or(if format == "json" {
+                "application/json; charset=utf-8"
+            } else {
+                "text/csv; charset=utf-8"
+            }),
         content,
     );
     if let Ok(value) = HeaderValue::from_str(&format!("attachment; filename=\"{filename}\"")) {
@@ -3123,30 +4601,69 @@ fn notification_severity(value: Option<&str>) -> domain::notifications::Notifica
 
 async fn push_notification(ctx: &Ctx<'_>, input: Value) -> ApiResult<Option<Map<String, Value>>> {
     let object = input.as_object().cloned().unwrap_or_default();
-    let dedupe = object.get("dedupe_key").and_then(Value::as_str).map(str::to_string);
+    let dedupe = object
+        .get("dedupe_key")
+        .and_then(Value::as_str)
+        .map(str::to_string);
     let opts = ctx.opts();
     if let Some(dedupe) = &dedupe {
         let rows = tier2::list_all(ctx.client(), &opts, NOTIFICATIONS, 2000).await?;
-        if rows.items.iter().any(|row| row.get("dedupe_key").and_then(Value::as_str) == Some(dedupe)) {
+        if rows
+            .items
+            .iter()
+            .any(|row| row.get("dedupe_key").and_then(Value::as_str) == Some(dedupe))
+        {
             return Ok(None);
         }
     }
     let notification_input = domain::notifications::NotificationInput {
-        user_id: object.get("user_id").and_then(Value::as_str).unwrap_or("").to_string(),
-        notification_type: notification_type(object.get("type").and_then(Value::as_str).unwrap_or("system")),
-        title: object.get("title").and_then(Value::as_str).unwrap_or("").to_string(),
-        message: object.get("message").and_then(Value::as_str).unwrap_or("").to_string(),
-        severity: Some(notification_severity(object.get("severity").and_then(Value::as_str))),
-        link: object.get("link").and_then(Value::as_str).map(str::to_string),
-        entity_type: object.get("entity_type").and_then(Value::as_str).map(str::to_string),
-        entity_id: object.get("entity_id").and_then(Value::as_str).map(str::to_string),
+        user_id: object
+            .get("user_id")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string(),
+        notification_type: notification_type(
+            object
+                .get("type")
+                .and_then(Value::as_str)
+                .unwrap_or("system"),
+        ),
+        title: object
+            .get("title")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string(),
+        message: object
+            .get("message")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string(),
+        severity: Some(notification_severity(
+            object.get("severity").and_then(Value::as_str),
+        )),
+        link: object
+            .get("link")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        entity_type: object
+            .get("entity_type")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        entity_id: object
+            .get("entity_id")
+            .and_then(Value::as_str)
+            .map(str::to_string),
         dedupe_key: dedupe.clone(),
         metadata: object.get("metadata").and_then(Value::as_object).cloned(),
         recipient: None,
     };
     let record = domain::notifications::build_notification(&notification_input, None, None)
         .map_err(|error| ApiError::bad_request(error.code(), error.code()))?;
-    let id = record.get("id").and_then(Value::as_str).unwrap_or("").to_string();
+    let id = record
+        .get("id")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
     let created = tier2::create(ctx.client(), &opts, NOTIFICATIONS, record, Some(&id)).await?;
     Ok(Some(created))
 }
@@ -3166,27 +4683,38 @@ async fn notify_operators(
         if !["admin", "manager"].contains(&user.get("role").and_then(Value::as_str).unwrap_or("")) {
             continue;
         }
-        let user_id = user.get("id").or_else(|| user.get("username")).and_then(Value::as_str).unwrap_or("");
+        let user_id = user
+            .get("id")
+            .or_else(|| user.get("username"))
+            .and_then(Value::as_str)
+            .unwrap_or("");
         if user_id.is_empty() {
             continue;
         }
-        let _ = push_notification(ctx, json!({
-            "user_id": user_id,
-            "type": notification_type_value,
-            "title": title,
-            "message": message,
-            "severity": severity,
-            "link": format!("/admin/alerts/{entity_id}"),
-            "entity_type": entity_type,
-            "entity_id": entity_id,
-            "dedupe_key": format!("{notification_type_value}:{entity_id}:{user_id}"),
-        })).await;
+        let _ = push_notification(
+            ctx,
+            json!({
+                "user_id": user_id,
+                "type": notification_type_value,
+                "title": title,
+                "message": message,
+                "severity": severity,
+                "link": format!("/admin/alerts/{entity_id}"),
+                "entity_type": entity_type,
+                "entity_id": entity_id,
+                "dedupe_key": format!("{notification_type_value}:{entity_id}:{user_id}"),
+            }),
+        )
+        .await;
     }
     Ok(())
 }
 
 fn is_own_notification(row: &Map<String, Value>, principal: &SessionPrincipal) -> bool {
-    let identities = [principal.sub.to_ascii_lowercase(), principal.username.to_ascii_lowercase()];
+    let identities = [
+        principal.sub.to_ascii_lowercase(),
+        principal.username.to_ascii_lowercase(),
+    ];
     row.get("user_id")
         .and_then(Value::as_str)
         .map(|value| identities.contains(&value.to_ascii_lowercase()))
@@ -3197,19 +4725,36 @@ async fn notifications_list(ctx: &Ctx<'_>) -> ApiResult<Response> {
     let Some(principal) = ctx.principal() else {
         return Err(ApiError::unauthorized("authentication_required"));
     };
-    let all = ctx.query.get("all").map(|value| value == "true").unwrap_or(false) && principal.role == auth::ROLE_ADMIN;
+    let all = ctx
+        .query
+        .get("all")
+        .map(|value| value == "true")
+        .unwrap_or(false)
+        && principal.role == auth::ROLE_ADMIN;
     let opts = ctx.opts();
     let rows = tier2::list_all(ctx.client(), &opts, NOTIFICATIONS, 5000).await?;
-    let mut values: Vec<Value> = rows.items.into_iter()
+    let mut values: Vec<Value> = rows
+        .items
+        .into_iter()
         .filter(|row| all || is_own_notification(row, principal))
-        .filter(|row| ctx.query.get("unread_only").map(|value| value != "true").unwrap_or(true) || (row.get("read").and_then(Value::as_bool) != Some(true) && row.get("read_at").is_none()))
+        .filter(|row| {
+            ctx.query
+                .get("unread_only")
+                .map(|value| value != "true")
+                .unwrap_or(true)
+                || (row.get("read").and_then(Value::as_bool) != Some(true)
+                    && row.get("read_at").is_none())
+        })
         .collect::<Vec<_>>()
         .into_iter()
         .map(Value::Object)
         .collect();
     values.sort_by(|left, right| {
         let left = left.get("created_at").and_then(Value::as_str).unwrap_or("");
-        let right = right.get("created_at").and_then(Value::as_str).unwrap_or("");
+        let right = right
+            .get("created_at")
+            .and_then(Value::as_str)
+            .unwrap_or("");
         right.cmp(left)
     });
     Ok(web::send_page(values, ctx.query, 100))
@@ -3219,12 +4764,21 @@ async fn notifications_unread(ctx: &Ctx<'_>) -> ApiResult<Response> {
     let Some(principal) = ctx.principal() else {
         return Err(ApiError::unauthorized("authentication_required"));
     };
-    let all = ctx.query.get("all").map(|value| value == "true").unwrap_or(false) && principal.role == auth::ROLE_ADMIN;
+    let all = ctx
+        .query
+        .get("all")
+        .map(|value| value == "true")
+        .unwrap_or(false)
+        && principal.role == auth::ROLE_ADMIN;
     let opts = ctx.opts();
     let rows = tier2::list_all(ctx.client(), &opts, NOTIFICATIONS, 5000).await?;
-    let unread = rows.items.iter()
+    let unread = rows
+        .items
+        .iter()
         .filter(|row| all || is_own_notification(row, principal))
-        .filter(|row| row.get("read").and_then(Value::as_bool) != Some(true) && row.get("read_at").is_none())
+        .filter(|row| {
+            row.get("read").and_then(Value::as_bool) != Some(true) && row.get("read_at").is_none()
+        })
         .count();
     Ok(web::json_response(json!({ "unread_count": unread })))
 }
@@ -3235,7 +4789,12 @@ async fn notifications_preferences_get(ctx: &Ctx<'_>) -> ApiResult<Response> {
     };
     let recipient = domain::notifications::preference_recipient(&principal.sub);
     let opts = ctx.opts();
-    let preference = ctx.client().notifications().get_preference(&recipient, &opts).await.map_err(ApiError::from)?;
+    let preference = ctx
+        .client()
+        .notifications()
+        .get_preference(&recipient, &opts)
+        .await
+        .map_err(ApiError::from)?;
     let mut value = preference;
     if let Some(object) = value.as_object_mut() {
         object.insert("recipient".into(), json!(recipient));
@@ -3249,14 +4808,25 @@ async fn notifications_preferences_put(ctx: &Ctx<'_>) -> ApiResult<Response> {
     };
     let recipient = domain::notifications::preference_recipient(&principal.sub);
     let body = web::private_input(ctx.body);
-    let channels: Option<Vec<String>> = body.get("channels").and_then(Value::as_array).map(|values| {
-        values.iter().filter_map(Value::as_str)
-            .filter(|value| ["email", "sms", "push", "webhook", "log"].contains(value))
-            .map(str::to_string).collect()
-    });
+    let channels: Option<Vec<String>> =
+        body.get("channels")
+            .and_then(Value::as_array)
+            .map(|values| {
+                values
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .filter(|value| ["email", "sms", "push", "webhook", "log"].contains(value))
+                    .map(str::to_string)
+                    .collect()
+            });
     let unsubscribed = web::bool_field(&body, "unsubscribed");
     let opts = ctx.opts();
-    let preference = ctx.client().notifications().set_preference(&recipient, channels, unsubscribed, &opts).await.map_err(ApiError::from)?;
+    let preference = ctx
+        .client()
+        .notifications()
+        .set_preference(&recipient, channels, unsubscribed, &opts)
+        .await
+        .map_err(ApiError::from)?;
     let mut value = preference;
     if let Some(object) = value.as_object_mut() {
         object.insert("recipient".into(), json!(recipient));
@@ -3269,7 +4839,10 @@ async fn notifications_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
     let created = push_notification(ctx, Value::Object(body)).await?;
     match created {
         Some(created) => Ok(web::created(Value::Object(created))),
-        None => Err(ApiError::conflict("notification_duplicate", "A notification with this dedupe_key already exists.")),
+        None => Err(ApiError::conflict(
+            "notification_duplicate",
+            "A notification with this dedupe_key already exists.",
+        )),
     }
 }
 
@@ -3280,13 +4853,24 @@ async fn notifications_delivery(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> 
     let opts = ctx.opts();
     let current = tier2::get(ctx.client(), &opts, NOTIFICATIONS, id).await?;
     if !is_own_notification(&current, principal) && principal.role != auth::ROLE_ADMIN {
-        return Err(ApiError::not_found("notification_not_found", "notification_not_found"));
+        return Err(ApiError::not_found(
+            "notification_not_found",
+            "notification_not_found",
+        ));
     }
-    let delivery = current.get("delivery").cloned().unwrap_or_else(|| json!({}));
+    let delivery = current
+        .get("delivery")
+        .cloned()
+        .unwrap_or_else(|| json!({}));
     let mut channels = delivery.as_object().cloned().unwrap_or_default();
     for (channel, receipt) in channels.clone() {
         if let Some(notification_id) = receipt.get("notification_id").and_then(Value::as_str) {
-            if let Ok(status) = ctx.client().notifications().get(notification_id, &opts).await {
+            if let Ok(status) = ctx
+                .client()
+                .notifications()
+                .get(notification_id, &opts)
+                .await
+            {
                 let mut merged = receipt;
                 for key in ["status", "attempts", "error", "deadReason"] {
                     if let Some(value) = status.get(key) {
@@ -3297,7 +4881,9 @@ async fn notifications_delivery(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> 
             }
         }
     }
-    Ok(web::json_response(json!({ "notification_id": id, "delivery": channels })))
+    Ok(web::json_response(
+        json!({ "notification_id": id, "delivery": channels }),
+    ))
 }
 
 async fn notifications_read(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
@@ -3307,7 +4893,10 @@ async fn notifications_read(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
     let opts = ctx.opts();
     let current = tier2::get(ctx.client(), &opts, NOTIFICATIONS, id).await?;
     if !is_own_notification(&current, principal) && principal.role != auth::ROLE_ADMIN {
-        return Err(ApiError::not_found("notification_not_found", "notification_not_found"));
+        return Err(ApiError::not_found(
+            "notification_not_found",
+            "notification_not_found",
+        ));
     }
     let mut patch = Map::new();
     patch.insert("read".into(), json!(true));
@@ -3320,7 +4909,12 @@ async fn notifications_mark_all(ctx: &Ctx<'_>) -> ApiResult<Response> {
     let Some(principal) = ctx.principal() else {
         return Err(ApiError::unauthorized("authentication_required"));
     };
-    let all = ctx.query.get("all").map(|value| value == "true").unwrap_or(false) && principal.role == auth::ROLE_ADMIN;
+    let all = ctx
+        .query
+        .get("all")
+        .map(|value| value == "true")
+        .unwrap_or(false)
+        && principal.role == auth::ROLE_ADMIN;
     let opts = ctx.opts();
     let rows = tier2::list_all(ctx.client(), &opts, NOTIFICATIONS, 5000).await?;
     let mut updated = 0;
@@ -3331,14 +4925,20 @@ async fn notifications_mark_all(ctx: &Ctx<'_>) -> ApiResult<Response> {
         if row.get("read").and_then(Value::as_bool) == Some(true) || row.get("read_at").is_some() {
             continue;
         }
-        let id = row.get("id").and_then(Value::as_str).unwrap_or("").to_string();
+        let id = row
+            .get("id")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
         let mut patch = Map::new();
         patch.insert("read".into(), json!(true));
         patch.insert("read_at".into(), json!(crate::now_iso()));
         let _ = tier2::update(ctx.client(), &opts, NOTIFICATIONS, &id, patch, None).await;
         updated += 1;
     }
-    Ok(web::json_response(json!({ "message": "all_notifications_marked_read", "updated": updated })))
+    Ok(web::json_response(
+        json!({ "message": "all_notifications_marked_read", "updated": updated }),
+    ))
 }
 
 // ---------------------------------------------------------------------------
@@ -3350,7 +4950,9 @@ async fn users_me(ctx: &Ctx<'_>) -> ApiResult<Response> {
         return Err(ApiError::unauthorized("authentication_required"));
     };
     let opts = ctx.opts();
-    let profile = tier2::get(ctx.client(), &opts, USERS, &principal.sub).await.ok();
+    let profile = tier2::get(ctx.client(), &opts, USERS, &principal.sub)
+        .await
+        .ok();
     let mut view = auth::user_json(&auth::user_from_principal(principal));
     if let Some(profile) = profile {
         if let Some(object) = view.as_object_mut() {
@@ -3371,13 +4973,22 @@ async fn users_me_update(ctx: &Ctx<'_>) -> ApiResult<Response> {
     };
     let body = web::private_input(ctx.body);
     if auth::contains_password(&body) {
-        return Err(ApiError::bad_request("password_is_managed_by_auth_shell", "password_is_managed_by_auth_shell"));
+        return Err(ApiError::bad_request(
+            "password_is_managed_by_auth_shell",
+            "password_is_managed_by_auth_shell",
+        ));
     }
     let mut patch = Map::new();
     patch.insert("id".into(), json!(principal.sub));
     patch.insert("username".into(), json!(principal.username));
-    patch.insert("email".into(), json!(web::string_field(&body, "email").unwrap_or_else(|| principal.email.clone())));
-    patch.insert("full_name".into(), json!(web::string_field(&body, "full_name").unwrap_or_else(|| principal.full_name.clone())));
+    patch.insert(
+        "email".into(),
+        json!(web::string_field(&body, "email").unwrap_or_else(|| principal.email.clone())),
+    );
+    patch.insert(
+        "full_name".into(),
+        json!(web::string_field(&body, "full_name").unwrap_or_else(|| principal.full_name.clone())),
+    );
     if let Some(phone) = web::string_field(&body, "phone") {
         patch.insert("phone".into(), json!(phone));
     }
@@ -3385,9 +4996,19 @@ async fn users_me_update(ctx: &Ctx<'_>) -> ApiResult<Response> {
     patch.insert("status".into(), json!("active"));
     patch.insert("updated_at".into(), json!(crate::now_iso()));
     let opts = ctx.opts();
-    let updated = match tier2::create(ctx.client(), &opts, USERS, patch.clone(), Some(&principal.sub)).await {
+    let updated = match tier2::create(
+        ctx.client(),
+        &opts,
+        USERS,
+        patch.clone(),
+        Some(&principal.sub),
+    )
+    .await
+    {
         Ok(row) => row,
-        Err(error) if error.status == StatusCode::CONFLICT || error.status == StatusCode::BAD_REQUEST => {
+        Err(error)
+            if error.status == StatusCode::CONFLICT || error.status == StatusCode::BAD_REQUEST =>
+        {
             tier2::update(ctx.client(), &opts, USERS, &principal.sub, patch, None).await?
         }
         Err(error) => return Err(error),
@@ -3407,7 +5028,9 @@ async fn users_me_update(ctx: &Ctx<'_>) -> ApiResult<Response> {
 async fn users_by_role(ctx: &Ctx<'_>, role: &str) -> ApiResult<Response> {
     let opts = ctx.opts();
     let rows = tier2::list_all(ctx.client(), &opts, USERS, 5000).await?;
-    let values: Vec<Value> = rows.items.into_iter()
+    let values: Vec<Value> = rows
+        .items
+        .into_iter()
         .filter(|row| row.get("role").and_then(Value::as_str) == Some(role))
         .map(|row| Value::Object(auth::sanitize_user(&row)))
         .collect();
@@ -3417,7 +5040,10 @@ async fn users_by_role(ctx: &Ctx<'_>, role: &str) -> ApiResult<Response> {
 async fn users_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
     let body = web::private_input(ctx.body);
     if auth::contains_password(&body) {
-        return Err(ApiError::bad_request("password_is_managed_by_auth_shell", "password_is_managed_by_auth_shell"));
+        return Err(ApiError::bad_request(
+            "password_is_managed_by_auth_shell",
+            "password_is_managed_by_auth_shell",
+        ));
     }
     let opts = ctx.opts();
     let row = tier2::create(ctx.client(), &opts, USERS, body, None).await?;
@@ -3433,11 +5059,16 @@ async fn users_get(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
 async fn users_update(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
     let body = web::private_input(ctx.body);
     if auth::contains_password(&body) {
-        return Err(ApiError::bad_request("password_is_managed_by_auth_shell", "password_is_managed_by_auth_shell"));
+        return Err(ApiError::bad_request(
+            "password_is_managed_by_auth_shell",
+            "password_is_managed_by_auth_shell",
+        ));
     }
     let opts = ctx.opts();
     let updated = tier2::update(ctx.client(), &opts, USERS, id, body, None).await?;
-    Ok(web::json_response(Value::Object(auth::sanitize_user(&updated))))
+    Ok(web::json_response(Value::Object(auth::sanitize_user(
+        &updated,
+    ))))
 }
 
 async fn users_delete(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
@@ -3458,15 +5089,24 @@ async fn geofence_test(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
     let opts = ctx.opts();
     let fence = tier2::get(ctx.client(), &opts, tier2::GEOFENCES, id).await?;
     let polygon = domain::geo::polygon_coordinates(
-        fence.get("polygon").or_else(|| fence.get("geometry")).or_else(|| fence.get("coordinates")).unwrap_or(&Value::Null),
+        fence
+            .get("polygon")
+            .or_else(|| fence.get("geometry"))
+            .or_else(|| fence.get("coordinates"))
+            .unwrap_or(&Value::Null),
     );
     let center = domain::geo::parse_point(&json!({
         "longitude": fence.get("center").and_then(|value| value.get("longitude")).cloned().unwrap_or_else(|| fence.get("center_longitude").cloned().unwrap_or(Value::Null)),
         "latitude": fence.get("center").and_then(|value| value.get("latitude")).cloned().unwrap_or_else(|| fence.get("center_latitude").cloned().unwrap_or(Value::Null)),
     }).as_object().cloned().unwrap_or_default());
-    let radius = fence.get("radius_meters").and_then(Value::as_f64).unwrap_or(0.0);
+    let radius = fence
+        .get("radius_meters")
+        .and_then(Value::as_f64)
+        .unwrap_or(0.0);
     let in_fence = |point: Option<domain::geo::Point>| -> bool {
-        let Some(point) = point else { return false; };
+        let Some(point) = point else {
+            return false;
+        };
         if let Some(polygon) = &polygon {
             return domain::geo::point_in_polygon(point, polygon);
         }
@@ -3476,9 +5116,18 @@ async fn geofence_test(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
         false
     };
     let assets = all_assets(ctx).await?;
-    let matched_assets: Vec<String> = assets.iter().filter(|asset| in_fence(point_of(asset))).filter_map(|asset| asset.get("id").and_then(Value::as_str).map(str::to_string)).collect();
+    let matched_assets: Vec<String> = assets
+        .iter()
+        .filter(|asset| in_fence(point_of(asset)))
+        .filter_map(|asset| asset.get("id").and_then(Value::as_str).map(str::to_string))
+        .collect();
     let sensors = tier2::list_all(ctx.client(), &opts, tier2::SENSORS, 5000).await?;
-    let matched_sensors: Vec<String> = sensors.items.iter().filter(|sensor| in_fence(point_of(sensor))).filter_map(|sensor| sensor.get("id").and_then(Value::as_str).map(str::to_string)).collect();
+    let matched_sensors: Vec<String> = sensors
+        .items
+        .iter()
+        .filter(|sensor| in_fence(point_of(sensor)))
+        .filter_map(|sensor| sensor.get("id").and_then(Value::as_str).map(str::to_string))
+        .collect();
     Ok(web::json_response(json!({
         "geofence_id": fence.get("id"),
         "matched_assets": matched_assets.len(),
@@ -3521,17 +5170,29 @@ async fn geo_nearby(ctx: &Ctx<'_>) -> ApiResult<Response> {
         "longitude": ctx.query.get("longitude").cloned().unwrap_or_default(),
         "latitude": ctx.query.get("latitude").cloned().unwrap_or_default(),
     });
-    let center = domain::geo::parse_point(query.as_object().unwrap_or(&Map::new())).ok_or_else(|| {
-        ApiError::bad_request("coordinates_required", "Send lng and lat.")
-    })?;
-    let radius = ctx.query.get("radius_meters").and_then(|value| value.parse::<f64>().ok()).unwrap_or(1000.0).clamp(0.0, 50_000.0);
-    let feature_type = ctx.query.get("feature_type").map(|value| value.to_ascii_lowercase());
-    let candidates = match spatial_asset_rows(ctx, json!({
-        "mode": "near",
-        "lat": center.latitude,
-        "lng": center.longitude,
-        "radiusMeters": radius,
-    })).await {
+    let center = domain::geo::parse_point(query.as_object().unwrap_or(&Map::new()))
+        .ok_or_else(|| ApiError::bad_request("coordinates_required", "Send lng and lat."))?;
+    let radius = ctx
+        .query
+        .get("radius_meters")
+        .and_then(|value| value.parse::<f64>().ok())
+        .unwrap_or(1000.0)
+        .clamp(0.0, 50_000.0);
+    let feature_type = ctx
+        .query
+        .get("feature_type")
+        .map(|value| value.to_ascii_lowercase());
+    let candidates = match spatial_asset_rows(
+        ctx,
+        json!({
+            "mode": "near",
+            "lat": center.latitude,
+            "lng": center.longitude,
+            "radiusMeters": radius,
+        }),
+    )
+    .await
+    {
         Some(rows) => rows,
         None => all_assets(ctx).await?,
     };
@@ -3544,7 +5205,13 @@ async fn geo_nearby(ctx: &Ctx<'_>) -> ApiResult<Response> {
                 return None;
             }
             if let Some(feature_type) = &feature_type {
-                if asset.get("feature_type").and_then(Value::as_str).unwrap_or("").to_ascii_lowercase() != *feature_type {
+                if asset
+                    .get("feature_type")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_ascii_lowercase()
+                    != *feature_type
+                {
                     return None;
                 }
             }
@@ -3554,23 +5221,55 @@ async fn geo_nearby(ctx: &Ctx<'_>) -> ApiResult<Response> {
         })
         .collect();
     rows.sort_by(|left, right| {
-        let left = left.get("distance_meters").and_then(Value::as_f64).unwrap_or(0.0);
-        let right = right.get("distance_meters").and_then(Value::as_f64).unwrap_or(0.0);
-        left.partial_cmp(&right).unwrap_or(std::cmp::Ordering::Equal)
+        let left = left
+            .get("distance_meters")
+            .and_then(Value::as_f64)
+            .unwrap_or(0.0);
+        let right = right
+            .get("distance_meters")
+            .and_then(Value::as_f64)
+            .unwrap_or(0.0);
+        left.partial_cmp(&right)
+            .unwrap_or(std::cmp::Ordering::Equal)
     });
     Ok(web::send_page(rows, ctx.query, 100))
 }
 
 async fn geo_bounds(ctx: &Ctx<'_>) -> ApiResult<Response> {
-    let min_lng = ctx.query.get("min_lng").and_then(|value| value.parse::<f64>().ok());
-    let min_lat = ctx.query.get("min_lat").and_then(|value| value.parse::<f64>().ok());
-    let max_lng = ctx.query.get("max_lng").and_then(|value| value.parse::<f64>().ok());
-    let max_lat = ctx.query.get("max_lat").and_then(|value| value.parse::<f64>().ok());
-    let (Some(min_lng), Some(min_lat), Some(max_lng), Some(max_lat)) = (min_lng, min_lat, max_lng, max_lat) else {
-        return Err(ApiError::bad_request("bounds_required", "Send min_lng, min_lat, max_lng, max_lat."));
+    let min_lng = ctx
+        .query
+        .get("min_lng")
+        .and_then(|value| value.parse::<f64>().ok());
+    let min_lat = ctx
+        .query
+        .get("min_lat")
+        .and_then(|value| value.parse::<f64>().ok());
+    let max_lng = ctx
+        .query
+        .get("max_lng")
+        .and_then(|value| value.parse::<f64>().ok());
+    let max_lat = ctx
+        .query
+        .get("max_lat")
+        .and_then(|value| value.parse::<f64>().ok());
+    let (Some(min_lng), Some(min_lat), Some(max_lng), Some(max_lat)) =
+        (min_lng, min_lat, max_lng, max_lat)
+    else {
+        return Err(ApiError::bad_request(
+            "bounds_required",
+            "Send min_lng, min_lat, max_lng, max_lat.",
+        ));
     };
-    let bbox = domain::geo::BoundingBox { min_lng, min_lat, max_lng, max_lat };
-    let feature_type = ctx.query.get("feature_type").map(|value| value.to_ascii_lowercase());
+    let bbox = domain::geo::BoundingBox {
+        min_lng,
+        min_lat,
+        max_lng,
+        max_lat,
+    };
+    let feature_type = ctx
+        .query
+        .get("feature_type")
+        .map(|value| value.to_ascii_lowercase());
     let candidates = match spatial_asset_rows(ctx, json!({
         "mode": "bbox",
         "bbox": [min_lng.min(max_lng), min_lat.min(max_lat), min_lng.max(max_lng), min_lat.max(max_lat)],
@@ -3580,8 +5279,24 @@ async fn geo_bounds(ctx: &Ctx<'_>) -> ApiResult<Response> {
     };
     let rows: Vec<Value> = candidates
         .into_iter()
-        .filter(|asset| point_of(asset).map(|point| domain::geo::point_in_bounding_box(point, bbox)).unwrap_or(false))
-        .filter(|asset| feature_type.as_ref().map(|value| asset.get("feature_type").and_then(Value::as_str).unwrap_or("").to_ascii_lowercase() == *value).unwrap_or(true))
+        .filter(|asset| {
+            point_of(asset)
+                .map(|point| domain::geo::point_in_bounding_box(point, bbox))
+                .unwrap_or(false)
+        })
+        .filter(|asset| {
+            feature_type
+                .as_ref()
+                .map(|value| {
+                    asset
+                        .get("feature_type")
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .to_ascii_lowercase()
+                        == *value
+                })
+                .unwrap_or(true)
+        })
         .map(Value::Object)
         .collect();
     Ok(web::send_page(rows, ctx.query, 100))
@@ -3589,27 +5304,59 @@ async fn geo_bounds(ctx: &Ctx<'_>) -> ApiResult<Response> {
 
 async fn geo_polygon(ctx: &Ctx<'_>) -> ApiResult<Response> {
     let body = web::private_input(ctx.body);
-    let value = body.get("polygon").or_else(|| body.get("coordinates")).or_else(|| body.get("geometry")).cloned().unwrap_or(Value::Null);
+    let value = body
+        .get("polygon")
+        .or_else(|| body.get("coordinates"))
+        .or_else(|| body.get("geometry"))
+        .cloned()
+        .unwrap_or(Value::Null);
     let Some(polygon) = domain::geo::polygon_coordinates(&value) else {
-        return Err(ApiError::bad_request("polygon_required", "Send a GeoJSON Polygon or a coordinate ring."));
+        return Err(ApiError::bad_request(
+            "polygon_required",
+            "Send a GeoJSON Polygon or a coordinate ring.",
+        ));
     };
-    let feature_type = body.get("feature_type").and_then(Value::as_str).map(|value| value.to_ascii_lowercase());
+    let feature_type = body
+        .get("feature_type")
+        .and_then(Value::as_str)
+        .map(|value| value.to_ascii_lowercase());
     let geometry = if value.get("type").and_then(Value::as_str).is_some() {
         value.clone()
     } else {
         json!({ "type": "Polygon", "coordinates": polygon })
     };
-    let candidates = match spatial_asset_rows(ctx, json!({
-        "mode": "within",
-        "geometry": geometry,
-    })).await {
+    let candidates = match spatial_asset_rows(
+        ctx,
+        json!({
+            "mode": "within",
+            "geometry": geometry,
+        }),
+    )
+    .await
+    {
         Some(rows) => rows,
         None => all_assets(ctx).await?,
     };
     let rows: Vec<Value> = candidates
         .into_iter()
-        .filter(|asset| point_of(asset).map(|point| domain::geo::point_in_polygon(point, &polygon)).unwrap_or(false))
-        .filter(|asset| feature_type.as_ref().map(|value| asset.get("feature_type").and_then(Value::as_str).unwrap_or("").to_ascii_lowercase() == *value).unwrap_or(true))
+        .filter(|asset| {
+            point_of(asset)
+                .map(|point| domain::geo::point_in_polygon(point, &polygon))
+                .unwrap_or(false)
+        })
+        .filter(|asset| {
+            feature_type
+                .as_ref()
+                .map(|value| {
+                    asset
+                        .get("feature_type")
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .to_ascii_lowercase()
+                        == *value
+                })
+                .unwrap_or(true)
+        })
         .map(Value::Object)
         .collect();
     Ok(web::send_page(rows, ctx.query, 100))
@@ -3621,7 +5368,12 @@ async fn geo_search(ctx: &Ctx<'_>) -> ApiResult<Response> {
         return Ok(web::json_response(json!([])));
     }
     let opts = ctx.opts();
-    let items = ctx.client().geo().autocomplete(&query, Some(5), None, &opts).await.map_err(ApiError::from)?;
+    let items = ctx
+        .client()
+        .geo()
+        .autocomplete(&query, Some(5), None, &opts)
+        .await
+        .map_err(ApiError::from)?;
     let values: Vec<Value> = items.into_iter().filter_map(|item| {
         let lat = item.get("lat").and_then(Value::as_f64)?;
         let lon = item.get("lon").and_then(Value::as_f64)?;
@@ -3640,13 +5392,27 @@ async fn geo_search(ctx: &Ctx<'_>) -> ApiResult<Response> {
 async fn geo_geocode(ctx: &Ctx<'_>) -> ApiResult<Response> {
     let address = web::string_field(&web::private_input(ctx.body), "address").unwrap_or_default();
     if address.is_empty() {
-        return Err(ApiError::bad_request("address_required", "address_required"));
+        return Err(ApiError::bad_request(
+            "address_required",
+            "address_required",
+        ));
     }
     let opts = ctx.opts();
-    let items = ctx.client().geo().geocode(&address, &opts).await.map_err(ApiError::from)?;
-    let hit = items.into_iter().find(|item| item.get("lat").and_then(Value::as_f64).is_some() && item.get("lon").and_then(Value::as_f64).is_some());
+    let items = ctx
+        .client()
+        .geo()
+        .geocode(&address, &opts)
+        .await
+        .map_err(ApiError::from)?;
+    let hit = items.into_iter().find(|item| {
+        item.get("lat").and_then(Value::as_f64).is_some()
+            && item.get("lon").and_then(Value::as_f64).is_some()
+    });
     let Some(hit) = hit else {
-        return Err(ApiError::not_found("address_not_found", "address_not_found"));
+        return Err(ApiError::not_found(
+            "address_not_found",
+            "address_not_found",
+        ));
     };
     let lat = hit.get("lat").and_then(Value::as_f64).unwrap_or(0.0);
     let lon = hit.get("lon").and_then(Value::as_f64).unwrap_or(0.0);
@@ -3663,13 +5429,30 @@ async fn geo_reverse(ctx: &Ctx<'_>) -> ApiResult<Response> {
     let latitude = web::number_field(&body, "latitude");
     let longitude = web::number_field(&body, "longitude");
     let (Some(latitude), Some(longitude)) = (latitude, longitude) else {
-        return Err(ApiError::bad_request("coordinates_required", "coordinates_required"));
+        return Err(ApiError::bad_request(
+            "coordinates_required",
+            "coordinates_required",
+        ));
     };
     let opts = ctx.opts();
-    let items = ctx.client().geo().reverse(latitude, longitude, &opts).await.map_err(ApiError::from)?;
-    let hit = items.into_iter().find(|item| item.get("address").or_else(|| item.get("label")).and_then(Value::as_str).map(|value| !value.is_empty()).unwrap_or(false));
+    let items = ctx
+        .client()
+        .geo()
+        .reverse(latitude, longitude, &opts)
+        .await
+        .map_err(ApiError::from)?;
+    let hit = items.into_iter().find(|item| {
+        item.get("address")
+            .or_else(|| item.get("label"))
+            .and_then(Value::as_str)
+            .map(|value| !value.is_empty())
+            .unwrap_or(false)
+    });
     let Some(hit) = hit else {
-        return Err(ApiError::not_found("address_not_found", "address_not_found"));
+        return Err(ApiError::not_found(
+            "address_not_found",
+            "address_not_found",
+        ));
     };
     Ok(web::json_response(json!({
         "address": hit.get("address").or_else(|| hit.get("label")).and_then(Value::as_str).unwrap_or(""),
@@ -3680,17 +5463,27 @@ async fn geo_reverse(ctx: &Ctx<'_>) -> ApiResult<Response> {
 }
 
 async fn geo_distance(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
-    let target = domain::geo::parse_point(&json!({
-        "lng": ctx.query.get("lng").cloned().unwrap_or_default(),
-        "lat": ctx.query.get("lat").cloned().unwrap_or_default(),
-        "longitude": ctx.query.get("longitude").cloned().unwrap_or_default(),
-        "latitude": ctx.query.get("latitude").cloned().unwrap_or_default(),
-    }).as_object().cloned().unwrap_or_default()).ok_or_else(|| ApiError::bad_request("coordinates_required", "coordinates_required"))?;
+    let target = domain::geo::parse_point(
+        &json!({
+            "lng": ctx.query.get("lng").cloned().unwrap_or_default(),
+            "lat": ctx.query.get("lat").cloned().unwrap_or_default(),
+            "longitude": ctx.query.get("longitude").cloned().unwrap_or_default(),
+            "latitude": ctx.query.get("latitude").cloned().unwrap_or_default(),
+        })
+        .as_object()
+        .cloned()
+        .unwrap_or_default(),
+    )
+    .ok_or_else(|| ApiError::bad_request("coordinates_required", "coordinates_required"))?;
     let Some(asset) = find_asset(ctx, id).await? else {
         return Err(ApiError::not_found("asset_not_found", "asset_not_found"));
     };
     let Some(origin) = point_of(&asset) else {
-        return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "asset_has_no_coordinates", "asset_has_no_coordinates"));
+        return Err(ApiError::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "asset_has_no_coordinates",
+            "asset_has_no_coordinates",
+        ));
     };
     let distance = (domain::geo::haversine(origin, target) * 10.0).round() / 10.0;
     Ok(web::json_response(json!({
@@ -3704,35 +5497,76 @@ async fn geo_distance(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
 
 async fn geo_coverage(ctx: &Ctx<'_>) -> ApiResult<Response> {
     let body = web::private_input(ctx.body);
-    let areas = body.get("areas").and_then(Value::as_array).cloned().unwrap_or_default();
+    let areas = body
+        .get("areas")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
     if areas.is_empty() {
-        return Err(ApiError::bad_request("areas_required", "Send { areas: [...] }."));
+        return Err(ApiError::bad_request(
+            "areas_required",
+            "Send { areas: [...] }.",
+        ));
     }
-    let assets: Vec<domain::analytics::CoverageAsset> = all_assets(ctx).await?.into_iter().map(|asset| domain::analytics::CoverageAsset {
-        id: asset.get("id").and_then(Value::as_str).unwrap_or("").to_string(),
-        feature_type: asset.get("feature_type").and_then(Value::as_str).unwrap_or("infrastructure").to_string(),
-        point: point_of(&asset),
-    }).collect();
-    let incidents: Vec<domain::analytics::CoverageIncident> = tier2::list_all(ctx.client(), &ctx.opts(), INCIDENTS, 5000).await?
-        .items
+    let assets: Vec<domain::analytics::CoverageAsset> = all_assets(ctx)
+        .await?
         .into_iter()
-        .map(|incident| domain::analytics::CoverageIncident {
-            id: incident.get("id").and_then(Value::as_str).unwrap_or("").to_string(),
-            status: incident.get("status").and_then(Value::as_str).unwrap_or("").to_string(),
-            point: point_of(&incident).or_else(|| incident.get("location").and_then(Value::as_object).and_then(|location| domain::geo::parse_point(location))),
-            reported_at: incident.get("reported_at").and_then(Value::as_str).map(str::to_string),
+        .map(|asset| domain::analytics::CoverageAsset {
+            id: asset
+                .get("id")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string(),
+            feature_type: asset
+                .get("feature_type")
+                .and_then(Value::as_str)
+                .unwrap_or("infrastructure")
+                .to_string(),
+            point: point_of(&asset),
         })
         .collect();
+    let incidents: Vec<domain::analytics::CoverageIncident> =
+        tier2::list_all(ctx.client(), &ctx.opts(), INCIDENTS, 5000)
+            .await?
+            .items
+            .into_iter()
+            .map(|incident| domain::analytics::CoverageIncident {
+                id: incident
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string(),
+                status: incident
+                    .get("status")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string(),
+                point: point_of(&incident).or_else(|| {
+                    incident
+                        .get("location")
+                        .and_then(Value::as_object)
+                        .and_then(|location| domain::geo::parse_point(location))
+                }),
+                reported_at: incident
+                    .get("reported_at")
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
+            })
+            .collect();
     let input = domain::analytics::CoverageInput {
         areas: serde_json::from_value(Value::Array(areas)).unwrap_or_default(),
         assets,
         incidents,
         service_radius_meters: body.get("service_radius_meters").and_then(Value::as_f64),
-        target_population_per_asset: body.get("target_population_per_asset").and_then(Value::as_f64),
+        target_population_per_asset: body
+            .get("target_population_per_asset")
+            .and_then(Value::as_f64),
         now: None,
     };
     let report = domain::analytics::analyse_coverage(input);
-    Ok(web::json_response(serde_json::to_value(report).unwrap_or(Value::Null)))
+    Ok(web::json_response(
+        serde_json::to_value(report).unwrap_or(Value::Null),
+    ))
 }
 
 // ---------------------------------------------------------------------------
@@ -3744,34 +5578,67 @@ async fn ingest_csv(ctx: &Ctx<'_>) -> ApiResult<Response> {
     let filename = web::string_field(&body, "filename").unwrap_or_else(|| "upload.csv".into());
     let content = web::string_field(&body, "content").unwrap_or_default();
     if content.trim().is_empty() {
-        return Err(ApiError::bad_request("content_required", "Send { filename, content }."));
+        return Err(ApiError::bad_request(
+            "content_required",
+            "Send { filename, content }.",
+        ));
     }
     let parsed = domain::csv::parse_csv(&content);
     let missing = domain::csv::missing_asset_columns(&parsed.headers);
     if !missing.is_empty() {
-        return Err(ApiError::bad_request("missing_columns", "CSV is missing required columns.")
-            .with_details(json!({ "missing": missing })));
+        return Err(
+            ApiError::bad_request("missing_columns", "CSV is missing required columns.")
+                .with_details(json!({ "missing": missing })),
+        );
     }
     let opts = ctx.opts();
     let existing = tier2::list_all(ctx.client(), &opts, ASSETS, 5000).await?;
-    let existing_ids: HashSet<String> = existing.items.into_iter().filter_map(|row| row.get("id").and_then(Value::as_str).map(str::to_string)).collect();
+    let existing_ids: HashSet<String> = existing
+        .items
+        .into_iter()
+        .filter_map(|row| row.get("id").and_then(Value::as_str).map(str::to_string))
+        .collect();
     let mut created = 0usize;
     let mut skipped = 0usize;
     let mut errors = Vec::new();
     for (index, row) in parsed.rows.iter().enumerate() {
-        let latitude = row.get("latitude").and_then(Value::as_str).and_then(|value| value.parse::<f64>().ok());
-        let longitude = row.get("longitude").and_then(Value::as_str).and_then(|value| value.parse::<f64>().ok());
+        let latitude = row
+            .get("latitude")
+            .and_then(Value::as_str)
+            .and_then(|value| value.parse::<f64>().ok());
+        let longitude = row
+            .get("longitude")
+            .and_then(Value::as_str)
+            .and_then(|value| value.parse::<f64>().ok());
         let (Some(latitude), Some(longitude)) = (latitude, longitude) else {
-            errors.push(json!({ "row": index + 2, "message": "latitude_and_longitude_must_be_numeric" }));
+            errors.push(
+                json!({ "row": index + 2, "message": "latitude_and_longitude_must_be_numeric" }),
+            );
             continue;
         };
-        let Some(asset_code) = row.get("asset_code").and_then(Value::as_str).filter(|value| !value.is_empty()) else {
+        let Some(asset_code) = row
+            .get("asset_code")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+        else {
             errors.push(json!({ "row": index + 2, "message": "required_value_missing" }));
             continue;
         };
-        let name = row.get("name").and_then(Value::as_str).unwrap_or("").to_string();
-        let feature_type = row.get("feature_type").and_then(Value::as_str).unwrap_or("").to_string();
-        let feature_code = row.get("feature_code").and_then(Value::as_str).unwrap_or("").to_string();
+        let name = row
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        let feature_type = row
+            .get("feature_type")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        let feature_code = row
+            .get("feature_code")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
         if name.is_empty() || feature_type.is_empty() || feature_code.is_empty() {
             errors.push(json!({ "row": index + 2, "message": "required_value_missing" }));
             continue;
@@ -3780,8 +5647,18 @@ async fn ingest_csv(ctx: &Ctx<'_>) -> ApiResult<Response> {
             skipped += 1;
             continue;
         }
-        let geometry = row.get("geometry").and_then(Value::as_str).and_then(|value| serde_json::from_str::<Value>(value).ok()).filter(|value| value.get("type").and_then(Value::as_str).is_some()).unwrap_or_else(|| json!({"type":"Point","coordinates":[longitude, latitude]}));
-        let properties = row.get("properties").and_then(Value::as_str).and_then(|value| serde_json::from_str::<Value>(value).ok()).filter(|value| value.is_object()).unwrap_or_else(|| json!({}));
+        let geometry = row
+            .get("geometry")
+            .and_then(Value::as_str)
+            .and_then(|value| serde_json::from_str::<Value>(value).ok())
+            .filter(|value| value.get("type").and_then(Value::as_str).is_some())
+            .unwrap_or_else(|| json!({"type":"Point","coordinates":[longitude, latitude]}));
+        let properties = row
+            .get("properties")
+            .and_then(Value::as_str)
+            .and_then(|value| serde_json::from_str::<Value>(value).ok())
+            .filter(|value| value.is_object())
+            .unwrap_or_else(|| json!({}));
         let now = crate::now_iso();
         let mut asset = Map::new();
         asset.insert("assetId".into(), json!(asset_code));
@@ -3789,14 +5666,28 @@ async fn ingest_csv(ctx: &Ctx<'_>) -> ApiResult<Response> {
         asset.insert("name".into(), json!(name));
         asset.insert("feature_type".into(), json!(feature_type));
         asset.insert("feature_code".into(), json!(feature_code));
-        asset.insert("category".into(), row.get("category").and_then(Value::as_str).map(|value| json!(value)).unwrap_or_else(|| json!(feature_type)));
-        asset.insert("status".into(), json!(row.get("status").and_then(Value::as_str).map(|value| json!(value)).unwrap_or_else(|| json!("active"))));
+        asset.insert(
+            "category".into(),
+            row.get("category")
+                .and_then(Value::as_str)
+                .map(|value| json!(value))
+                .unwrap_or_else(|| json!(feature_type)),
+        );
+        asset.insert(
+            "status".into(),
+            json!(row
+                .get("status")
+                .and_then(Value::as_str)
+                .map(|value| json!(value))
+                .unwrap_or_else(|| json!("active"))),
+        );
         asset.insert("geometry".into(), geometry);
         asset.insert("location".into(), json!({
             "address": row.get("address").and_then(Value::as_str).map(|value| json!(value)).unwrap_or(Value::Null),
             "coordinates": { "longitude": longitude, "latitude": latitude },
         }));
         asset.insert("properties".into(), properties);
+        asset.insert("public_visible".into(), json!(true));
         asset.insert("source".into(), json!("synapsecity-ingest"));
         asset.insert("sourceVersion".into(), json!("1.0.0"));
         asset.insert("created_at".into(), json!(now));
@@ -3819,12 +5710,19 @@ async fn ingest_csv(ctx: &Ctx<'_>) -> ApiResult<Response> {
     job.insert("created".into(), json!(created));
     job.insert("skipped".into(), json!(skipped));
     job.insert("failed".into(), json!(errors.len()));
-    job.insert("errors".into(), json!(errors.iter().take(50).collect::<Vec<_>>()));
+    job.insert(
+        "errors".into(),
+        json!(errors.iter().take(50).collect::<Vec<_>>()),
+    );
     job.insert("completed_at".into(), json!(crate::now_iso()));
     let stored = tier2::create(ctx.client(), &opts, tier2::INGEST, job, None).await?;
     let all_failed = created == 0 && skipped == 0 && !errors.is_empty();
     Ok(web::status_json(
-        if all_failed { StatusCode::BAD_GATEWAY } else { StatusCode::ACCEPTED },
+        if all_failed {
+            StatusCode::BAD_GATEWAY
+        } else {
+            StatusCode::ACCEPTED
+        },
         json!({
             "message": format!("Ingested {created} of {} asset rows ({skipped} already present)", parsed.rows.len()),
             "job_id": stored.get("id"),
@@ -3841,22 +5739,60 @@ async fn ingest_csv(ctx: &Ctx<'_>) -> ApiResult<Response> {
 // ---------------------------------------------------------------------------
 
 fn asset_is_public(asset: &Map<String, Value>, include_inactive: bool) -> bool {
-    if asset.get("deleted_at").is_some() || asset.get("public_visible").and_then(Value::as_bool) == Some(false) {
+    if asset.get("deleted_at").is_some()
+        || asset.get("public_visible").and_then(Value::as_bool) == Some(false)
+    {
         return false;
     }
-    if include_inactive {
-        return true;
+    let status = asset
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let lifecycle = asset
+        .get("lifecycle_stage")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    // Retired/decommissioned assets are never exposed by a public route, even
+    // when a map asks for include_inactive. `include_inactive` only widens the
+    // projection to non-retired inactive assets.
+    if ["decommissioned", "deleted", "purged", "retired"].contains(&status.as_str())
+        || ["decommissioned", "deleted", "retired"].contains(&lifecycle.as_str())
+    {
+        return false;
     }
-    let status = asset.get("status").and_then(Value::as_str).unwrap_or("").to_ascii_lowercase();
-    let lifecycle = asset.get("lifecycle_stage").and_then(Value::as_str).unwrap_or("").to_ascii_lowercase();
-    !["decommissioned", "deleted", "purged", "retired"].contains(&status.as_str())
-        && !["decommissioned", "deleted", "retired"].contains(&lifecycle.as_str())
+    include_inactive || status != "inactive"
 }
 
 fn public_asset_view(ctx: &Ctx<'_>, asset: &Map<String, Value>) -> Value {
     let code = asset_code(asset);
-    let url = format!("{}/asset/{}", ctx.config().public_url, percent_encoding::utf8_percent_encode(&code, percent_encoding::NON_ALPHANUMERIC));
+    let url = format!(
+        "{}/asset/{}",
+        ctx.config().public_url,
+        percent_encoding::utf8_percent_encode(&code, percent_encoding::NON_ALPHANUMERIC)
+    );
     let coordinates = coordinates_of(asset);
+    let mut location = Map::new();
+    location.insert(
+        "address".into(),
+        json!(asset
+            .get("location")
+            .and_then(|value| value.get("address"))
+            .and_then(Value::as_str)
+            .unwrap_or("")),
+    );
+    // A missing coordinate is omitted, never serialized as `null`; public
+    // clients render "location unavailable" without dereferencing it.
+    if let Some((longitude, latitude)) = coordinates {
+        location.insert(
+            "coordinates".into(),
+            json!({"longitude": longitude, "latitude": latitude}),
+        );
+    }
+    if let Some(geometry) = asset.get("geometry").filter(|value| !value.is_null()) {
+        location.insert("geometry".into(), geometry.clone());
+    }
     json!({
         "id": asset.get("id"),
         "asset_code": code,
@@ -3865,25 +5801,56 @@ fn public_asset_view(ctx: &Ctx<'_>, asset: &Map<String, Value>) -> Value {
         "feature_code": asset.get("feature_code"),
         "category": asset.get("category").cloned().unwrap_or_else(|| asset.get("feature_type").cloned().unwrap_or_else(|| json!("infrastructure"))),
         "status": asset.get("status"),
-        "location": {
-            "address": asset.get("location").and_then(|value| value.get("address")).and_then(Value::as_str).unwrap_or(""),
-            "coordinates": coordinates.map(|(longitude, latitude)| json!({"longitude": longitude, "latitude": latitude})),
-            "geometry": asset.get("geometry"),
-        },
+        "location": Value::Object(location),
         "geometry": asset.get("geometry"),
         "qr_code": url,
         "public_url": url,
     })
 }
 
+fn public_filter(query: &HashMap<String, String>, fields: &[&str]) -> Value {
+    let mut filter = Map::new();
+    filter.insert("public_visible".into(), json!(true));
+    for field in fields {
+        if let Some(value) = query
+            .get(*field)
+            .map(|value| value.trim())
+            .filter(|value| !value.is_empty())
+        {
+            filter.insert((*field).to_string(), json!(value));
+        }
+    }
+    Value::Object(filter)
+}
+
 async fn public_assets(ctx: &Ctx<'_>) -> ApiResult<Response> {
-    let include_inactive = ctx.query.get("include_inactive").map(|value| value == "true" || value == "1").unwrap_or(false);
-    let values: Vec<Value> = all_assets(ctx).await?
+    let include_inactive = ctx
+        .query
+        .get("include_inactive")
+        .map(|value| value == "true" || value == "1")
+        .unwrap_or(false);
+    let limit = tier2::limit_of(ctx.query, 100);
+    let offset = tier2::offset_of(ctx.query);
+    let filter = public_filter(
+        ctx.query,
+        &[
+            "status",
+            "feature_type",
+            "feature_code",
+            "asset_code",
+            "category",
+        ],
+    );
+    let opts = ctx.opts();
+    let (rows, total) =
+        tier2::query_records(ctx.client(), &opts, ASSETS, filter, limit, offset, None).await?;
+    let values: Vec<Value> = rows
         .into_iter()
+        .map(|row| asset_view(&row))
         .filter(|asset| asset_is_public(asset, include_inactive))
         .map(|asset| public_asset_view(ctx, &asset))
         .collect();
-    Ok(web::send_page(values, ctx.query, 100))
+    Ok(web::send_page_with_total(values, total, false, true))
 }
 
 async fn public_asset(ctx: &Ctx<'_>, code: &str) -> ApiResult<Response> {
@@ -3893,7 +5860,12 @@ async fn public_asset(ctx: &Ctx<'_>, code: &str) -> ApiResult<Response> {
     if !asset_is_public(&asset, true) {
         return Err(ApiError::not_found("asset_not_found", "asset_not_found"));
     }
-    Ok(web::json_response(public_asset_view(ctx, &asset)))
+    let mut response = web::json_response(public_asset_view(ctx, &asset));
+    response.headers_mut().insert(
+        "cache-control",
+        HeaderValue::from_static("public, max-age=60, stale-while-revalidate=300"),
+    );
+    Ok(response)
 }
 
 async fn public_asset_aux(ctx: &Ctx<'_>, code: &str, kind: &str) -> ApiResult<Response> {
@@ -3913,11 +5885,34 @@ async fn public_asset_aux(ctx: &Ctx<'_>, code: &str, kind: &str) -> ApiResult<Re
     }
     let opts = ctx.opts();
     let orders = tier2::list_all(ctx.client(), &opts, MAINTENANCE, 5000).await?;
-    let asset_ids: HashSet<String> = [asset.get("id"), asset.get("asset_code")].into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect();
-    let orders: Vec<Map<String, Value>> = orders.items.into_iter().filter(|order| {
-        order.get("asset_id").or_else(|| order.get("assetId")).and_then(Value::as_str).map(|id| asset_ids.contains(id)).unwrap_or(false)
-    }).collect();
-    let completed: Vec<&Map<String, Value>> = orders.iter().filter(|order| order.get("status").and_then(Value::as_str).map(|status| status.eq_ignore_ascii_case("completed")).unwrap_or(false)).collect();
+    let asset_ids: HashSet<String> = [asset.get("id"), asset.get("asset_code")]
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(str::to_string)
+        .collect();
+    let orders: Vec<Map<String, Value>> = orders
+        .items
+        .into_iter()
+        .filter(|order| {
+            order
+                .get("asset_id")
+                .or_else(|| order.get("assetId"))
+                .and_then(Value::as_str)
+                .map(|id| asset_ids.contains(id))
+                .unwrap_or(false)
+        })
+        .collect();
+    let completed: Vec<&Map<String, Value>> = orders
+        .iter()
+        .filter(|order| {
+            order
+                .get("status")
+                .and_then(Value::as_str)
+                .map(|status| status.eq_ignore_ascii_case("completed"))
+                .unwrap_or(false)
+        })
+        .collect();
     Ok(web::json_response(json!({
         "asset_code": asset.get("asset_code").or_else(|| asset.get("id")),
         "work_order_count": orders.len(),
@@ -3928,59 +5923,238 @@ async fn public_asset_aux(ctx: &Ctx<'_>, code: &str, kind: &str) -> ApiResult<Re
 }
 
 async fn public_incidents(ctx: &Ctx<'_>) -> ApiResult<Response> {
+    let limit = tier2::limit_of(ctx.query, 100);
+    let offset = tier2::offset_of(ctx.query);
+    let filter = public_filter(
+        ctx.query,
+        &[
+            "status",
+            "severity",
+            "category",
+            "asset_id",
+            "incident_number",
+        ],
+    );
     let opts = ctx.opts();
-    let rows = tier2::list_all(ctx.client(), &opts, INCIDENTS, 5000).await?;
-    let values: Vec<Value> = rows.items.into_iter()
+    let (rows, total) = tier2::query_records(
+        ctx.client(),
+        &opts,
+        INCIDENTS,
+        filter,
+        limit,
+        offset,
+        Some("reported_at:desc".into()),
+    )
+    .await?;
+    let values: Vec<Value> = rows
+        .into_iter()
         .filter(|row| domain::incidents::incident_is_publicly_visible(row))
         .map(|row| Value::Object(domain::incidents::to_public_incident_view(&row)))
         .collect();
-    Ok(web::send_page(values, ctx.query, 100))
+    Ok(web::send_page_with_total(values, total, false, true))
 }
 
 async fn public_incident(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
     let Some(incident) = find_public_incident(ctx, id).await? else {
-        return Err(ApiError::not_found("incident_not_found", "incident_not_found"));
+        return Err(ApiError::not_found(
+            "incident_not_found",
+            "incident_not_found",
+        ));
     };
     if !domain::incidents::incident_is_publicly_visible(&incident) {
-        return Err(ApiError::not_found("incident_not_found", "incident_not_found"));
+        return Err(ApiError::not_found(
+            "incident_not_found",
+            "incident_not_found",
+        ));
     }
-    Ok(web::json_response(Value::Object(domain::incidents::to_public_incident_view(&incident))))
+    let mut response = web::json_response(Value::Object(
+        domain::incidents::to_public_incident_view(&incident),
+    ));
+    response.headers_mut().insert(
+        "cache-control",
+        HeaderValue::from_static("public, max-age=60, stale-while-revalidate=300"),
+    );
+    Ok(response)
 }
 
-fn enforce_turnstile(ctx: &Ctx<'_>) -> Result<(), ApiError> {
-    if !ctx.config().require_turnstile {
-        return Ok(());
+fn turnstile_error_code(payload: &Value) -> String {
+    match payload.get("error") {
+        Some(Value::String(value)) if !value.is_empty() => value.clone(),
+        Some(Value::Object(value)) => value
+            .get("code")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .unwrap_or("turnstile_failed")
+            .to_string(),
+        _ => "turnstile_failed".into(),
     }
+}
+
+/// Verify the token through the Tier-2 security capability. Presence alone is
+/// never enough: a random non-empty string must be rejected by the provider.
+async fn enforce_turnstile(ctx: &Ctx<'_>) -> Result<(), ApiError> {
     let token = ctx
         .headers
         .get("cf-turnstile-response")
         .and_then(|value| value.to_str().ok())
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .or_else(|| ctx.body.get("turnstile_token").and_then(Value::as_str));
-    if token.is_some() {
-        Ok(())
-    } else {
-        Err(ApiError::forbidden("turnstile_failed", "turnstile_failed"))
+        .or_else(|| {
+            ctx.body
+                .get("turnstile_token")
+                .or_else(|| ctx.body.get("cf-turnstile-response"))
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+        });
+    let Some(token) = token else {
+        return if ctx.config().require_turnstile {
+            Err(ApiError::forbidden(
+                "turnstile_token_required",
+                "A Turnstile token is required.",
+            ))
+        } else {
+            Ok(())
+        };
+    };
+    let remote_ip = ctx
+        .headers
+        .get("x-forwarded-for")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.rsplit(',').next())
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let mut payload = json!({ "token": token });
+    if let Some(remote_ip) = remote_ip {
+        payload["remoteip"] = json!(remote_ip);
     }
+    let opts = ctx.opts();
+    let verification = ctx
+        .client()
+        .post("/v1/capabilities/security/turnstile/verify", payload, &opts)
+        .await;
+    let value = match verification {
+        Ok(value) => value,
+        Err(error) => {
+            if ctx.config().require_turnstile {
+                return Err(ApiError::unavailable(
+                    "turnstile_unavailable",
+                    format!("Turnstile verification failed: {error}"),
+                ));
+            }
+            return Ok(());
+        }
+    };
+    if value.get("ok").and_then(Value::as_bool) == Some(true) {
+        return Ok(());
+    }
+    if value.get("configured").and_then(Value::as_bool) == Some(false)
+        && !ctx.config().require_turnstile
+    {
+        return Ok(());
+    }
+    let code = turnstile_error_code(&value);
+    Err(ApiError::forbidden(code.clone(), code))
+}
+
+const MAX_PUBLIC_INCIDENT_PHOTOS: usize = 10;
+
+fn report_photo_file_id(value: &Value) -> Option<String> {
+    let candidate = match value {
+        Value::String(value) => value.trim().to_string(),
+        Value::Object(object) => object
+            .get("file_id")
+            .or_else(|| object.get("fileId"))
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .unwrap_or("")
+            .to_string(),
+        _ => String::new(),
+    };
+    if candidate.contains("://") || !domain::files::looks_like_file_id(&candidate) {
+        return None;
+    }
+    Some(candidate)
+}
+
+/// Anonymous photo writes accept only City public-file ids. External URLs and
+/// private/operator files are rejected, and an append is bound to the report
+/// that issued the edit token.
+async fn resolve_public_report_photos(
+    ctx: &Ctx<'_>,
+    values: &[Value],
+    incident_id: Option<&str>,
+) -> ApiResult<Vec<Value>> {
+    let mut photos = Vec::new();
+    for value in values {
+        let Some(file_id) = report_photo_file_id(value) else {
+            return Err(ApiError::bad_request(
+                "public_photo_file_id_required",
+                "Anonymous reports accept City public file ids only.",
+            ));
+        };
+        let Some(record) = file_metadata(ctx, &file_id).await? else {
+            return Err(ApiError::not_found("file_not_found", "file_not_found"));
+        };
+        if record.get("public").and_then(Value::as_bool) != Some(true)
+            || record
+                .get("owner")
+                .and_then(Value::as_str)
+                .map(|owner| !owner.eq_ignore_ascii_case("anonymous"))
+                .unwrap_or(true)
+        {
+            return Err(ApiError::not_found("file_not_found", "file_not_found"));
+        }
+        if let Some(incident_id) = incident_id {
+            if record.get("report_id").and_then(Value::as_str) != Some(incident_id) {
+                return Err(ApiError::forbidden(
+                    "photo_not_uploaded_for_report",
+                    "The photo was not uploaded for this report.",
+                ));
+            }
+        }
+        let content_type = record
+            .get("contentType")
+            .or_else(|| record.get("content_type"))
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        if !domain::files::IMAGE_MIME_TYPES.contains(&content_type) {
+            return Err(ApiError::unsupported(
+                "unsupported_file_type",
+                "Only image files may be attached as incident photos.",
+            ));
+        }
+        photos.push(json!(file_url(
+            ctx.config(),
+            record.get("id").and_then(Value::as_str).unwrap_or(&file_id),
+            true,
+        )));
+    }
+    Ok(photos)
 }
 
 async fn public_incident_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
-    enforce_turnstile(ctx)?;
+    enforce_turnstile(ctx).await?;
     let body = web::private_input(ctx.body);
     let incident_id = uuid::Uuid::new_v4().to_string();
     let number = incident_number();
-    let photo_values: Vec<Value> = body.get("photos").and_then(Value::as_array).cloned()
+    let photo_values: Vec<Value> = body
+        .get("photos")
+        .and_then(Value::as_array)
+        .cloned()
         .or_else(|| body.get("file_ids").and_then(Value::as_array).cloned())
         .or_else(|| body.get("file_id").cloned().map(|value| vec![value]))
         .unwrap_or_default();
-    if photo_values.len() > 10 {
-        return Err(ApiError::too_large("too_many_photos", "too_many_photos"));
+    if photo_values.len() > MAX_PUBLIC_INCIDENT_PHOTOS {
+        return Err(ApiError::too_large(
+            "too_many_photos",
+            format!("At most {MAX_PUBLIC_INCIDENT_PHOTOS} photos may be attached."),
+        ));
     }
     let photos: Vec<Value> = if photo_values.is_empty() {
         Vec::new()
     } else {
-        resolve_photos(ctx, &photo_values, true).await?.into_iter().map(|entry| json!(entry.get("url").and_then(Value::as_str).unwrap_or(""))).collect()
+        resolve_public_report_photos(ctx, &photo_values, None).await?
     };
     let now = crate::now_iso();
     let mut incident = Map::new();
@@ -3988,16 +6162,28 @@ async fn public_incident_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
     incident.insert("incident_number".into(), json!(number));
     incident.insert("incident_code".into(), json!(number));
     incident.insert("title".into(), json!(web::required_string(&body, "title")?));
-    incident.insert("description".into(), json!(web::required_string(&body, "description")?));
-    incident.insert("category".into(), json!(web::string_field(&body, "category").unwrap_or_else(|| "other".into())));
-    incident.insert("severity".into(), json!(web::string_field(&body, "severity").unwrap_or_else(|| "medium".into())));
+    incident.insert(
+        "description".into(),
+        json!(web::required_string(&body, "description")?),
+    );
+    incident.insert(
+        "category".into(),
+        json!(web::string_field(&body, "category").unwrap_or_else(|| "other".into())),
+    );
+    incident.insert(
+        "severity".into(),
+        json!(web::string_field(&body, "severity").unwrap_or_else(|| "medium".into())),
+    );
     incident.insert("status".into(), json!("reported"));
     incident.insert("reporter_type".into(), json!("citizen"));
     incident.insert("reported_by".into(), json!("anonymous"));
     incident.insert("reported_via".into(), json!("web"));
     incident.insert("public_visible".into(), json!(true));
     incident.insert("reported_at".into(), json!(now));
-    incident.insert("occurredAt".into(), json!(web::string_field(&body, "occurredAt").unwrap_or_else(|| now.clone())));
+    incident.insert(
+        "occurredAt".into(),
+        json!(web::string_field(&body, "occurredAt").unwrap_or_else(|| now.clone())),
+    );
     incident.insert("created_at".into(), json!(now));
     incident.insert("updated_at".into(), json!(now));
     incident.insert("upvotes".into(), json!(0));
@@ -4022,44 +6208,138 @@ async fn public_incident_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
     }
     let published = domain::incidents::to_published_incident(&incident);
     let opts = ctx.opts();
-    tier2::create(ctx.client(), &opts, INCIDENTS, published, Some(&incident_id)).await?;
     write_incident_internal(ctx, &incident_id, &incident).await?;
+    // Citizen reports are never published to the open-data layer. The City
+    // public API still exposes the redacted projection using its own
+    // service credential.
+    if let Err(error) = tier2::create_with_visibility(
+        ctx.client(),
+        &opts,
+        INCIDENTS,
+        published,
+        Some(&incident_id),
+        false,
+    )
+    .await
+    {
+        let _ = tier2::delete(
+            ctx.client(),
+            &opts,
+            INCIDENT_INTERNAL,
+            &incident_internal_id(&incident_id),
+        )
+        .await;
+        return Err(error);
+    }
     let _ = notify_operators(
         ctx,
         "incident_reported",
-        format!("New citizen report: {}", incident.get("title").and_then(Value::as_str).unwrap_or(&incident_id)),
-        incident.get("description").and_then(Value::as_str).unwrap_or("").to_string(),
-        if incident.get("severity").and_then(Value::as_str) == Some("critical") { "critical" } else { "info" },
+        format!(
+            "New citizen report: {}",
+            incident
+                .get("title")
+                .and_then(Value::as_str)
+                .unwrap_or(&incident_id)
+        ),
+        incident
+            .get("description")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string(),
+        if incident.get("severity").and_then(Value::as_str) == Some("critical") {
+            "critical"
+        } else {
+            "info"
+        },
         "incident",
         &incident_id,
-    ).await;
+    )
+    .await;
     let mut view = incident.clone();
-    view.insert("id".into(), json!(incident_id));
-    Ok(web::created(Value::Object(domain::incidents::to_public_incident_view(&view))))
+    view.insert("id".into(), json!(incident_id.clone()));
+    let mut response = domain::incidents::to_public_incident_view(&view);
+    // A short-lived edit capability is returned once to the creator. It is
+    // never part of the public read projection.
+    let (edit_token, expires_at) = auth::issue_report_edit_token(ctx.config(), &incident_id);
+    response.insert("edit_token".into(), json!(edit_token));
+    response.insert("edit_token_expires_at".into(), json!(expires_at));
+    Ok(web::created(Value::Object(response)))
 }
 
 async fn public_incident_photos(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
+    enforce_turnstile(ctx).await?;
     let body = web::private_input(ctx.body);
-    let values: Vec<Value> = body.get("photos").and_then(Value::as_array).cloned()
+    let values: Vec<Value> = body
+        .get("photos")
+        .and_then(Value::as_array)
+        .cloned()
         .or_else(|| body.get("file_ids").and_then(Value::as_array).cloned())
         .or_else(|| body.get("file_id").cloned().map(|value| vec![value]))
         .unwrap_or_default();
     if values.is_empty() {
         return Err(ApiError::bad_request("photos_required", "photos_required"));
     }
-    let photos: Vec<Value> = resolve_photos(ctx, &values, true).await?.into_iter().map(|entry| json!(entry.get("url").and_then(Value::as_str).unwrap_or(""))).collect();
+    // Missing capability is rejected before any Tier-2 lookup.
+    let body_edit_token = web::string_field(&body, "edit_token")
+        .or_else(|| web::string_field(&body, "report_edit_token"));
+    let edit_token = ctx
+        .headers
+        .get("x-report-edit-token")
+        .and_then(|value| value.to_str().ok())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .or(body_edit_token.as_deref());
+    let Some(edit_token) = edit_token else {
+        return Err(ApiError::forbidden(
+            "report_edit_token_required",
+            "The report edit token is required to append photos.",
+        ));
+    };
     let Some(existing) = find_public_incident(ctx, id).await? else {
-        return Err(ApiError::not_found("incident_not_found", "incident_not_found"));
+        return Err(ApiError::not_found(
+            "incident_not_found",
+            "incident_not_found",
+        ));
     };
     if !domain::incidents::incident_is_publicly_visible(&existing) {
-        return Err(ApiError::not_found("incident_not_found", "incident_not_found"));
+        return Err(ApiError::not_found(
+            "incident_not_found",
+            "incident_not_found",
+        ));
     }
-    let mut current = existing.get("photos").and_then(Value::as_array).cloned().unwrap_or_default();
-    current.extend(photos);
+    let incident_id = existing
+        .get("id")
+        .and_then(Value::as_str)
+        .unwrap_or(id)
+        .to_string();
+    if !auth::verify_report_edit_token(ctx.config(), &edit_token, &incident_id)
+        && !auth::verify_report_edit_token(ctx.config(), &edit_token, id)
+    {
+        return Err(ApiError::forbidden(
+            "report_edit_token_invalid",
+            "The report edit token is invalid or expired.",
+        ));
+    }
+    let current = existing
+        .get("photos")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    if current.len() + values.len() > MAX_PUBLIC_INCIDENT_PHOTOS {
+        return Err(ApiError::too_large(
+            "too_many_photos",
+            format!("At most {MAX_PUBLIC_INCIDENT_PHOTOS} photos may be attached to one report."),
+        ));
+    }
+    let photos = resolve_public_report_photos(ctx, &values, Some(&incident_id)).await?;
+    let mut merged = current;
+    merged.extend(photos);
     let mut patch = Map::new();
-    patch.insert("photos".into(), Value::Array(current));
+    patch.insert("photos".into(), Value::Array(merged));
     let updated = update_incident(ctx, id, patch).await?;
-    Ok(web::json_response(Value::Object(domain::incidents::to_public_incident_view(&updated))))
+    Ok(web::json_response(Value::Object(
+        domain::incidents::to_public_incident_view(&updated),
+    )))
 }
 
 // ---------------------------------------------------------------------------
@@ -4072,13 +6352,24 @@ async fn attachment_from_body(
     fallback_name: &str,
     photo: bool,
 ) -> ApiResult<Map<String, Value>> {
-    if body.get("content_base64").is_some() || body.get("file_content").is_some() || body.get("content").and_then(Value::as_str).map(|value| value.len() > 256).unwrap_or(false) {
+    if body.get("content_base64").is_some()
+        || body.get("file_content").is_some()
+        || body
+            .get("content")
+            .and_then(Value::as_str)
+            .map(|value| value.len() > 256)
+            .unwrap_or(false)
+    {
         return Err(ApiError::unsupported(
             "raw_upload_not_accepted",
             "Upload bytes with POST /v1/files/upload and send the returned file id.",
         ));
     }
-    let allowlist: &[&str] = if photo { &domain::files::IMAGE_MIME_TYPES } else { &domain::files::DOCUMENT_MIME_TYPES };
+    let allowlist: &[&str] = if photo {
+        &domain::files::IMAGE_MIME_TYPES
+    } else {
+        &domain::files::DOCUMENT_MIME_TYPES
+    };
     let reference = body
         .get("file_id")
         .or_else(|| body.get("fileId"))
@@ -4088,23 +6379,41 @@ async fn attachment_from_body(
         .and_then(Value::as_str)
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .ok_or_else(|| ApiError::bad_request("file_reference_required", "file_reference_required"))?;
+        .ok_or_else(|| {
+            ApiError::bad_request("file_reference_required", "file_reference_required")
+        })?;
     if domain::files::is_data_url(reference) {
-        return Err(ApiError::unsupported("data_url_not_supported", "data_url_not_supported"));
+        return Err(ApiError::unsupported(
+            "data_url_not_supported",
+            "data_url_not_supported",
+        ));
     }
-    let is_file_id = body.get("file_id").is_some() || body.get("fileId").is_some() || domain::files::looks_like_file_id(reference);
+    let is_file_id = body.get("file_id").is_some()
+        || body.get("fileId").is_some()
+        || domain::files::looks_like_file_id(reference);
     let principal = ctx.principal();
     if is_file_id {
-        let file_id = body.get("file_id").or_else(|| body.get("fileId")).and_then(Value::as_str).unwrap_or(reference);
+        let file_id = body
+            .get("file_id")
+            .or_else(|| body.get("fileId"))
+            .and_then(Value::as_str)
+            .unwrap_or(reference);
         let Some(record) = file_metadata(ctx, file_id).await? else {
             return Err(ApiError::not_found("file_not_found", "file_not_found"));
         };
-        if !requester_can_use_file(principal, &record) {
+        if !requester_can_read_file(principal, &record) {
             return Err(ApiError::not_found("file_not_found", "file_not_found"));
         }
-        let content_type = record.get("contentType").or_else(|| record.get("content_type")).and_then(Value::as_str).unwrap_or("");
+        let content_type = record
+            .get("contentType")
+            .or_else(|| record.get("content_type"))
+            .and_then(Value::as_str)
+            .unwrap_or("");
         if !allowlist.contains(&content_type) {
-            return Err(ApiError::unsupported("unsupported_file_type", "unsupported_file_type"));
+            return Err(ApiError::unsupported(
+                "unsupported_file_type",
+                "unsupported_file_type",
+            ));
         }
         return Ok(json!({
             "file_id": record.get("id"),
@@ -4121,11 +6430,13 @@ async fn attachment_from_body(
         Some(&json!(reference)),
         Some("file_url"),
         ctx.config().allow_local_dependencies,
-    ).map_err(file_error)?;
+    )
+    .map_err(file_error)?;
     let file_type = domain::files::assert_mime_type(
         body.get("file_type").or_else(|| body.get("type")),
         allowlist,
-    ).map_err(file_error)?;
+    )
+    .map_err(file_error)?;
     Ok(json!({
         "file_name": body.get("file_name").or_else(|| body.get("name")).and_then(Value::as_str).unwrap_or(fallback_name),
         "file_url": file_url,
@@ -4135,16 +6446,28 @@ async fn attachment_from_body(
     }).as_object().cloned().unwrap_or_default())
 }
 
-async fn resolve_photos(ctx: &Ctx<'_>, values: &[Value], public_url: bool) -> ApiResult<Vec<Map<String, Value>>> {
+async fn resolve_photos(
+    ctx: &Ctx<'_>,
+    values: &[Value],
+    public_url: bool,
+) -> ApiResult<Vec<Map<String, Value>>> {
     let mut resolved = Vec::new();
     for (index, value) in values.iter().enumerate() {
         let body = if value.is_string() {
-            json!({ "file_url": value }).as_object().cloned().unwrap_or_default()
+            json!({ "file_url": value })
+                .as_object()
+                .cloned()
+                .unwrap_or_default()
         } else {
             value.as_object().cloned().unwrap_or_default()
         };
-        let attachment = attachment_from_body(ctx, &body, &format!("photo-{}", index + 1), true).await?;
-        let url = attachment.get("file_url").and_then(Value::as_str).unwrap_or("").to_string();
+        let attachment =
+            attachment_from_body(ctx, &body, &format!("photo-{}", index + 1), true).await?;
+        let url = attachment
+            .get("file_url")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
         let _ = public_url;
         let mut entry = Map::new();
         entry.insert("url".into(), json!(url));
@@ -4189,29 +6512,55 @@ async fn create_approval(
         "dueAt": (Utc::now() + chrono::Duration::minutes(ctx.config().approval_sla_minutes as i64)).to_rfc3339_opts(SecondsFormat::Millis, true),
     });
     let opts = ctx.opts();
-    let response = ctx.client().post("/v1/capabilities/approvals", body, &opts).await.map_err(ApiError::from)?;
+    let response = ctx
+        .client()
+        .post("/v1/capabilities/approvals", body, &opts)
+        .await
+        .map_err(ApiError::from)?;
     Ok(response.get("approval").cloned().unwrap_or(response))
 }
 
 async fn get_approval(ctx: &Ctx<'_>, id: &str) -> ApiResult<Value> {
     let opts = ctx.opts();
-    let response = ctx.client().get(format!("/v1/capabilities/approvals/{id}"), &opts).await.map_err(ApiError::from)?;
+    let response = ctx
+        .client()
+        .get(format!("/v1/capabilities/approvals/{id}"), &opts)
+        .await
+        .map_err(ApiError::from)?;
     Ok(response.get("approval").cloned().unwrap_or(response))
 }
 
-async fn assert_approved(ctx: &Ctx<'_>, approval_id: &str, entity_id: &str, action: &str, actor: &str) -> ApiResult<Value> {
+async fn assert_approved(
+    ctx: &Ctx<'_>,
+    approval_id: &str,
+    entity_id: &str,
+    action: &str,
+    actor: &str,
+) -> ApiResult<Value> {
     let approval = get_approval(ctx, approval_id).await?;
     if approval.get("status").and_then(Value::as_str) != Some("approved") {
-        return Err(ApiError::conflict("approval_not_approved", "approval_not_approved"));
+        return Err(ApiError::conflict(
+            "approval_not_approved",
+            "approval_not_approved",
+        ));
     }
     if approval.get("entityId").and_then(Value::as_str) != Some(entity_id) {
-        return Err(ApiError::conflict("approval_entity_mismatch", "approval_entity_mismatch"));
+        return Err(ApiError::conflict(
+            "approval_entity_mismatch",
+            "approval_entity_mismatch",
+        ));
     }
     if approval.get("action").and_then(Value::as_str) != Some(action) {
-        return Err(ApiError::conflict("approval_action_mismatch", "approval_action_mismatch"));
+        return Err(ApiError::conflict(
+            "approval_action_mismatch",
+            "approval_action_mismatch",
+        ));
     }
     if approval.get("requester").and_then(Value::as_str) == Some(actor) {
-        return Err(ApiError::forbidden("self_approval_forbidden", "self_approval_forbidden"));
+        return Err(ApiError::forbidden(
+            "self_approval_forbidden",
+            "self_approval_forbidden",
+        ));
     }
     Ok(approval)
 }
@@ -4223,34 +6572,110 @@ async fn list_pending_approvals(ctx: &Ctx<'_>, module: Option<&str>) -> ApiResul
         path.push_str(&url::form_urlencoded::byte_serialize(module.as_bytes()).collect::<String>());
     }
     let opts = ctx.opts();
-    let response = ctx.client().get(path, &opts).await.map_err(ApiError::from)?;
-    Ok(response.get("items").and_then(Value::as_array).cloned().unwrap_or_default())
+    let response = ctx
+        .client()
+        .get(path, &opts)
+        .await
+        .map_err(ApiError::from)?;
+    Ok(response
+        .get("items")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default())
+}
+
+fn approval_role_allowed(ctx: &Ctx<'_>, approval: &Value) -> bool {
+    let Some(principal) = ctx.principal() else {
+        return false;
+    };
+    if principal.role == auth::ROLE_ADMIN {
+        return true;
+    }
+    let roles: Vec<&str> = approval
+        .get("approverRoles")
+        .and_then(Value::as_array)
+        .map(|roles| roles.iter().filter_map(Value::as_str).collect())
+        .unwrap_or_default();
+    if roles.is_empty() {
+        return [auth::ROLE_ADMIN, auth::ROLE_MANAGER].contains(&principal.role.as_str());
+    }
+    let role = principal.role.to_ascii_lowercase();
+    roles.into_iter().any(|candidate| {
+        let candidate = candidate.to_ascii_lowercase();
+        candidate == role || (role == auth::ROLE_MANAGER && candidate.ends_with("-manager"))
+    })
 }
 
 async fn hitl_list(ctx: &Ctx<'_>) -> ApiResult<Response> {
     let items = list_pending_approvals(ctx, ctx.query.get("module").map(String::as_str)).await?;
     let now = Utc::now().timestamp_millis();
-    let values: Vec<Value> = items.into_iter().map(|mut item| {
-        let escalated = item.get("dueAt").and_then(Value::as_str).and_then(compare_timestamp).map(|due| due < now).unwrap_or(false);
-        item["escalated"] = json!(escalated);
-        item
-    }).collect();
+    let values: Vec<Value> = items
+        .into_iter()
+        // Record-level authorization: an approver only sees approvals whose
+        // approverRoles include their role. Admin retains the explicit bypass.
+        .filter(|item| approval_role_allowed(ctx, item))
+        .map(|mut item| {
+            let escalated = item
+                .get("dueAt")
+                .and_then(Value::as_str)
+                .and_then(compare_timestamp)
+                .map(|due| due < now)
+                .unwrap_or(false);
+            item["escalated"] = json!(escalated);
+            item
+        })
+        .collect();
     let total = values.len();
-    Ok(web::json_response(json!({ "items": values, "total": total })))
+    Ok(web::json_response(
+        json!({ "items": values, "total": total }),
+    ))
 }
 
 async fn hitl_decide(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
-    let decision = web::string_field(ctx.body, "decision").unwrap_or_default().to_ascii_lowercase();
+    let decision = web::string_field(ctx.body, "decision")
+        .unwrap_or_default()
+        .to_ascii_lowercase();
     if !["approve", "reject"].contains(&decision.as_str()) {
-        return Err(ApiError::bad_request("invalid_decision", "invalid_decision"));
+        return Err(ApiError::bad_request(
+            "invalid_decision",
+            "invalid_decision",
+        ));
+    }
+    if ctx.config().is_production
+        && ctx
+            .principal()
+            .and_then(|principal| principal.tier2_token.as_ref())
+            .is_none()
+    {
+        return Err(ApiError::unavailable(
+            "user_identity_required",
+            "HITL decisions must carry the caller's Tier-2 identity, not the service credential.",
+        ));
+    }
+    let approval = get_approval(ctx, id).await?;
+    if !approval_role_allowed(ctx, &approval) {
+        return Err(ApiError::forbidden(
+            "approval_role_required",
+            "Your role is not listed as an approver for this request.",
+        ));
     }
     let mut body = json!({ "decision": decision });
     if let Some(note) = web::string_field(ctx.body, "note") {
         body["note"] = json!(note);
     }
     let opts = ctx.opts();
-    let response = ctx.client().post(format!("/v1/capabilities/approvals/{id}/decide"), body, &opts).await.map_err(ApiError::from)?;
-    Ok(web::json_response(json!({ "approval": response.get("approval").cloned().unwrap_or(response) })))
+    let response = ctx
+        .client()
+        .post(
+            format!("/v1/capabilities/approvals/{id}/decide"),
+            body,
+            &opts,
+        )
+        .await
+        .map_err(ApiError::from)?;
+    Ok(web::json_response(
+        json!({ "approval": response.get("approval").cloned().unwrap_or(response) }),
+    ))
 }
 
 // ---------------------------------------------------------------------------
@@ -4258,11 +6683,25 @@ async fn hitl_decide(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
 // ---------------------------------------------------------------------------
 
 async fn map_tile(ctx: &Ctx<'_>, z: &str, x: &str, y: &str) -> ApiResult<Response> {
-    let Some(api_key) = ctx.config().tier2_api_key.clone().or_else(|| ctx.config().tier2_token.clone()) else {
-        return Ok(web::status_json(StatusCode::SERVICE_UNAVAILABLE, json!({ "error": "map_tiles_unavailable", "dependency": "synapsedx" })));
+    let Some(api_key) = ctx
+        .config()
+        .tier2_api_key
+        .clone()
+        .or_else(|| ctx.config().tier2_token.clone())
+    else {
+        return Ok(web::status_json(
+            StatusCode::SERVICE_UNAVAILABLE,
+            json!({ "error": "map_tiles_unavailable", "dependency": "synapsedx" }),
+        ));
     };
     let y = y.strip_suffix(".png").unwrap_or(y);
-    let url = format!("{}/v1/capabilities/geo/tiles/{}/{}/{}.png", ctx.config().tier2_url, z, x, y);
+    let url = format!(
+        "{}/v1/capabilities/geo/tiles/{}/{}/{}.png",
+        ctx.config().tier2_url,
+        z,
+        x,
+        y
+    );
     let client = reqwest::Client::new();
     let mut request = client.get(url).header("accept", "*/*");
     request = if ctx.config().tier2_api_key.is_some() {
@@ -4272,18 +6711,37 @@ async fn map_tile(ctx: &Ctx<'_>, z: &str, x: &str, y: &str) -> ApiResult<Respons
     };
     match request.send().await {
         Ok(response) if response.status().is_success() => {
-            let content_type = response.headers().get("content-type").and_then(|value| value.to_str().ok()).unwrap_or("image/png").to_string();
+            let content_type = response
+                .headers()
+                .get("content-type")
+                .and_then(|value| value.to_str().ok())
+                .unwrap_or("image/png")
+                .to_string();
             let bytes = response.bytes().await.map_err(ApiError::internal)?;
             let mut output = Response::new(axum::body::Body::from(bytes));
-            output.headers_mut().insert("content-type", HeaderValue::from_str(&content_type).unwrap_or(HeaderValue::from_static("image/png")));
-            output.headers_mut().insert("cache-control", HeaderValue::from_static("public, max-age=86400, immutable"));
+            output.headers_mut().insert(
+                "content-type",
+                HeaderValue::from_str(&content_type)
+                    .unwrap_or(HeaderValue::from_static("image/png")),
+            );
+            output.headers_mut().insert(
+                "cache-control",
+                HeaderValue::from_static("public, max-age=86400, immutable"),
+            );
             Ok(output)
         }
         Ok(response) => Ok(web::status_json(
-            if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS { StatusCode::TOO_MANY_REQUESTS } else { StatusCode::SERVICE_UNAVAILABLE },
+            if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                StatusCode::TOO_MANY_REQUESTS
+            } else {
+                StatusCode::SERVICE_UNAVAILABLE
+            },
             json!({ "error": "map_tiles_unavailable", "dependency": "synapsedx", "upstreamStatus": response.status().as_u16() }),
         )),
-        Err(_) => Ok(web::status_json(StatusCode::SERVICE_UNAVAILABLE, json!({ "error": "map_tiles_unavailable", "dependency": "synapsedx" }))),
+        Err(_) => Ok(web::status_json(
+            StatusCode::SERVICE_UNAVAILABLE,
+            json!({ "error": "map_tiles_unavailable", "dependency": "synapsedx" }),
+        )),
     }
 }
 
@@ -4291,7 +6749,11 @@ async fn ai_status(ctx: &Ctx<'_>) -> ApiResult<Response> {
     let opts = ctx.opts();
     let status = ai::ai_status(ctx.state, &opts).await;
     Ok(web::status_json(
-        if status.get("status").and_then(Value::as_str) == Some("unavailable") { StatusCode::SERVICE_UNAVAILABLE } else { StatusCode::OK },
+        if status.get("status").and_then(Value::as_str) == Some("unavailable") {
+            StatusCode::SERVICE_UNAVAILABLE
+        } else {
+            StatusCode::OK
+        },
         status,
     ))
 }
@@ -4300,7 +6762,10 @@ async fn ai_chat(ctx: &Ctx<'_>) -> ApiResult<Response> {
     let body = web::private_input(ctx.body);
     let message = web::string_field(&body, "message").unwrap_or_default();
     if message.is_empty() {
-        return Err(ApiError::bad_request("message_required", "message_required"));
+        return Err(ApiError::bad_request(
+            "message_required",
+            "message_required",
+        ));
     }
     let context = body.get("context").cloned();
     let opts = ctx.opts();
@@ -4318,7 +6783,7 @@ mod route_tests {
     use serde_json::{json, Value};
     use synapsedx::{Client, Credentials};
     use tower::ServiceExt;
-    use wiremock::matchers::{header, method, path, query_param};
+    use wiremock::matchers::{body_partial_json, header, method, path, query_param};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     fn state(uri: &str) -> AppState {
@@ -4425,14 +6890,7 @@ mod route_tests {
         let app = app(state("http://127.0.0.1:1"));
         let (status, _, _) = call(app.clone(), Method::GET, "/v1/assets", None, None).await;
         assert_eq!(status, StatusCode::UNAUTHORIZED);
-        let (status, _, _) = call(
-            app,
-            Method::GET,
-            "/v1/assets",
-            Some("not-a-token"),
-            None,
-        )
-        .await;
+        let (status, _, _) = call(app, Method::GET, "/v1/assets", Some("not-a-token"), None).await;
         assert_eq!(status, StatusCode::UNAUTHORIZED);
     }
 
@@ -4477,14 +6935,7 @@ mod route_tests {
     #[tokio::test]
     async fn public_map_config_and_status_stay_anonymous() {
         let app = app(state("http://127.0.0.1:1"));
-        let (status, _, body) = call(
-            app.clone(),
-            Method::GET,
-            "/v1/map/config",
-            None,
-            None,
-        )
-        .await;
+        let (status, _, body) = call(app.clone(), Method::GET, "/v1/map/config", None, None).await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["provider"], "synapsedx");
         let (status, _, body) = call(app, Method::GET, "/v1/map/status", None, None).await;
@@ -4504,10 +6955,8 @@ mod route_tests {
             true,
         )
         .await;
-        Mock::given(method("GET"))
-            .and(path("/v1/capabilities/datasets/city-assets/records"))
-            .and(query_param("limit", "500"))
-            .and(query_param("offset", "0"))
+        Mock::given(method("POST"))
+            .and(path("/v1/capabilities/datasets/city-assets/records/query"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "items": [{
                     "id": "a1",
@@ -4525,8 +6974,8 @@ mod route_tests {
                         "geometry": {"type": "Point", "coordinates": [105.8, 21.0]}
                     }
                 }],
-                "total": 1,
-                "limit": 500,
+                "total": 6001,
+                "limit": 1,
                 "offset": 0,
                 "nextCursor": null
             })))
@@ -4534,7 +6983,7 @@ mod route_tests {
             .mount(&server)
             .await;
 
-        let (status, _, body) = call(
+        let (status, headers, body) = call(
             app(state(&server.uri())),
             Method::GET,
             "/v1/public/assets?limit=1",
@@ -4543,8 +6992,136 @@ mod route_tests {
         )
         .await;
         assert_eq!(status, StatusCode::OK);
+        assert_eq!(headers.get("x-total-count").unwrap(), "6001");
+        assert_eq!(headers.get("x-scan-truncated").unwrap(), "false");
+        assert_eq!(
+            headers.get("cache-control").unwrap(),
+            "public, max-age=60, stale-while-revalidate=300"
+        );
         assert_eq!(body[0]["asset_code"], "A1");
         assert_eq!(body[0]["name"], "Pump station");
+    }
+
+    #[tokio::test]
+    async fn multibyte_report_id_returns_created_instead_of_panicking() {
+        let config = Config::for_test("http://127.0.0.1:1");
+        let token = admin_token(&config);
+        let server = MockServer::start().await;
+        mount_dataset(
+            &server,
+            "city-assets",
+            "SynapseCity infrastructure assets",
+            "CityAsset",
+            "Public projection of city infrastructure assets",
+            true,
+        )
+        .await;
+        mount_dataset(
+            &server,
+            "city-incidents",
+            "SynapseCity infrastructure incidents",
+            "CityIncident",
+            "Public projection of generalized infrastructure incidents",
+            true,
+        )
+        .await;
+        mount_dataset(
+            &server,
+            "city-maintenance",
+            "SynapseCity maintenance work orders",
+            "MaintenanceWorkOrder",
+            "Infrastructure maintenance lifecycle records",
+            false,
+        )
+        .await;
+        mount_dataset(
+            &server,
+            "city-reports",
+            "SynapseCity reports",
+            "InfrastructureReport",
+            "Infrastructure operational reports",
+            false,
+        )
+        .await;
+        for dataset in ["city-assets", "city-incidents", "city-maintenance"] {
+            Mock::given(method("GET"))
+                .and(path(format!("/v1/capabilities/datasets/{dataset}/records")))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                    "items": [], "total": 0, "limit": 500, "offset": 0, "nextCursor": null
+                })))
+                .mount(&server)
+                .await;
+        }
+        Mock::given(method("POST"))
+            .and(path("/v1/capabilities/datasets/city-reports/records"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": "abcdefg😀", "version": 1,
+                "createdAt": "2026-11-01T00:00:00.000Z",
+                "updatedAt": "2026-11-01T00:00:00.000Z",
+                "data": { "report_code": "RPT-ABCDEFG😀", "status": "completed" }
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let app = app(AppState::new(
+            config,
+            Client::new(&server.uri(), Credentials::none()).unwrap(),
+        ));
+        let (status, _, body) = call(
+            app,
+            Method::POST,
+            "/v1/reports",
+            Some(&token),
+            Some(json!({
+                "id": "abcdefg😀",
+                "report_type": "incident_summary",
+                "format": "csv"
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED, "{body}");
+        assert_eq!(body["report_code"], "RPT-ABCDEFG😀");
+    }
+
+    #[tokio::test]
+    async fn public_asset_without_coordinates_omits_them_instead_of_null() {
+        let server = MockServer::start().await;
+        mount_dataset(
+            &server,
+            "city-assets",
+            "SynapseCity infrastructure assets",
+            "CityAsset",
+            "Public projection of city infrastructure assets",
+            true,
+        )
+        .await;
+        Mock::given(method("POST"))
+            .and(path("/v1/capabilities/datasets/city-assets/records/query"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "items": [{
+                    "id": "a-null", "version": 1,
+                    "createdAt": "2026-11-01T00:00:00.000Z",
+                    "updatedAt": "2026-11-01T00:00:00.000Z",
+                    "data": {
+                        "id": "a-null", "asset_code": "A-NULL", "name": "No location",
+                        "feature_type": "utility", "status": "active", "public_visible": true
+                    }
+                }],
+                "total": 1, "limit": 100, "offset": 0, "nextCursor": null
+            })))
+            .mount(&server)
+            .await;
+        let (status, _, body) = call(
+            app(state(&server.uri())),
+            Method::GET,
+            "/v1/public/assets",
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert!(body[0]["location"].get("coordinates").is_none());
+        assert!(body[0]["geometry"].is_null());
     }
 
     #[tokio::test]
@@ -4562,7 +7139,9 @@ mod route_tests {
         )
         .await;
         Mock::given(method("GET"))
-            .and(path("/v1/capabilities/datasets/city-maintenance/records/m1"))
+            .and(path(
+                "/v1/capabilities/datasets/city-maintenance/records/m1",
+            ))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "id": "m1",
                 "version": 3,
@@ -4570,11 +7149,14 @@ mod route_tests {
                 "updatedAt": "2026-11-01T00:00:00.000Z",
                 "data": { "title": "Pump repair", "status": "scheduled" }
             })))
-            .expect(2)
+            .expect(3)
             .mount(&server)
             .await;
 
-        let state = AppState::new(config, Client::new(&server.uri(), Credentials::none()).unwrap());
+        let state = AppState::new(
+            config,
+            Client::new(&server.uri(), Credentials::none()).unwrap(),
+        );
         let app = app(state);
         let (status, headers, value) = call(
             app.clone(),
@@ -4615,7 +7197,9 @@ mod route_tests {
         )
         .await;
         Mock::given(method("GET"))
-            .and(path("/v1/capabilities/datasets/city-maintenance/records/m1"))
+            .and(path(
+                "/v1/capabilities/datasets/city-maintenance/records/m1",
+            ))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "id": "m1",
                 "version": 3,
@@ -4623,11 +7207,13 @@ mod route_tests {
                 "updatedAt": "2026-11-01T00:00:00.000Z",
                 "data": { "title": "Pump repair", "status": "scheduled" }
             })))
-            .expect(1)
+            .expect(2)
             .mount(&server)
             .await;
         Mock::given(method("PATCH"))
-            .and(path("/v1/capabilities/datasets/city-maintenance/records/m1"))
+            .and(path(
+                "/v1/capabilities/datasets/city-maintenance/records/m1",
+            ))
             .and(header("if-match", "\"3\""))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "id": "m1",
@@ -4640,7 +7226,10 @@ mod route_tests {
             .mount(&server)
             .await;
 
-        let state = AppState::new(config, Client::new(&server.uri(), Credentials::none()).unwrap());
+        let state = AppState::new(
+            config,
+            Client::new(&server.uri(), Credentials::none()).unwrap(),
+        );
         let (status, headers, value) = call(
             app(state),
             Method::PUT,
@@ -4693,6 +7282,7 @@ mod route_tests {
             .await;
         Mock::given(method("POST"))
             .and(path("/v1/capabilities/datasets/city-incidents/records"))
+            .and(body_partial_json(json!({ "publish": false })))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "id": "inc-1",
                 "version": 1,
@@ -4704,12 +7294,18 @@ mod route_tests {
             .mount(&server)
             .await;
         Mock::given(method("GET"))
-            .and(path("/v1/capabilities/datasets/city-incident-internal/records/internal-inc-1"))
-            .respond_with(ResponseTemplate::new(404).set_body_json(json!({"error": {"code": "not_found"}})))
+            .and(path(
+                "/v1/capabilities/datasets/city-incident-internal/records/internal-inc-1",
+            ))
+            .respond_with(
+                ResponseTemplate::new(404).set_body_json(json!({"error": {"code": "not_found"}})),
+            )
             .mount(&server)
             .await;
         Mock::given(method("POST"))
-            .and(path("/v1/capabilities/datasets/city-incident-internal/records"))
+            .and(path(
+                "/v1/capabilities/datasets/city-incident-internal/records",
+            ))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "id": "internal-inc-1",
                 "version": 1,
@@ -4737,6 +7333,10 @@ mod route_tests {
         assert_eq!(status, StatusCode::CREATED);
         assert_eq!(body["title"], "Broken pump");
         assert_eq!(body["reporter_type"], "citizen");
+        assert!(body["edit_token"]
+            .as_str()
+            .map(|token| !token.is_empty())
+            .unwrap_or(false));
     }
     #[tokio::test]
     async fn public_asset_lookup_by_code_works_anonymously() {
@@ -4752,7 +7352,9 @@ mod route_tests {
         .await;
         Mock::given(method("GET"))
             .and(path("/v1/capabilities/datasets/city-assets/records/A1"))
-            .respond_with(ResponseTemplate::new(404).set_body_json(json!({"error": {"code": "not_found"}})))
+            .respond_with(
+                ResponseTemplate::new(404).set_body_json(json!({"error": {"code": "not_found"}})),
+            )
             .mount(&server)
             .await;
         Mock::given(method("GET"))
@@ -4816,6 +7418,619 @@ mod route_tests {
         assert_eq!(body["code"], "x_file_name_required");
     }
 
+    fn role_token(config: &Config, role: &str, username: &str) -> String {
+        let principal = auth::principal_from_input(
+            config,
+            username,
+            Some(&format!("{username}@example.com")),
+            Some(username),
+            None,
+            role,
+        );
+        auth::issue_session(config, principal, false).access_token
+    }
+
+    async fn call_raw(
+        app: Router,
+        method: Method,
+        uri: &str,
+        token: &str,
+        content_type: &str,
+        body: Vec<u8>,
+    ) -> (StatusCode, Value) {
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method(method)
+                    .uri(uri)
+                    .header("authorization", format!("Bearer {token}"))
+                    .header("content-type", content_type)
+                    .body(Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let status = response.status();
+        let bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
+        (status, value)
+    }
+
+    #[tokio::test]
+    async fn preventive_cycle_and_report_codes_are_input_safe() {
+        let config = Config::for_test("http://127.0.0.1:1");
+        let token = admin_token(&config);
+        let app = app(AppState::new(
+            config,
+            Client::new("http://127.0.0.1:1", Credentials::none()).unwrap(),
+        ));
+        for cycle in [
+            json!(1e30),
+            json!("NaN"),
+            json!(-1),
+            json!(3651),
+            json!(1.5),
+        ] {
+            let (status, _, body) = call(
+                app.clone(),
+                Method::POST,
+                "/v1/preventive-maintenance",
+                Some(&token),
+                Some(json!({ "asset_id": "asset-1", "cycle_days": cycle })),
+            )
+            .await;
+            assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+            assert_eq!(body["code"], "cycle_days_out_of_range");
+        }
+        assert_eq!(report_code_for("abcdefg😀"), "RPT-ABCDEFG😀");
+    }
+
+    #[tokio::test]
+    async fn hitl_requires_permission_and_matching_approver_role() {
+        let config = Config::for_test("http://127.0.0.1:1");
+        let technician = role_token(&config, auth::ROLE_TECHNICIAN, "tech");
+        let technician_app = app(AppState::new(
+            config.clone(),
+            Client::new("http://127.0.0.1:1", Credentials::none()).unwrap(),
+        ));
+        let (status, _, _) = call(
+            technician_app,
+            Method::GET,
+            "/v1/hitl/approvals",
+            Some(&technician),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/v1/capabilities/approvals"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "items": [
+                    { "id": "a1", "status": "pending", "approverRoles": ["auditor"] },
+                    { "id": "a2", "status": "pending", "approverRoles": ["operations-manager"] }
+                ]
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/v1/capabilities/approvals/a1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": "a1", "status": "pending", "approverRoles": ["auditor"],
+                "entityId": "m1", "action": "maintenance.approve", "requester": "someone"
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/v1/capabilities/approvals/a1/decide"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(0)
+            .mount(&server)
+            .await;
+
+        let manager = role_token(&config, auth::ROLE_MANAGER, "manager");
+        let app = app(AppState::new(
+            config,
+            Client::new(&server.uri(), Credentials::none()).unwrap(),
+        ));
+        let (status, _, body) = call(
+            app.clone(),
+            Method::GET,
+            "/v1/hitl/approvals",
+            Some(&manager),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        let items = body["items"].as_array().unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["id"], "a2");
+
+        let (status, _, body) = call(
+            app,
+            Method::POST,
+            "/v1/hitl/approvals/a1/decide",
+            Some(&manager),
+            Some(json!({ "decision": "approve" })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+        assert_eq!(body["code"], "approval_role_required");
+    }
+
+    #[tokio::test]
+    async fn technician_cannot_read_or_list_another_technicians_work_order() {
+        let config = Config::for_test("http://127.0.0.1:1");
+        let technician = role_token(&config, auth::ROLE_TECHNICIAN, "tech");
+        let server = MockServer::start().await;
+        mount_dataset(
+            &server,
+            "city-maintenance",
+            "SynapseCity maintenance work orders",
+            "MaintenanceWorkOrder",
+            "Infrastructure maintenance lifecycle records",
+            false,
+        )
+        .await;
+        Mock::given(method("GET"))
+            .and(path("/v1/capabilities/datasets/city-maintenance/records/m1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": "m1", "version": 1,
+                "createdAt": "2026-11-01T00:00:00.000Z",
+                "updatedAt": "2026-11-01T00:00:00.000Z",
+                "data": { "id": "m1", "title": "Other", "status": "scheduled", "assigned_to": "other-tech" }
+            })))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/v1/capabilities/datasets/city-maintenance/records"))
+            .and(query_param("limit", "500"))
+            .and(query_param("offset", "0"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "items": [
+                    { "id": "m1", "version": 1, "createdAt": "2026-11-01T00:00:00.000Z", "updatedAt": "2026-11-01T00:00:00.000Z", "data": { "id": "m1", "title": "Other", "assigned_to": "other-tech" } },
+                    { "id": "m2", "version": 1, "createdAt": "2026-11-01T00:00:00.000Z", "updatedAt": "2026-11-01T00:00:00.000Z", "data": { "id": "m2", "title": "Mine", "assigned_to": "tech" } }
+                ],
+                "total": 2, "limit": 500, "offset": 0, "nextCursor": null
+            })))
+            .mount(&server)
+            .await;
+
+        let app = app(AppState::new(
+            config,
+            Client::new(&server.uri(), Credentials::none()).unwrap(),
+        ));
+        let (status, _, _) = call(
+            app.clone(),
+            Method::GET,
+            "/v1/maintenance/m1",
+            Some(&technician),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+
+        let (status, _, body) = call(
+            app,
+            Method::GET,
+            "/v1/maintenance?limit=10",
+            Some(&technician),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(body.as_array().unwrap().len(), 1);
+        assert_eq!(body[0]["id"], "m2");
+    }
+
+    #[tokio::test]
+    async fn public_file_tampering_is_limited_to_the_owner() {
+        let config = Config::for_test("http://127.0.0.1:1");
+        let technician = role_token(&config, auth::ROLE_TECHNICIAN, "tech");
+        let server = MockServer::start().await;
+        mount_dataset(
+            &server,
+            "city-files",
+            "SynapseCity file metadata",
+            "CityFile",
+            "Metadata for binary files stored through the Tier-2 files capability",
+            false,
+        )
+        .await;
+        Mock::given(method("GET"))
+            .and(path("/v1/capabilities/datasets/city-files/records/f1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": "f1", "version": 1,
+                "createdAt": "2026-11-01T00:00:00.000Z",
+                "updatedAt": "2026-11-01T00:00:00.000Z",
+                "data": { "id": "f1", "filename": "evidence.png", "contentType": "image/png", "public": true, "owner": "someone-else" }
+            })))
+            .mount(&server)
+            .await;
+        let app = app(AppState::new(
+            config.clone(),
+            Client::new(&server.uri(), Credentials::none()).unwrap(),
+        ));
+        let (status, _) = call_raw(
+            app.clone(),
+            Method::PUT,
+            "/v1/files/f1/content",
+            &technician,
+            "image/png",
+            vec![1, 2, 3],
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+
+        let (status, _, body) = call(
+            app,
+            Method::POST,
+            "/v1/files/f1/presign",
+            Some(&technician),
+            Some(json!({ "method": "DELETE" })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert_eq!(body["code"], "file_write_forbidden");
+    }
+
+    #[tokio::test]
+    async fn file_overwrite_enforces_the_upload_mime_allowlist() {
+        let config = Config::for_test("http://127.0.0.1:1");
+        let technician = role_token(&config, auth::ROLE_TECHNICIAN, "tech");
+        let server = MockServer::start().await;
+        mount_dataset(
+            &server,
+            "city-files",
+            "SynapseCity file metadata",
+            "CityFile",
+            "Metadata for binary files stored through the Tier-2 files capability",
+            false,
+        )
+        .await;
+        Mock::given(method("GET"))
+            .and(path("/v1/capabilities/datasets/city-files/records/f2"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": "f2", "version": 1,
+                "createdAt": "2026-11-01T00:00:00.000Z",
+                "updatedAt": "2026-11-01T00:00:00.000Z",
+                "data": { "id": "f2", "filename": "evidence.png", "contentType": "image/png", "public": true, "owner": "user-tech" }
+            })))
+            .mount(&server)
+            .await;
+        let app = app(AppState::new(
+            config,
+            Client::new(&server.uri(), Credentials::none()).unwrap(),
+        ));
+        let (status, body) = call_raw(
+            app,
+            Method::PUT,
+            "/v1/files/f2/content",
+            &technician,
+            "text/html",
+            b"<script>alert(1)</script>".to_vec(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNSUPPORTED_MEDIA_TYPE, "{body}");
+        assert_eq!(body["code"], "unsupported_file_type");
+    }
+
+    #[tokio::test]
+    async fn turnstile_rejects_presence_only_tokens_when_required() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/capabilities/security/turnstile/verify"))
+            .and(body_partial_json(json!({ "token": "fake-token" })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "ok": false, "configured": true, "error": "turnstile_failed"
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/v1/capabilities/security/turnstile/verify"))
+            .and(body_partial_json(json!({ "token": "valid-token" })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "ok": true, "configured": true
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let mut config = Config::for_test(&server.uri());
+        config.require_turnstile = true;
+        let app = app(AppState::new(
+            config,
+            Client::new(&server.uri(), Credentials::none()).unwrap(),
+        ));
+        let (status, _, body) = call(
+            app.clone(),
+            Method::POST,
+            "/v1/public/incidents",
+            None,
+            Some(json!({ "title": "x", "description": "y" })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert_eq!(body["code"], "turnstile_token_required");
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/v1/public/incidents")
+                    .header("content-type", "application/json")
+                    .header("cf-turnstile-response", "fake-token")
+                    .body(Body::from(r#"{"title":"x","description":"y"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/v1/public/incidents")
+                    .header("content-type", "application/json")
+                    .header("cf-turnstile-response", "valid-token")
+                    .body(Body::from(r#"{"description":"y"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn public_photo_append_requires_edit_token_and_rejects_external_urls() {
+        let config = Config::for_test("http://127.0.0.1:1");
+        let valid_token = auth::issue_report_edit_token(&config, "inc-1").0;
+        let server = MockServer::start().await;
+        mount_dataset(
+            &server,
+            "city-incidents",
+            "SynapseCity infrastructure incidents",
+            "CityIncident",
+            "Public projection of generalized infrastructure incidents",
+            true,
+        )
+        .await;
+        Mock::given(method("GET"))
+            .and(path(
+                "/v1/capabilities/datasets/city-incidents/records/inc-1",
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": "inc-1", "version": 1,
+                "createdAt": "2026-11-01T00:00:00.000Z",
+                "updatedAt": "2026-11-01T00:00:00.000Z",
+                "data": {
+                    "id": "inc-1", "incident_number": "INC-1", "title": "Broken pump",
+                    "status": "reported", "public_visible": true, "source": "synapsecity-public",
+                    "photos": []
+                }
+            })))
+            .mount(&server)
+            .await;
+
+        let app = app(AppState::new(
+            config.clone(),
+            Client::new(&server.uri(), Credentials::none()).unwrap(),
+        ));
+        let (status, _, body) = call(
+            app.clone(),
+            Method::POST,
+            "/v1/public/incidents/inc-1/photos",
+            None,
+            Some(json!({ "file_ids": ["abcdefgh"] })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+        assert_eq!(body["code"], "report_edit_token_required");
+
+        let (status, _, body) = call(
+            app,
+            Method::POST,
+            "/v1/public/incidents/inc-1/photos",
+            None,
+            Some(json!({
+                "edit_token": valid_token,
+                "file_ids": ["https://evil.example/tracker.png"]
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+        assert_eq!(body["code"], "public_photo_file_id_required");
+    }
+
+    #[tokio::test]
+    async fn risk_ranking_loads_each_dataset_once_and_scores_every_asset() {
+        let config = Config::for_test("http://127.0.0.1:1");
+        let token = admin_token(&config);
+        let server = MockServer::start().await;
+        mount_dataset(
+            &server,
+            "city-assets",
+            "SynapseCity infrastructure assets",
+            "CityAsset",
+            "Public projection of city infrastructure assets",
+            true,
+        )
+        .await;
+        mount_dataset(
+            &server,
+            "city-incidents",
+            "SynapseCity infrastructure incidents",
+            "CityIncident",
+            "Public projection of generalized infrastructure incidents",
+            true,
+        )
+        .await;
+        mount_dataset(
+            &server,
+            "city-maintenance",
+            "SynapseCity maintenance work orders",
+            "MaintenanceWorkOrder",
+            "Infrastructure maintenance lifecycle records",
+            false,
+        )
+        .await;
+        mount_dataset(
+            &server,
+            "city-iot-sensors",
+            "SynapseCity IoT sensors",
+            "IoTSensor",
+            "Infrastructure sensor metadata and readings",
+            false,
+        )
+        .await;
+        mount_dataset(
+            &server,
+            "city-iot-readings",
+            "SynapseCity IoT readings",
+            "SensorReading",
+            "Infrastructure sensor observations",
+            false,
+        )
+        .await;
+        let assets: Vec<Value> = (1..=3).map(|index| json!({
+            "id": format!("a{index}"), "version": 1,
+            "createdAt": "2026-11-01T00:00:00.000Z",
+            "updatedAt": "2026-11-01T00:00:00.000Z",
+            "data": {
+                "id": format!("a{index}"), "asset_code": format!("A{index}"), "name": format!("Asset {index}"),
+                "feature_type": "utility", "status": "active", "public_visible": true
+            }
+        })).collect();
+        Mock::given(method("GET"))
+            .and(path("/v1/capabilities/datasets/city-assets/records"))
+            .and(query_param("limit", "500"))
+            .and(query_param("offset", "0"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "items": assets, "total": 3, "limit": 500, "offset": 0, "nextCursor": null
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        for dataset in [
+            "city-incidents",
+            "city-maintenance",
+            "city-iot-sensors",
+            "city-iot-readings",
+        ] {
+            Mock::given(method("GET"))
+                .and(path(format!("/v1/capabilities/datasets/{dataset}/records")))
+                .and(query_param("limit", "500"))
+                .and(query_param("offset", "0"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                    "items": [], "total": 0, "limit": 500, "offset": 0, "nextCursor": null
+                })))
+                .expect(1)
+                .mount(&server)
+                .await;
+        }
+        let app = app(AppState::new(
+            config,
+            Client::new(&server.uri(), Credentials::none()).unwrap(),
+        ));
+        let (status, _, body) = call(
+            app,
+            Method::GET,
+            "/v1/risk/top?limit=10",
+            Some(&token),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(body["total"], 3);
+        assert_eq!(body["truncated"], false);
+        assert_eq!(body["items"].as_array().unwrap().len(), 3);
+    }
+
+    #[tokio::test]
+    async fn non_public_incident_is_created_with_publish_false() {
+        let config = Config::for_test("http://127.0.0.1:1");
+        let token = admin_token(&config);
+        let server = MockServer::start().await;
+        mount_dataset(
+            &server,
+            "city-incidents",
+            "SynapseCity infrastructure incidents",
+            "CityIncident",
+            "Public projection of generalized infrastructure incidents",
+            true,
+        )
+        .await;
+        mount_dataset(
+            &server,
+            "city-incident-internal",
+            "SynapseCity incident internal records",
+            "CityIncidentInternal",
+            "Private reporter identity and internal incident notes",
+            false,
+        )
+        .await;
+        Mock::given(method("GET"))
+            .and(path(
+                "/v1/capabilities/datasets/city-incident-internal/records/internal-inc-private",
+            ))
+            .respond_with(
+                ResponseTemplate::new(404).set_body_json(json!({"error": {"code": "not_found"}})),
+            )
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path(
+                "/v1/capabilities/datasets/city-incident-internal/records",
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": "internal-inc-private", "version": 1,
+                "createdAt": "2026-11-01T00:00:00.000Z",
+                "updatedAt": "2026-11-01T00:00:00.000Z",
+                "data": {"reported_by": "operator"}
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/v1/capabilities/datasets/city-incidents/records"))
+            .and(body_partial_json(json!({ "publish": false })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": "inc-private", "version": 1,
+                "createdAt": "2026-11-01T00:00:00.000Z",
+                "updatedAt": "2026-11-01T00:00:00.000Z",
+                "data": {"title": "Private incident", "public_visible": false}
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let app = app(AppState::new(
+            config,
+            Client::new(&server.uri(), Credentials::none()).unwrap(),
+        ));
+        let (status, _, body) = call(
+            app,
+            Method::POST,
+            "/v1/incidents",
+            Some(&token),
+            Some(json!({
+                "incidentId": "inc-private",
+                "title": "Private incident",
+                "category": "repair",
+                "reported_by": "operator",
+                "public_visible": false
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED, "{body}");
+        assert_eq!(body["public_visible"], false);
+    }
 }
 
 #[cfg(test)]
@@ -4850,7 +8065,12 @@ mod route_family_tests {
         auth::issue_session(&config, principal, false).access_token
     }
 
-    async fn call(method: Method, uri: &str, token: Option<&str>, body: Option<Value>) -> (StatusCode, Value) {
+    async fn call(
+        method: Method,
+        uri: &str,
+        token: Option<&str>,
+        body: Option<Value>,
+    ) -> (StatusCode, Value) {
         let mut builder = Request::builder().method(method).uri(uri);
         if let Some(token) = token {
             builder = builder.header("authorization", format!("Bearer {token}"));
@@ -4906,5 +8126,4 @@ mod route_family_tests {
         assert_eq!(status, StatusCode::BAD_REQUEST);
         assert_eq!(body["code"], "content_required");
     }
-
 }

@@ -23,13 +23,17 @@ pub async fn raw_body(req: Request, limit: usize) -> ApiResult<(Bytes, HeaderMap
     Ok((bytes, parts.headers, parts.uri))
 }
 
-pub async fn json_body(req: Request, limit: usize) -> ApiResult<(Map<String, Value>, HeaderMap, Uri)> {
+pub async fn json_body(
+    req: Request,
+    limit: usize,
+) -> ApiResult<(Map<String, Value>, HeaderMap, Uri)> {
     let (bytes, headers, uri) = raw_body(req, limit).await?;
     if bytes.is_empty() {
         return Ok((Map::new(), headers, uri));
     }
-    let value: Value = serde_json::from_slice(&bytes)
-        .map_err(|_| ApiError::bad_request("invalid_json", "The request body must be a JSON object."))?;
+    let value: Value = serde_json::from_slice(&bytes).map_err(|_| {
+        ApiError::bad_request("invalid_json", "The request body must be a JSON object.")
+    })?;
     match value {
         Value::Object(map) => Ok((map, headers, uri)),
         _ => Err(ApiError::bad_request(
@@ -92,7 +96,11 @@ pub fn send_record(data: Map<String, Value>) -> Response {
     response
 }
 
-pub fn send_page(mut items: Vec<Value>, query: &HashMap<String, String>, default_limit: i64) -> Response {
+pub fn send_page(
+    mut items: Vec<Value>,
+    query: &HashMap<String, String>,
+    default_limit: i64,
+) -> Response {
     let limit = query
         .get("limit")
         .and_then(|value| value.parse::<f64>().ok())
@@ -121,6 +129,34 @@ pub fn send_page(mut items: Vec<Value>, query: &HashMap<String, String>, default
     response
 }
 
+/// Return an already paginated Tier-2 page. `total` is the upstream dataset
+/// total, so a client paging beyond the local scan window still sees the real
+/// count instead of a silently truncated one.
+pub fn send_page_with_total(
+    items: Vec<Value>,
+    total: i64,
+    truncated: bool,
+    cache: bool,
+) -> Response {
+    let total = total.max(items.len() as i64);
+    let mut response = json_response(Value::Array(items));
+    response.headers_mut().insert(
+        "x-total-count",
+        HeaderValue::from_str(&total.to_string()).unwrap_or(HeaderValue::from_static("0")),
+    );
+    response.headers_mut().insert(
+        "x-scan-truncated",
+        HeaderValue::from_static(if truncated { "true" } else { "false" }),
+    );
+    if cache {
+        response.headers_mut().insert(
+            "cache-control",
+            HeaderValue::from_static("public, max-age=60, stale-while-revalidate=300"),
+        );
+    }
+    response
+}
+
 pub fn private_input(body: &Map<String, Value>) -> Map<String, Value> {
     match body.get("data") {
         Some(Value::Object(data)) => data.clone(),
@@ -129,10 +165,9 @@ pub fn private_input(body: &Map<String, Value>) -> Map<String, Value> {
 }
 
 pub fn object_body(value: &Value) -> Result<Map<String, Value>, ApiError> {
-    value
-        .as_object()
-        .cloned()
-        .ok_or_else(|| ApiError::bad_request("request_body_must_be_an_object", "Expected a JSON object."))
+    value.as_object().cloned().ok_or_else(|| {
+        ApiError::bad_request("request_body_must_be_an_object", "Expected a JSON object.")
+    })
 }
 
 pub fn required_string(body: &Map<String, Value>, field: &str) -> Result<String, ApiError> {
