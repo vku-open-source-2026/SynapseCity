@@ -42,6 +42,7 @@ const AssetDetailPage: React.FC = () => {
         queryKey: ["asset", id],
         queryFn: async () => {
             const publicAsset = await publicApi.getPublicAsset(id);
+            const coordinates = publicAsset.location?.coordinates;
             return {
                 id: id,
                 asset_code: publicAsset.asset_code,
@@ -51,13 +52,15 @@ const AssetDetailPage: React.FC = () => {
                 category: publicAsset.category,
                 status: publicAsset.status,
                 location: publicAsset.location,
-                geometry: {
-                    type: "Point" as const,
-                    coordinates: [
-                        publicAsset.location.coordinates.longitude,
-                        publicAsset.location.coordinates.latitude,
-                    ],
-                },
+                geometry: coordinates
+                    ? {
+                          type: "Point" as const,
+                          coordinates: [
+                              coordinates.longitude,
+                              coordinates.latitude,
+                          ],
+                      }
+                    : undefined,
                 created_at: "",
                 updated_at: "",
             } as Asset;

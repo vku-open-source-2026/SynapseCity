@@ -242,11 +242,15 @@ GET  /v1/public/files/:id/content
 ```
 
 These routes are anonymous and expose only published/`public_visible` records.
+`POST /v1/public/incidents` returns a one-time `edit_token` to the creator; photo
+appends require it plus a Turnstile token, accept only public file ids uploaded
+for that report, and cap the total at 10 photos. External URLs are rejected.
 The response is a stable City JSON object, **not** NGSI-LD: assets return
 `{ id, asset_code, name, feature_type, feature_code, category, status,
-location: { address, coordinates, geometry }, qr_code, public_url }`, and
-incidents return the public projection with reporter contact details, internal
-comments and assignee identity removed. Soft-deleted, decommissioned and
+location: { address, coordinates?, geometry? }, qr_code, public_url }`.
+`location.coordinates` is omitted (not `null`) when the asset has no usable
+point. Incidents return the public projection with reporter contact details,
+internal comments and assignee identity removed. Soft-deleted, decommissioned and
 `public_visible:false` assets are excluded from every public route, including
 the QR-code and maintenance-summary lookups. `maintenance-summary` exposes
 aggregate counts and the last completed maintenance type only; public pages

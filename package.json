@@ -25,6 +25,7 @@
     "plugins:sync": "node scripts/plugin-bundle.mjs sync",
     "plugins:test": "node --test --test-concurrency=1 scripts/plugin-bundle.test.mjs",
     "test:public-only": "node --test --test-concurrency=1 scripts/public-only.test.mjs",
+    "test:tier-boundary": "node --test --test-concurrency=1 scripts/tier-boundary.test.mjs",
     "test:workflow-artifacts": "node --test --test-concurrency=1 scripts/workflow-artifacts.test.mjs",
     "test:workflow-engine": "node --test --test-concurrency=1 scripts/workflow-engine.test.mjs",
     "workflows:validate": "node workflows/validate.mjs",

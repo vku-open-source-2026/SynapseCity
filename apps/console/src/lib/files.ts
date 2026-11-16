@@ -63,7 +63,16 @@ async function sha256Hex(bytes: ArrayBuffer): Promise<string | undefined> {
     }
 }
 
-async function postFile(path: string, file: File, options: { isPublic?: boolean } = {}): Promise<UploadedFile> {
+async function postFile(
+    path: string,
+    file: File,
+    options: {
+        isPublic?: boolean;
+        reportId?: string;
+        editToken?: string;
+        turnstileToken?: string;
+    } = {},
+): Promise<UploadedFile> {
     if (!file) throw new FileUploadError("Chưa chọn tệp.");
     const bytes = await file.arrayBuffer();
     const checksum = await sha256Hex(bytes);
@@ -72,6 +81,11 @@ async function postFile(path: string, file: File, options: { isPublic?: boolean 
         "X-File-Name": encodeURIComponent(file.name),
         ...(checksum ? { "X-Checksum-SHA256": checksum } : {}),
         ...(options.isPublic ? { "X-File-Visibility": "public" } : {}),
+        ...(options.reportId ? { "X-Report-Id": options.reportId } : {}),
+        ...(options.editToken ? { "X-Report-Edit-Token": options.editToken } : {}),
+        ...(options.turnstileToken
+            ? { "CF-Turnstile-Response": options.turnstileToken }
+            : {}),
     };
     try {
         const response = await httpClient.post(path, bytes, { headers });
@@ -93,8 +107,11 @@ export function uploadFile(file: File): Promise<UploadedFile> {
 }
 
 /** Upload a photo attached to an anonymous citizen report. */
-export function uploadPublicFile(file: File): Promise<UploadedFile> {
-    return postFile("/public/files", file, { isPublic: true });
+export function uploadPublicFile(
+    file: File,
+    options: { reportId?: string; editToken?: string; turnstileToken?: string } = {},
+): Promise<UploadedFile> {
+    return postFile("/public/files", file, { isPublic: true, ...options });
 }
 
 /** Validate that a reference is an absolute HTTPS URL. */

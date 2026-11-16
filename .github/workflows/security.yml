@@ -56,6 +56,22 @@ jobs:
         with:
           category: /language:${{ matrix.language }}
 
+  tier-boundary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify Tier boundary and workflow artifacts
+        run: |
+          node --test --test-concurrency=1 scripts/tier-boundary.test.mjs
+          node --test --test-concurrency=1 scripts/workflow-artifacts.test.mjs
+          node workflows/validate.mjs
+
   workflow-lint:
     runs-on: ubuntu-latest
     timeout-minutes: 10

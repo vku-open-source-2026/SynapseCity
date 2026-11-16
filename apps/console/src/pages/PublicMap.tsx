@@ -24,23 +24,30 @@ import AIChatWidget from "../components/AIChatWidget";
 
 // Extended Asset type with status added by the public projection
 type AssetWithStatus = Asset & {
+    name?: string;
     status?: string;
     lastPing?: string;
 };
 
 /** Convert the public projection into the map's asset shape. */
-function toMapAsset(asset: PublicAssetInfo): Asset {
+function toMapAsset(asset: PublicAssetInfo): Asset | null {
+    const coordinates = asset.location?.coordinates;
+    const geometry =
+        asset.location?.geometry ||
+        (coordinates
+            ? { type: "Point", coordinates: [coordinates.longitude, coordinates.latitude] }
+            : null);
+    if (!geometry) return null;
     return {
         id: asset.id || asset.asset_code,
         _id: asset.id || asset.asset_code,
+        name: asset.name,
+        status: asset.status,
         feature_type: asset.feature_type,
         feature_code: asset.feature_code,
-        geometry: (asset.location.geometry || {
-            type: "Point",
-            coordinates: [asset.location.coordinates.longitude, asset.location.coordinates.latitude],
-        }) as Asset["geometry"],
+        geometry: geometry as Asset["geometry"],
         created_at: "",
-    } as Asset;
+    } as Asset & { name?: string; status?: string };
 }
 
 const PublicMap: React.FC = () => {
@@ -60,7 +67,10 @@ const PublicMap: React.FC = () => {
     } = useQuery({
         queryKey: ["public", "assets"],
         // The public map reads the published projection only.
-        queryFn: async () => (await publicApi.listAllPublicAssets({ include_inactive: true })).map(toMapAsset),
+        queryFn: async () =>
+            (await publicApi.listAllPublicAssets({ include_inactive: true }))
+                .map(toMapAsset)
+                .filter((asset): asset is Asset => asset !== null),
         staleTime: 5 * 60 * 1000, // 5 minutes - prevent refetch on navigation
         refetchOnWindowFocus: false,
     });
@@ -205,7 +215,8 @@ const PublicMap: React.FC = () => {
                                         )}
                                     </div>
                                     <h3 className="text-xl font-bold text-slate-900">
-                                        {selectedAsset.feature_type}
+                                        {(selectedAsset as AssetWithStatus).name ||
+                                            selectedAsset.feature_type}
                                     </h3>
                                 </div>
                                 <button

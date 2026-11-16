@@ -46,3 +46,13 @@ console proxy remains functional.
 The edge configuration is a deployment operation because the current
 SynapseOne edge certificate only covers `synapseone.space` and its existing
 subdomains.
+
+### Request body limit
+
+`infra/nginx/synapsecity.conf` sets `client_max_body_size 26m` in both City
+server blocks. City accepts 10 MiB photos/documents and the gateway accepts up
+to 26 MiB, so the edge must stay at or above 26 MiB. The SynapseOne production
+edge (`infra/prod/nginx-prod.conf` in that deployment) owns the final server
+blocks; verify its City `server` block has the same directive after every edge
+change. A missing directive falls back to nginx's 1 MiB default and rejects
+normal phone photos with `413` before the gateway is reached.

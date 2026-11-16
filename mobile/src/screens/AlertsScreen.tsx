@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 import React, { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
-import { cityApi } from '../api/city';
 import type { CityAlert, CityNotification, PublicIncident, Severity } from '../api/types';
 import type { AppRoute } from '../lib/deepLink';
 import {
@@ -15,7 +13,6 @@ import {
   severityMeta,
   timeAgo,
 } from '../lib/format';
-import { useAuth } from '../store/auth';
 import {
   Card,
   Chip,
@@ -46,27 +43,10 @@ export function AlertsScreen({
   navigate,
   onAccount,
 }: AlertsScreenProps) {
-  const { token, user } = useAuth();
   const [tab, setTab] = useState<Tab>('public');
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
   const [lookup, setLookup] = useState('');
-
-  const alertsQuery = useQuery({
-    queryKey: ['city', 'alerts', token],
-    queryFn: () => cityApi.listAlerts(token as string),
-    enabled: Boolean(token),
-    staleTime: 30_000,
-    retry: 1,
-  });
-
-  const notificationsQuery = useQuery({
-    queryKey: ['city', 'notifications', token],
-    queryFn: () => cityApi.listNotifications(token as string),
-    enabled: Boolean(token),
-    staleTime: 30_000,
-    retry: 1,
-  });
 
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -82,17 +62,15 @@ export function AlertsScreen({
       .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
   }, [incidents, filter, search]);
 
-  const unread = (notificationsQuery.data ?? []).filter((item) => !item.read).length;
-
   return (
     <Screen>
       <PageHeader
         eyebrow="SỰ CỐ & CẢNH BÁO"
         title="Trung tâm sự cố"
-        subtitle={`${incidents.length} báo cáo công khai${token ? ` · ${unread} thông báo chưa đọc` : ''}`}
+        subtitle={`${incidents.length} báo cáo công khai`}
         right={
           <Pressable onPress={onAccount} style={styles.accountBtn} accessibilityLabel="Tài khoản">
-            <Ionicons name="person" size={18} color={token ? colors.cyan : colors.textMuted} />
+            <Ionicons name="person" size={18} color={colors.textMuted} />
           </Pressable>
         }
       />
@@ -103,7 +81,7 @@ export function AlertsScreen({
         </Pressable>
         <Pressable onPress={() => setTab('operator')} style={[styles.tab, tab === 'operator' && styles.tabActive]}>
           <Text style={[styles.tabText, tab === 'operator' && styles.tabTextActive]}>
-            Vận hành {token ? `(${unread})` : ''}
+            Vận hành
           </Text>
         </Pressable>
       </View>
@@ -153,69 +131,49 @@ export function AlertsScreen({
             />
           ) : null}
         </>
-      ) : token ? (
-        <>
-          <SectionHeader title="Cảnh báo hạ tầng" icon="warning" />
-          {alertsQuery.isLoading ? <Text style={styles.loading}>Đang tải cảnh báo…</Text> : null}
-          {alertsQuery.error ? (
-            <ErrorNotice message="Không tải được cảnh báo vận hành." onRetry={() => alertsQuery.refetch()} />
-          ) : null}
-          {(alertsQuery.data ?? []).map((alert) => (
-            <AlertCard key={alert.id} alert={alert} />
-          ))}
-          {(alertsQuery.data ?? []).length === 0 && !alertsQuery.isLoading ? (
-            <Card>
-              <Text style={styles.muted}>Không có cảnh báo đang hoạt động cho tài khoản này.</Text>
-            </Card>
-          ) : null}
-
-          <SectionHeader title="Thông báo" icon="notifications" />
-          {(notificationsQuery.data ?? []).slice(0, 20).map((notification) => (
-            <NotificationCard key={notification.id} notification={notification} />
-          ))}
-          {(notificationsQuery.data ?? []).length === 0 && !notificationsQuery.isLoading ? (
-            <Card>
-              <Text style={styles.muted}>Chưa có thông báo vận hành.</Text>
-            </Card>
-          ) : null}
-        </>
       ) : (
-        <>
-          <Card tone="cyan" style={styles.loginCard}>
-            <View style={styles.loginIcon}>
-              <Ionicons name="lock-closed" size={24} color={colors.cyan} />
-            </View>
-            <Text style={styles.loginTitle}>Đăng nhập để xem cảnh báo vận hành</Text>
-            <Text style={styles.loginBody}>
-              Tài khoản SynapseCity cho phép xem cảnh báo hạ tầng, thông báo và trạng thái vận hành.
-              Báo cáo công khai vẫn dùng được mà không cần đăng nhập.
-            </Text>
-            <PrimaryButton label="Đăng nhập" icon="log-in" onPress={onAccount} />
-          </Card>
-          <Card>
-            <Text style={styles.lookupTitle}>Tra cứu mã sự cố</Text>
-            <TextField
-              label="Mã sự cố"
-              value={lookup}
-              onChangeText={setLookup}
-              placeholder="VD: INC-2026-00001"
-              autoCapitalize="characters"
-            />
-            <PrimaryButton
-              label="Tra cứu"
-              icon="search"
-              disabled={!lookup.trim()}
-              onPress={() => navigate({ name: 'incident', params: { reference: lookup.trim() } })}
-            />
-          </Card>
-        </>
+        <Card tone="cyan" style={styles.loginCard}>
+          <View style={styles.loginIcon}>
+            <Ionicons name="open-outline" size={24} color={colors.cyan} />
+          </View>
+          <Text style={styles.loginTitle}>Workspace vận hành đã chuyển sang SynapseDX</Text>
+          <Text style={styles.loginBody}>
+            Đăng nhập, cảnh báo nội bộ và work order do SynapseDX quản lý. Ứng dụng
+            City chỉ hiển thị dữ liệu công khai.
+          </Text>
+          <PrimaryButton
+            label="Mở SynapseDX Workspace"
+            icon="open-outline"
+            onPress={() => Linking.openURL('https://synapsedx.sbs/workspace').catch(() => undefined)}
+          />
+        </Card>
+        <Card>
+          <Text style={styles.lookupTitle}>Tra cứu mã sự cố</Text>
+          <TextField
+            label="Mã sự cố"
+            value={lookup}
+            onChangeText={setLookup}
+            placeholder="VD: INC-2026-00001"
+            autoCapitalize="characters"
+          />
+          <PrimaryButton
+            label="Tra cứu"
+            icon="search"
+            disabled={!lookup.trim()}
+            onPress={() => navigate({ name: 'incident', params: { reference: lookup.trim() } })}
+          />
+        </Card>
       )}
 
-      {tab === 'public' && !token ? (
+      {tab === 'public' ? (
         <Card tone="cyan" style={styles.loginCard}>
           <Text style={styles.loginTitle}>Bạn là đội vận hành?</Text>
-          <Text style={styles.loginBody}>Đăng nhập để xem cảnh báo hạ tầng và thông báo nội bộ.</Text>
-          <PrimaryButton label="Đăng nhập" icon="log-in" onPress={onAccount} />
+          <Text style={styles.loginBody}>Cảnh báo hạ tầng và thông báo nội bộ nằm trong SynapseDX Workspace.</Text>
+          <PrimaryButton
+            label="Mở SynapseDX Workspace"
+            icon="open-outline"
+            onPress={() => Linking.openURL('https://synapsedx.sbs/workspace').catch(() => undefined)}
+          />
         </Card>
       ) : null}
     </Screen>

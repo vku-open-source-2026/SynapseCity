@@ -41,20 +41,21 @@ const SCHEMAS = {
       latitude: N(), longitude: N(), properties_json: JSONV(),
     },
     required: ['name'],
-    defaults: { status: 'active' },
+    defaults: { status: 'active', public_visible: true },
   },
   incidents: {
-    dataset: 'city-incidents', recordType: 'Incident', publish: true,
+    // Incident writes stay private. The City service is the only component
+    // allowed to publish a redacted projection to city-incidents.
+    dataset: 'city-incidents', recordType: 'Incident', publish: false,
     terminal: ['closed', 'cancelled', 'rejected', 'merged'],
     statuses: ['reported', 'open', 'acknowledged', 'assigned', 'investigating', 'in_progress', 'waiting_approval', 'resolved', 'verified', 'closed', 'rejected', 'cancelled', 'merged'],
     fields: {
       title: S(200), description: S(4000), category: S(80), severity: S(40), status: S(40),
-      priority: S(40), asset_id: S(128), assigned_to: S(160), reporter_type: S(40),
-      resolution_type: S(80), resolution_notes: S(4000), address: S(300), latitude: N(), longitude: N(),
-      details_json: JSONV(),
+      priority: S(40), asset_id: S(128), resolution_type: S(80), address: S(300),
+      latitude: N(), longitude: N(), details_json: JSONV(),
     },
     required: ['title'],
-    defaults: { status: 'reported', severity: 'medium' },
+    defaults: { status: 'reported', severity: 'medium', public_visible: true },
   },
   maintenance: {
     dataset: 'city-maintenance', recordType: 'Maintenance', publish: false,
@@ -257,6 +258,12 @@ if (action === 'create') {
   if (record.status !== undefined && schema.statuses.length && !schema.statuses.includes(String(record.status))) throw new Error('status_invalid');
   record.created_at = $now;
   record.updated_at = $now;
+  if (resource === 'incidents') {
+    if (!record.incident_number) record.incident_number = 'INC-' + $now.replace(/[^0-9]/g, '').slice(0, 17);
+    record.incident_code = record.incident_number;
+    record.public_visible = true;
+  }
+  if (resource === 'assets' && record.public_visible === undefined) record.public_visible = true;
   return { mode: 'create', url: base, body: { data: record, publish: schema.publish === true }, audit, operation: resource + '.create' };
 }
 if (action === 'delete') {
@@ -326,7 +333,16 @@ const schema = ${JSON.stringify(Object.fromEntries(Object.entries(SCHEMAS).map((
 const terminal = schema[action.resource] ? schema[action.resource].terminal : [];
 if (terminal.includes(String(data.status))) throw new Error('record_terminal');
 const next = { ...data, ...action.patch, updated_at: $now };
-return { body: { data: next, ifVersion: current.version }, url: action.url, audit: action.audit, operation: action.operation };`,
+return {
+  body: {
+    data: next,
+    ifVersion: current.version,
+    ...(action.resource === 'incidents' ? { publish: false } : {}),
+  },
+  url: action.url,
+  audit: action.audit,
+  operation: action.operation,
+};`,
     }),
     node('Patch full record', 'httpRequest', 4, [1520, 360], {
       url: '={{ $json.url }}', method: 'PATCH',
