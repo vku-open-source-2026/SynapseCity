@@ -1,0 +1,733 @@
+{
+  "format": "synapsedx-plugin",
+  "formatVersion": 1,
+  "plugin": {
+    "product": "city",
+    "name": "City manager review",
+    "slug": "city-manager-review",
+    "audience": "admin",
+    "roles": [
+      "admin",
+      "manager"
+    ],
+    "widgets": [
+      {
+        "id": "intro",
+        "text": "One view for budgets, maintenance approvals, incident verification and report readiness. Each decision form executes a reviewed City workflow and records the actor.",
+        "type": "heading",
+        "title": "Review lane for approvals and publication",
+        "width": "full"
+      },
+      {
+        "id": "workspace-navigation",
+        "type": "navigation",
+        "title": "Quick access",
+        "width": "full",
+        "links": [
+          {
+            "label": "Overview",
+            "target": "page:city-operations-overview",
+            "actionId": "act-workspace-navigation-link1"
+          },
+          {
+            "label": "Assets",
+            "target": "page:city-asset-registry",
+            "actionId": "act-workspace-navigation-link2"
+          },
+          {
+            "label": "Incidents",
+            "target": "page:city-incident-desk",
+            "actionId": "act-workspace-navigation-link3"
+          },
+          {
+            "label": "Maintenance",
+            "target": "page:city-maintenance-workshop",
+            "actionId": "act-workspace-navigation-link4"
+          },
+          {
+            "label": "Team tasks",
+            "target": "module:tasks",
+            "actionId": "act-workspace-navigation-link5"
+          }
+        ]
+      },
+      {
+        "id": "budgets-metric",
+        "type": "metric",
+        "title": "Budgets awaiting action",
+        "width": "half",
+        "resource": "budgets",
+        "onLoad": "act-budgets-metric-load"
+      },
+      {
+        "id": "maintenance-metric",
+        "type": "metric",
+        "title": "Work orders awaiting action",
+        "width": "half",
+        "resource": "maintenance",
+        "onLoad": "act-maintenance-metric-load"
+      },
+      {
+        "id": "incidents-metric",
+        "type": "metric",
+        "title": "Incidents awaiting verification",
+        "width": "half",
+        "resource": "incidents",
+        "onLoad": "act-incidents-metric-load"
+      },
+      {
+        "id": "reports-metric",
+        "type": "metric",
+        "title": "Reports",
+        "width": "half",
+        "resource": "reports",
+        "onLoad": "act-reports-metric-load"
+      },
+      {
+        "id": "records-section",
+        "type": "divider",
+        "title": "Your infrastructure",
+        "width": "full"
+      },
+      {
+        "id": "budgets-table",
+        "type": "table",
+        "title": "Budget review",
+        "width": "full",
+        "columns": [
+          "id",
+          "budget_code",
+          "fiscal_year",
+          "category",
+          "total_amount",
+          "status"
+        ],
+        "resource": "budgets",
+        "onLoad": "act-budgets-table-load",
+        "onRowClick": "act-budgets-table-row",
+        "onExport": "act-budgets-table-export"
+      },
+      {
+        "id": "maintenance-table",
+        "type": "table",
+        "title": "Maintenance review",
+        "width": "full",
+        "columns": [
+          "id",
+          "work_order_number",
+          "title",
+          "priority",
+          "status",
+          "approval_status",
+          "assigned_to"
+        ],
+        "resource": "maintenance",
+        "onLoad": "act-maintenance-table-load",
+        "onRowClick": "act-maintenance-table-row",
+        "onExport": "act-maintenance-table-export"
+      },
+      {
+        "id": "incidents-table",
+        "type": "table",
+        "title": "Incident verification",
+        "width": "full",
+        "columns": [
+          "id",
+          "incident_number",
+          "title",
+          "severity",
+          "status",
+          "assigned_to"
+        ],
+        "resource": "incidents",
+        "onLoad": "act-incidents-table-load",
+        "onRowClick": "act-incidents-table-row",
+        "onExport": "act-incidents-table-export"
+      },
+      {
+        "id": "actions-section",
+        "type": "divider",
+        "title": "Take action",
+        "width": "full"
+      },
+      {
+        "id": "budget-decision",
+        "type": "form",
+        "title": "Decide a budget",
+        "width": "half",
+        "action": "execute",
+        "fields": [
+          {
+            "name": "record_id",
+            "type": "text",
+            "label": "Budget id",
+            "required": true
+          },
+          {
+            "name": "decision",
+            "type": "text",
+            "label": "Decision: approve or reject",
+            "required": true
+          },
+          {
+            "name": "notes",
+            "type": "textarea",
+            "label": "Note"
+          }
+        ],
+        "resource": "budgets",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        },
+        "onSubmit": "act-budget-decision-submit"
+      },
+      {
+        "id": "maintenance-decision",
+        "type": "form",
+        "title": "Decide a work order",
+        "width": "half",
+        "action": "execute",
+        "fields": [
+          {
+            "name": "record_id",
+            "type": "text",
+            "label": "Work order id",
+            "required": true
+          },
+          {
+            "name": "decision",
+            "type": "text",
+            "label": "Decision: approve or reject",
+            "required": true
+          },
+          {
+            "name": "notes",
+            "type": "textarea",
+            "label": "Note"
+          }
+        ],
+        "resource": "maintenance",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        },
+        "onSubmit": "act-maintenance-decision-submit"
+      },
+      {
+        "id": "incident-verify",
+        "type": "form",
+        "title": "Verify an incident resolution",
+        "width": "half",
+        "action": "update",
+        "fields": [
+          {
+            "name": "incident_id",
+            "type": "text",
+            "label": "Incident id",
+            "required": true
+          },
+          {
+            "name": "notes",
+            "type": "textarea",
+            "label": "Verification note"
+          }
+        ],
+        "resource": "incidents",
+        "workflowRef": {
+          "name": "city-incident-verify",
+          "checksum": "bd47fa64a2ec0feb99683a998f0724f15a8817639788edefcb8caa63fd69c9a1"
+        },
+        "onSubmit": "act-incident-verify-submit"
+      },
+      {
+        "id": "act-workspace-navigation-link1",
+        "type": "action",
+        "title": "Navigate Overview",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "page:city-operations-overview"
+        }
+      },
+      {
+        "id": "act-workspace-navigation-link2",
+        "type": "action",
+        "title": "Navigate Assets",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "page:city-asset-registry"
+        }
+      },
+      {
+        "id": "act-workspace-navigation-link3",
+        "type": "action",
+        "title": "Navigate Incidents",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "page:city-incident-desk"
+        }
+      },
+      {
+        "id": "act-workspace-navigation-link4",
+        "type": "action",
+        "title": "Navigate Maintenance",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "page:city-maintenance-workshop"
+        }
+      },
+      {
+        "id": "act-workspace-navigation-link5",
+        "type": "action",
+        "title": "Navigate Team tasks",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "module:tasks"
+        }
+      },
+      {
+        "id": "act-budgets-metric-load",
+        "type": "action",
+        "title": "Read Budgets awaiting action",
+        "operation": {
+          "kind": "query",
+          "target": "budgets-metric",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "budgets"
+        }
+      },
+      {
+        "id": "act-maintenance-metric-load",
+        "type": "action",
+        "title": "Read Work orders awaiting action",
+        "operation": {
+          "kind": "query",
+          "target": "maintenance-metric",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "maintenance"
+        }
+      },
+      {
+        "id": "act-incidents-metric-load",
+        "type": "action",
+        "title": "Read Incidents awaiting verification",
+        "operation": {
+          "kind": "query",
+          "target": "incidents-metric",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "incidents"
+        }
+      },
+      {
+        "id": "act-reports-metric-load",
+        "type": "action",
+        "title": "Read Reports",
+        "operation": {
+          "kind": "query",
+          "target": "reports-metric",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "reports"
+        }
+      },
+      {
+        "id": "act-budgets-table-load",
+        "type": "action",
+        "title": "Read Budget review",
+        "operation": {
+          "kind": "query",
+          "target": "budgets-table",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "budgets"
+        }
+      },
+      {
+        "id": "act-budgets-table-row",
+        "type": "action",
+        "title": "Inspect Budget review",
+        "operation": {
+          "kind": "showRecord",
+          "target": "budgets-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-budgets-table-export",
+        "type": "action",
+        "title": "Export Budget review",
+        "operation": {
+          "kind": "export",
+          "target": "budgets-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-maintenance-table-load",
+        "type": "action",
+        "title": "Read Maintenance review",
+        "operation": {
+          "kind": "query",
+          "target": "maintenance-table",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "maintenance"
+        }
+      },
+      {
+        "id": "act-maintenance-table-row",
+        "type": "action",
+        "title": "Inspect Maintenance review",
+        "operation": {
+          "kind": "showRecord",
+          "target": "maintenance-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-maintenance-table-export",
+        "type": "action",
+        "title": "Export Maintenance review",
+        "operation": {
+          "kind": "export",
+          "target": "maintenance-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incidents-table-load",
+        "type": "action",
+        "title": "Read Incident verification",
+        "operation": {
+          "kind": "query",
+          "target": "incidents-table",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "incidents"
+        }
+      },
+      {
+        "id": "act-incidents-table-row",
+        "type": "action",
+        "title": "Inspect Incident verification",
+        "operation": {
+          "kind": "showRecord",
+          "target": "incidents-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incidents-table-export",
+        "type": "action",
+        "title": "Export Incident verification",
+        "operation": {
+          "kind": "export",
+          "target": "incidents-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-budget-decision-submit",
+        "type": "action",
+        "title": "Submit Decide a budget",
+        "operation": {
+          "kind": "execute",
+          "target": "budget-decision",
+          "mappings": [
+            {
+              "field": "record_id",
+              "source": "event",
+              "value": "values.record_id",
+              "required": true
+            },
+            {
+              "field": "decision",
+              "source": "event",
+              "value": "values.decision",
+              "required": true
+            },
+            {
+              "field": "notes",
+              "source": "event",
+              "value": "values.notes",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-budget-decision-open",
+        "type": "action",
+        "title": "Open Decide a budget",
+        "operation": {
+          "kind": "openForm",
+          "target": "budget-decision",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-maintenance-decision-submit",
+        "type": "action",
+        "title": "Submit Decide a work order",
+        "operation": {
+          "kind": "execute",
+          "target": "maintenance-decision",
+          "mappings": [
+            {
+              "field": "record_id",
+              "source": "event",
+              "value": "values.record_id",
+              "required": true
+            },
+            {
+              "field": "decision",
+              "source": "event",
+              "value": "values.decision",
+              "required": true
+            },
+            {
+              "field": "notes",
+              "source": "event",
+              "value": "values.notes",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-maintenance-decision-open",
+        "type": "action",
+        "title": "Open Decide a work order",
+        "operation": {
+          "kind": "openForm",
+          "target": "maintenance-decision",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incident-verify-submit",
+        "type": "action",
+        "title": "Submit Verify an incident resolution",
+        "operation": {
+          "kind": "update",
+          "target": "incident-verify",
+          "mappings": [
+            {
+              "field": "incident_id",
+              "source": "event",
+              "value": "values.incident_id",
+              "required": true
+            },
+            {
+              "field": "notes",
+              "source": "event",
+              "value": "values.notes",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incident-verify-open",
+        "type": "action",
+        "title": "Open Verify an incident resolution",
+        "operation": {
+          "kind": "openForm",
+          "target": "incident-verify",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      }
+    ]
+  },
+  "source": {
+    "repository": "https://github.com/vku-open-source-2026/SynapseCity",
+    "path": "plugins/city-manager-review.plugin.json",
+    "revision": "2026-11-15.business"
+  },
+  "checksum": "sha256:e2f528d7e6d132b24772bae5a23a3c733178af5e8432d887396c1ed6e398d536"
+}

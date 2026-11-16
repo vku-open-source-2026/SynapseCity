@@ -11,6 +11,8 @@ process.env.ALLOW_LOCAL_DEPENDENCIES = 'true';
 process.env.AUTH_SECRET = 'city-authz-test-secret';
 // This suite exercises the explicit development-only demo session shell.
 process.env.CITY_AUTH_MODE = 'demo';
+// Non-production test only: keep the pre-migration auth routes reachable.
+process.env.TIER3_AUTH_MODE = 'legacy';
 process.env.NODE_ENV = 'test';
 process.env.LOG_LEVEL = 'silent';
 
@@ -66,7 +68,6 @@ const OPERATOR_PROBES: Array<{ method: string; path: string; body?: unknown }> =
   { method: 'GET', path: '/v1/geofences' },
   { method: 'GET', path: '/v1/geo/assets/nearby?lng=105.8&lat=21.0' },
   { method: 'POST', path: '/v1/ingest/csv', body: { content: '' } },
-  { method: 'POST', path: '/v1/ai/chat', body: { message: 'hello' } },
 ];
 
 before(async () => {
@@ -118,6 +119,17 @@ test('the anonymous public surface and product metadata stay reachable', async (
   }
   const health = await request('/health');
   assert.equal(health.status, 200);
+});
+
+test('the public assistant is anonymous and never leaks a 401', async () => {
+  // The citizen map embeds the assistant for visitors; it must reach the
+  // Tier-2 capability with the deployment credential instead of requiring a
+  // City session. Upstream availability is reported in the body (200/503).
+  const status = await request('/v1/ai/status');
+  assert.notEqual(status.status, 401);
+  assert.ok([200, 503].includes(status.status), `unexpected status ${status.status}`);
+  const chat = await request('/v1/ai/chat', json('POST', { message: 'hello' }));
+  assert.notEqual(chat.status, 401);
 });
 
 test('a forged or malformed token is rejected', async () => {

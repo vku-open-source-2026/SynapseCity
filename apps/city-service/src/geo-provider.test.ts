@@ -98,10 +98,10 @@ test('an unavailable shared geocoder is reported honestly, not replaced silently
   }
 });
 
-test('CITY_GEO_PROVIDER=vietmap is an explicit legacy opt-in', () => {
+test('there is no local VietMap opt-in: geocoding is always Tier 2', () => {
   process.env.CITY_GEO_PROVIDER = 'vietmap';
   try {
-    assert.equal(geoProviderMode(), 'vietmap');
+    assert.equal(geoProviderMode(), 'tier2');
   } finally {
     delete process.env.CITY_GEO_PROVIDER;
   }

@@ -93,6 +93,17 @@ before(async () => {
   tier2.seed('city-iot-readings', 'r2', { id: 'r2', sensor_id: 'sensor-1', asset_id: 'asset-1', timestamp: new Date(now - 3_600_000).toISOString(), value: 20 });
   tier2.seed('city-iot-readings', 'r3', { id: 'r3', sensor_id: 'sensor-2', asset_id: 'asset-2', timestamp: new Date(now).toISOString(), value: 99 });
   tier2.seed('city-iot-readings', 'r4', { id: 'r4', sensor_id: 'sensor-1', asset_id: 'asset-1', timestamp: new Date(now - 48 * 3_600_000).toISOString(), value: 30 });
+  // More than the old 5000-record in-memory ceiling: the API must query by
+  // sensor_id on Tier-2 rather than download the first page of the dataset.
+  for (let index = 0; index < 5200; index += 1) {
+    tier2.seed('city-iot-readings', `r-bulk-${index}`, {
+      id: `r-bulk-${index}`,
+      sensor_id: 'sensor-2',
+      asset_id: 'asset-2',
+      timestamp: new Date(now - index * 60_000).toISOString(),
+      value: index,
+    });
+  }
 
   tier2.seed('city-incidents', 'inc-1', {
     id: 'inc-1', incident_number: 'INC-2026-000001', incident_code: 'INC-2026-000001', title: 'Broken lamp',
@@ -171,6 +182,15 @@ test('IoT readings are scoped to the sensor and the requested window', async () 
   assert.equal(alias.status, 200);
   assert.equal(alias.body.total, 2);
   assert.equal(alias.body.readings.length, 2);
+});
+
+test('IoT readings query Tier-2 instead of stopping at the 5k list cap', async () => {
+  const page = await request('/v1/iot/sensors/sensor-2/readings?limit=5', json('GET', undefined, adminToken));
+  assert.equal(page.status, 200);
+  assert.ok(page.body.total > 5000, 'the total must include readings beyond the old 5000 row ceiling');
+  assert.equal(page.body.readings.length, 5);
+  assert.equal(page.body.readings.every((reading: { sensor_id: string }) => reading.sensor_id === 'sensor-2'), true);
+  assert.equal(page.headers.get('x-total-count'), String(page.body.total));
 });
 
 test('IoT statistics return real min/max/average/count', async () => {

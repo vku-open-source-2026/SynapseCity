@@ -97,9 +97,10 @@ export function isOwnedV1Path(raw: string): boolean {
 }
 
 // Anonymous surface: health/readiness is outside /v1, and only the public
-// projection, auth shell, product metadata and map tiles may be called without
-// a City session. Every operator namespace is rejected here before proxying as
-// defence in depth; the City service still verifies the session itself.
+// projection, auth shell, product metadata, map tiles and the citizen AI
+// assistant may be called without a City session. Every operator namespace is
+// rejected here before proxying as defence in depth; the City service still
+// verifies the session itself and rate-limits the public assistant.
 const PUBLIC_V1_PREFIXES: readonly string[] = [
   '/v1/auth',
   '/v1/city',
@@ -108,10 +109,11 @@ const PUBLIC_V1_PREFIXES: readonly string[] = [
   '/v1/public/incidents',
   '/v1/public/files',
 ];
+const PUBLIC_AI_PATHS = new Set(['/v1/ai/status', '/v1/ai/chat']);
 
 export function isPublicV1Path(raw: string): boolean {
   const path = normalizeV1Path(raw);
-  return PUBLIC_V1_PREFIXES.some((prefix) => within(path, prefix));
+  return PUBLIC_AI_PATHS.has(path) || PUBLIC_V1_PREFIXES.some((prefix) => within(path, prefix));
 }
 
 /**
@@ -138,12 +140,19 @@ app.use((req, res, next) => {
   return rawUpload(req, res, next);
 });
 app.use(express.json({ limit: '10mb' }));
+const CORRELATION_ID_RE = /^[A-Za-z0-9_.:-]{1,128}$/;
 app.use((req, res, next) => {
   res.setHeader('access-control-allow-origin', process.env.CORS_ORIGIN || 'https://synapsecity.sbs');
   res.setHeader('access-control-allow-headers', 'authorization,content-type,x-api-key,x-correlation-id');
   res.setHeader('access-control-allow-methods', 'GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS');
+  res.setHeader('x-content-type-options', 'nosniff');
+  res.setHeader('referrer-policy', 'no-referrer');
+  res.setHeader('x-frame-options', 'DENY');
+  res.setHeader('strict-transport-security', 'max-age=31536000; includeSubDomains');
   if (req.method === 'OPTIONS') return res.status(204).end();
-  res.setHeader('x-correlation-id', req.header('x-correlation-id') || randomUUID());
+  // Never echo an unsanitized client correlation id into response headers/logs.
+  const incoming = req.header('x-correlation-id');
+  res.setHeader('x-correlation-id', incoming && CORRELATION_ID_RE.test(incoming) ? incoming : randomUUID());
   next();
 });
 
@@ -176,10 +185,14 @@ async function proxy(req: Request, res: Response): Promise<void> {
         : JSON.stringify(req.body ?? {}),
   });
   const type = response.headers.get('content-type');
-  const cacheControl = response.headers.get('cache-control');
   res.status(response.status);
   if (type) res.setHeader('content-type', type);
-  if (cacheControl) res.setHeader('cache-control', cacheControl);
+  // Pagination and download metadata are part of the City contract. Forward the
+  // upstream headers instead of dropping them at the public edge.
+  for (const name of ['cache-control', 'x-total-count', 'etag', 'x-dataset-version', 'content-disposition']) {
+    const value = response.headers.get(name);
+    if (value) res.setHeader(name, value);
+  }
   if (response.status === 204 || response.status === 304) {
     res.end();
     return;

@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 import { useQuery } from "@tanstack/react-query";
 import { maintenanceApi } from "../../api/maintenance";
+import { assetsApi } from "../../api/assets";
 import { incidentsApi } from "../../api/incidents";
 import { format } from "date-fns";
 import { Skeleton } from "../ui/skeleton";
@@ -18,6 +19,12 @@ const AssetOverviewTab: React.FC<AssetOverviewTabProps> = ({ assetId, asset }) =
   const { data: recentMaintenance, isLoading: maintenanceLoading } = useQuery({
     queryKey: ["maintenance", assetId, "recent"],
     queryFn: () => maintenanceApi.getByAsset(assetId, { limit: 5 }),
+  });
+
+  const { data: risk, isLoading: riskLoading } = useQuery({
+    queryKey: ["asset-risk", assetId],
+    queryFn: () => assetsApi.getRisk(assetId),
+    retry: false,
   });
 
   const { data: recentIncidents, isLoading: incidentsLoading } = useQuery({
@@ -118,6 +125,37 @@ const AssetOverviewTab: React.FC<AssetOverviewTabProps> = ({ assetId, asset }) =
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Explainable outage risk */}
+      <div>
+        <h3 className="text-lg font-semibold text-slate-900 mb-4">Rủi ro mất dịch vụ</h3>
+        {riskLoading ? <Skeleton className="h-24 w-full" /> : risk ? (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${
+                risk.band === "critical" ? "bg-red-100 text-red-700" :
+                risk.band === "high" ? "bg-orange-100 text-orange-700" :
+                risk.band === "moderate" ? "bg-yellow-100 text-yellow-700" :
+                "bg-green-100 text-green-700"
+              }`}>{risk.band} · {risk.score}/100</span>
+              <span className="text-sm text-slate-600">Độ tin cậy {Math.round(risk.confidence * 100)}%</span>
+              {risk.data_freshness.stale && <span className="text-xs text-amber-700">Dữ liệu cảm biến cũ</span>}
+            </div>
+            <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2">
+              {risk.factors.map((factor) => (
+                <div key={factor.name} className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm">
+                  <span className="text-slate-600">{factor.name}</span>
+                  <span className="font-semibold text-slate-900">{Math.round(factor.score)} · {Math.round(factor.weight * 100)}%</span>
+                </div>
+              ))}
+            </div>
+            {risk.flags.length > 0 && <p className="mt-3 text-xs text-amber-700">Cờ dữ liệu: {risk.flags.join(", ")}</p>}
+            <ul className="mt-3 list-disc pl-5 text-sm text-slate-600">
+              {risk.recommendations.map((item) => <li key={item}>{item}</li>)}
+            </ul>
+          </div>
+        ) : <p className="text-sm text-slate-500">Chưa đủ dữ liệu để tính rủi ro.</p>}
       </div>
 
       {/* Last 5 Maintenance Records */}

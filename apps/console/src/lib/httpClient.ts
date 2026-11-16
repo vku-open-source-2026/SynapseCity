@@ -6,6 +6,7 @@ import axios, {
     type InternalAxiosRequestConfig,
 } from "axios";
 import { useAuthStore } from "../stores";
+import { WORKSPACE_URL } from "./workspace";
 import type { AxiosResponse } from "axios";
 
 /** Normalize list endpoints that may return a bare array or an envelope. */
@@ -22,6 +23,24 @@ export function asList<T>(value: unknown): T[] {
         }
     }
     return [];
+}
+
+export interface ListPage<T> {
+    items: T[];
+    total: number;
+}
+
+/**
+ * Build a page result from a list response and the server's x-total-count
+ * header. Falls back to the current page length when the header is absent.
+ */
+export function asListPage<T>(value: unknown, totalHeader: unknown): ListPage<T> {
+    const items = asList<T>(value);
+    const total = Number(totalHeader);
+    return {
+        items,
+        total: Number.isFinite(total) && total >= 0 ? total : items.length,
+    };
 }
 
 // Create main API instance
@@ -70,15 +89,22 @@ const responseErrorInterceptor = (error: AxiosError) => {
         const { status } = error.response;
 
         switch (status) {
-            case 401:
-                // Unauthorized - clear auth and redirect to login
-                useAuthStore.getState().logout();
-
-                // Only redirect if not already on a public page
-                if (window.location.pathname.includes("/admin")) {
-                    window.location.href = "/";
+            case 401: {
+                // A 401 from a secondary endpoint (e.g. notifications) must not
+                // destroy a valid session. Only auth failures invalidate it.
+                const requestUrl = String(error.config?.url || "");
+                const authFailure = /\/auth\/(login|refresh|me|verify|change-password)/.test(requestUrl);
+                if (!authFailure) {
+                    console.error("Unauthorized secondary request:", requestUrl);
+                    break;
                 }
+                useAuthStore.getState().logout();
+                // Tier 3 has no login page: work surfaces live in the DX
+                // workspace, so an expired session goes there (never a token in
+                // the URL).
+                window.location.assign(WORKSPACE_URL);
                 break;
+            }
 
             case 403:
                 console.error("Access forbidden");
