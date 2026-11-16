@@ -6,6 +6,7 @@ import axios, {
     type InternalAxiosRequestConfig,
 } from "axios";
 import { useAuthStore } from "../stores";
+import { WORKSPACE_URL } from "./workspace";
 import type { AxiosResponse } from "axios";
 
 /** Normalize list endpoints that may return a bare array or an envelope. */
@@ -98,9 +99,10 @@ const responseErrorInterceptor = (error: AxiosError) => {
                     break;
                 }
                 useAuthStore.getState().logout();
-                if (window.location.pathname.includes("/admin")) {
-                    window.location.href = "/login";
-                }
+                // Tier 3 has no login page: work surfaces live in the DX
+                // workspace, so an expired session goes there (never a token in
+                // the URL).
+                window.location.assign(WORKSPACE_URL);
                 break;
             }
 

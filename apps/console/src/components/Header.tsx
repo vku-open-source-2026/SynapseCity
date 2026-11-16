@@ -6,7 +6,9 @@ import { CircleAlert, LogIn, Menu, Monitor, Moon, Siren, Sun, X } from "lucide-r
 import { useI18n } from "../lib/i18n-context";
 import { useTheme } from "../lib/theme-context";
 import { LINKS } from "../lib/site";
+import { WORKSPACE_URL } from "../lib/workspace";
 import { StableLabel } from "./StableLabel";
+import { BrandSymbol } from "./BrandSymbol";
 
 const linkBase =
     "whitespace-nowrap text-[15px] transition-colors max-lg:text-lg max-lg:py-2 flex items-center gap-1.5";
@@ -52,9 +54,12 @@ const Header: React.FC = () => {
     return (
         <header className="fixed top-0 left-0 z-[1001] h-20 w-full border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
             <div className="mx-auto flex h-full max-w-7xl items-center justify-between gap-8 px-4">
-                <Link to="/" onClick={closeMobileMenu} className="flex shrink-0 flex-col leading-tight">
-                    <span className="font-montserrat text-xl font-bold text-[#087f83] dark:text-teal-400">SynapseCity</span>
-                    <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">{m.nav.tagline}</span>
+                <Link to="/" onClick={closeMobileMenu} className="flex shrink-0 items-center gap-2.5">
+                    <BrandSymbol className="h-9 w-9 shrink-0" />
+                    <span className="flex flex-col leading-tight">
+                        <span className="font-montserrat text-xl font-bold text-[#1D4ED8] dark:text-blue-300">SynapseCity</span>
+                        <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">{m.nav.tagline}</span>
+                    </span>
                 </Link>
 
                 <div className="flex items-center gap-1 lg:hidden">
@@ -114,14 +119,16 @@ const Header: React.FC = () => {
                         <Siren className="h-4 w-4" />
                         <StableLabel pick={(d) => d.nav.sos} />
                     </a>
-                    <Link
-                        to="/login"
+                    {/* Work interfaces moved to the Tier-2 DX workspace; this is
+                        a public navigation link, never an API dependency. */}
+                    <a
+                        href={WORKSPACE_URL}
                         onClick={closeMobileMenu}
                         className={`${linkBase} text-slate-600 hover:text-sky-600 dark:text-slate-300 dark:hover:text-sky-400`}
                     >
                         <LogIn className="h-4 w-4" />
-                        <StableLabel pick={(d) => d.nav.login} />
-                    </Link>
+                        <StableLabel pick={(d) => d.nav.workspace} />
+                    </a>
 
                     <SiteToggles className="max-lg:hidden" />
 

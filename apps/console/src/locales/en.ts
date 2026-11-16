@@ -15,7 +15,7 @@ export const en: Messages = {
         docs: "API docs",
         report: "Report an issue",
         sos: "Emergency (SOS)",
-        login: "Sign in",
+        workspace: "Workspace",
         start: "Try it now",
         openMenu: "Open menu",
         closeMenu: "Close menu",
@@ -51,7 +51,7 @@ export const en: Messages = {
             {
                 title: "Infrastructure operators",
                 text: "Manage assets on a map, merge duplicate reports, assign maintenance with approval, and watch IoT sensors and budgets.",
-                cta: "Sign in",
+                cta: "Open the workspace",
             },
             {
                 title: "Developers and businesses",

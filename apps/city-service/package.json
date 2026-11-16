@@ -11,7 +11,7 @@
     "test": "npm run build && node --test dist/src/*.test.js"
   },
   "dependencies": {
-    "@synapsedx/capabilities": "^0.3.0",
+    "@synapsedx/capabilities": "^0.5.1",
     "express": "^4.21.2"
   },
   "devDependencies": {

@@ -1,0 +1,999 @@
+{
+  "format": "synapsedx-plugin",
+  "formatVersion": 1,
+  "plugin": {
+    "product": "city",
+    "name": "City GIS workspace",
+    "slug": "city-gis-workspace",
+    "audience": "admin",
+    "roles": [
+      "admin",
+      "manager"
+    ],
+    "widgets": [
+      {
+        "id": "intro",
+        "text": "Review asset locations, geofences and open incidents together. Coordinate fields are stored as JSON geometry and are available to map consumers; this page deliberately does not embed a third-party map script.",
+        "type": "heading",
+        "title": "Service areas and location context",
+        "width": "full"
+      },
+      {
+        "id": "workspace-navigation",
+        "type": "navigation",
+        "title": "Quick access",
+        "width": "full",
+        "links": [
+          {
+            "label": "Overview",
+            "target": "page:city-operations-overview",
+            "actionId": "act-workspace-navigation-link1"
+          },
+          {
+            "label": "Assets",
+            "target": "page:city-asset-registry",
+            "actionId": "act-workspace-navigation-link2"
+          },
+          {
+            "label": "Incidents",
+            "target": "page:city-incident-desk",
+            "actionId": "act-workspace-navigation-link3"
+          },
+          {
+            "label": "Maintenance",
+            "target": "page:city-maintenance-workshop",
+            "actionId": "act-workspace-navigation-link4"
+          },
+          {
+            "label": "Team tasks",
+            "target": "module:tasks",
+            "actionId": "act-workspace-navigation-link5"
+          }
+        ]
+      },
+      {
+        "id": "assets-metric",
+        "type": "metric",
+        "title": "Assets",
+        "width": "half",
+        "resource": "assets",
+        "onLoad": "act-assets-metric-load"
+      },
+      {
+        "id": "geofences-metric",
+        "type": "metric",
+        "title": "Geofences",
+        "width": "half",
+        "resource": "geofences",
+        "onLoad": "act-geofences-metric-load"
+      },
+      {
+        "id": "incidents-metric",
+        "type": "metric",
+        "title": "Incidents",
+        "width": "half",
+        "resource": "incidents",
+        "onLoad": "act-incidents-metric-load"
+      },
+      {
+        "id": "geofences-map",
+        "type": "map",
+        "title": "Geofences · Live map",
+        "width": "full",
+        "resource": "geofences",
+        "columns": [
+          "id",
+          "name",
+          "title",
+          "status",
+          "severity",
+          "address",
+          "district",
+          "latitude",
+          "longitude",
+          "geometry",
+          "geometry_json",
+          "location",
+          "current_location",
+          "current_location_json"
+        ],
+        "onLoad": "act-geofences-map-load",
+        "onRowClick": "act-geofences-map-row",
+        "onExport": "act-geofences-map-export"
+      },
+      {
+        "id": "incidents-map",
+        "type": "map",
+        "title": "Incidents · Live map",
+        "width": "full",
+        "resource": "incidents",
+        "columns": [
+          "id",
+          "name",
+          "title",
+          "status",
+          "severity",
+          "address",
+          "district",
+          "latitude",
+          "longitude",
+          "geometry",
+          "geometry_json",
+          "location",
+          "current_location",
+          "current_location_json"
+        ],
+        "onLoad": "act-incidents-map-load",
+        "onRowClick": "act-incidents-map-row",
+        "onExport": "act-incidents-map-export"
+      },
+      {
+        "id": "assets-map",
+        "type": "map",
+        "title": "Assets · Live map",
+        "width": "full",
+        "resource": "assets",
+        "columns": [
+          "id",
+          "name",
+          "title",
+          "status",
+          "severity",
+          "address",
+          "district",
+          "latitude",
+          "longitude",
+          "geometry",
+          "geometry_json",
+          "location",
+          "current_location",
+          "current_location_json"
+        ],
+        "onLoad": "act-assets-map-load",
+        "onRowClick": "act-assets-map-row",
+        "onExport": "act-assets-map-export"
+      },
+      {
+        "id": "records-section",
+        "type": "divider",
+        "title": "Your infrastructure",
+        "width": "full"
+      },
+      {
+        "id": "assets-table",
+        "type": "table",
+        "title": "Assets with address context",
+        "width": "full",
+        "columns": [
+          "id",
+          "asset_code",
+          "name",
+          "category",
+          "status",
+          "address",
+          "owner"
+        ],
+        "resource": "assets",
+        "onLoad": "act-assets-table-load",
+        "onRowClick": "act-assets-table-row",
+        "onExport": "act-assets-table-export"
+      },
+      {
+        "id": "geofences-table",
+        "type": "table",
+        "title": "Geofences",
+        "width": "full",
+        "columns": [
+          "id",
+          "name",
+          "type",
+          "category",
+          "active",
+          "description"
+        ],
+        "resource": "geofences",
+        "onLoad": "act-geofences-table-load",
+        "onRowClick": "act-geofences-table-row",
+        "onExport": "act-geofences-table-export"
+      },
+      {
+        "id": "incidents-table",
+        "type": "table",
+        "title": "Incident locations",
+        "width": "full",
+        "columns": [
+          "id",
+          "title",
+          "category",
+          "severity",
+          "status",
+          "address"
+        ],
+        "resource": "incidents",
+        "onLoad": "act-incidents-table-load",
+        "onRowClick": "act-incidents-table-row",
+        "onExport": "act-incidents-table-export"
+      },
+      {
+        "id": "actions-section",
+        "type": "divider",
+        "title": "Take action",
+        "width": "full"
+      },
+      {
+        "id": "geofence-create",
+        "type": "form",
+        "title": "Create a geofence",
+        "width": "full",
+        "action": "create",
+        "fields": [
+          {
+            "name": "name",
+            "type": "text",
+            "label": "Name",
+            "required": true
+          },
+          {
+            "name": "type",
+            "type": "text",
+            "label": "Type"
+          },
+          {
+            "name": "category",
+            "type": "text",
+            "label": "Category"
+          },
+          {
+            "name": "description",
+            "type": "textarea",
+            "label": "Description"
+          },
+          {
+            "name": "active",
+            "type": "text",
+            "label": "Active: true or false"
+          },
+          {
+            "name": "geometry_json",
+            "type": "json",
+            "label": "Geometry GeoJSON",
+            "required": true,
+            "editor": "geometry",
+            "selectionPath": "geometry"
+          }
+        ],
+        "resource": "geofences",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        },
+        "onSubmit": "act-geofence-create-submit"
+      },
+      {
+        "id": "geofence-update",
+        "type": "form",
+        "title": "Update a geofence",
+        "width": "half",
+        "action": "update",
+        "fields": [
+          {
+            "name": "record_id",
+            "type": "text",
+            "label": "Geofence id",
+            "required": true
+          },
+          {
+            "name": "name",
+            "type": "text",
+            "label": "Name"
+          },
+          {
+            "name": "type",
+            "type": "text",
+            "label": "Type"
+          },
+          {
+            "name": "description",
+            "type": "textarea",
+            "label": "Description"
+          },
+          {
+            "name": "active",
+            "type": "text",
+            "label": "Active: true or false"
+          },
+          {
+            "name": "geometry_json",
+            "type": "json",
+            "label": "Geometry GeoJSON",
+            "editor": "geometry",
+            "selectionPath": "geometry"
+          }
+        ],
+        "resource": "geofences",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        },
+        "onSubmit": "act-geofence-update-submit"
+      },
+      {
+        "id": "geofence-delete",
+        "type": "form",
+        "title": "Delete a geofence",
+        "width": "half",
+        "action": "delete",
+        "fields": [
+          {
+            "name": "record_id",
+            "type": "text",
+            "label": "Geofence id",
+            "required": true
+          }
+        ],
+        "resource": "geofences",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        },
+        "onSubmit": "act-geofence-delete-submit"
+      },
+      {
+        "id": "act-workspace-navigation-link1",
+        "type": "action",
+        "title": "Navigate Overview",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "page:city-operations-overview"
+        }
+      },
+      {
+        "id": "act-workspace-navigation-link2",
+        "type": "action",
+        "title": "Navigate Assets",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "page:city-asset-registry"
+        }
+      },
+      {
+        "id": "act-workspace-navigation-link3",
+        "type": "action",
+        "title": "Navigate Incidents",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "page:city-incident-desk"
+        }
+      },
+      {
+        "id": "act-workspace-navigation-link4",
+        "type": "action",
+        "title": "Navigate Maintenance",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "page:city-maintenance-workshop"
+        }
+      },
+      {
+        "id": "act-workspace-navigation-link5",
+        "type": "action",
+        "title": "Navigate Team tasks",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "module:tasks"
+        }
+      },
+      {
+        "id": "act-assets-metric-load",
+        "type": "action",
+        "title": "Read Assets",
+        "operation": {
+          "kind": "query",
+          "target": "assets-metric",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "assets"
+        }
+      },
+      {
+        "id": "act-geofences-metric-load",
+        "type": "action",
+        "title": "Read Geofences",
+        "operation": {
+          "kind": "query",
+          "target": "geofences-metric",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "geofences"
+        }
+      },
+      {
+        "id": "act-incidents-metric-load",
+        "type": "action",
+        "title": "Read Incidents",
+        "operation": {
+          "kind": "query",
+          "target": "incidents-metric",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "incidents"
+        }
+      },
+      {
+        "id": "act-geofences-map-load",
+        "type": "action",
+        "title": "Read Geofences · Live map",
+        "operation": {
+          "kind": "query",
+          "target": "geofences-map",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "geofences"
+        }
+      },
+      {
+        "id": "act-geofences-map-row",
+        "type": "action",
+        "title": "Inspect Geofences · Live map",
+        "operation": {
+          "kind": "showRecord",
+          "target": "geofences-map",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-geofences-map-export",
+        "type": "action",
+        "title": "Export Geofences · Live map",
+        "operation": {
+          "kind": "export",
+          "target": "geofences-map",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incidents-map-load",
+        "type": "action",
+        "title": "Read Incidents · Live map",
+        "operation": {
+          "kind": "query",
+          "target": "incidents-map",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "incidents"
+        }
+      },
+      {
+        "id": "act-incidents-map-row",
+        "type": "action",
+        "title": "Inspect Incidents · Live map",
+        "operation": {
+          "kind": "showRecord",
+          "target": "incidents-map",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incidents-map-export",
+        "type": "action",
+        "title": "Export Incidents · Live map",
+        "operation": {
+          "kind": "export",
+          "target": "incidents-map",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-assets-map-load",
+        "type": "action",
+        "title": "Read Assets · Live map",
+        "operation": {
+          "kind": "query",
+          "target": "assets-map",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "assets"
+        }
+      },
+      {
+        "id": "act-assets-map-row",
+        "type": "action",
+        "title": "Inspect Assets · Live map",
+        "operation": {
+          "kind": "showRecord",
+          "target": "assets-map",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-assets-map-export",
+        "type": "action",
+        "title": "Export Assets · Live map",
+        "operation": {
+          "kind": "export",
+          "target": "assets-map",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-assets-table-load",
+        "type": "action",
+        "title": "Read Assets with address context",
+        "operation": {
+          "kind": "query",
+          "target": "assets-table",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "assets"
+        }
+      },
+      {
+        "id": "act-assets-table-row",
+        "type": "action",
+        "title": "Inspect Assets with address context",
+        "operation": {
+          "kind": "showRecord",
+          "target": "assets-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-assets-table-export",
+        "type": "action",
+        "title": "Export Assets with address context",
+        "operation": {
+          "kind": "export",
+          "target": "assets-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-geofences-table-load",
+        "type": "action",
+        "title": "Read Geofences",
+        "operation": {
+          "kind": "query",
+          "target": "geofences-table",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "geofences"
+        }
+      },
+      {
+        "id": "act-geofences-table-row",
+        "type": "action",
+        "title": "Inspect Geofences",
+        "operation": {
+          "kind": "showRecord",
+          "target": "geofences-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-geofences-table-export",
+        "type": "action",
+        "title": "Export Geofences",
+        "operation": {
+          "kind": "export",
+          "target": "geofences-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incidents-table-load",
+        "type": "action",
+        "title": "Read Incident locations",
+        "operation": {
+          "kind": "query",
+          "target": "incidents-table",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "incidents"
+        }
+      },
+      {
+        "id": "act-incidents-table-row",
+        "type": "action",
+        "title": "Inspect Incident locations",
+        "operation": {
+          "kind": "showRecord",
+          "target": "incidents-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incidents-table-export",
+        "type": "action",
+        "title": "Export Incident locations",
+        "operation": {
+          "kind": "export",
+          "target": "incidents-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-geofence-create-submit",
+        "type": "action",
+        "title": "Submit Create a geofence",
+        "operation": {
+          "kind": "create",
+          "target": "geofence-create",
+          "mappings": [
+            {
+              "field": "name",
+              "source": "event",
+              "value": "values.name",
+              "required": true
+            },
+            {
+              "field": "type",
+              "source": "event",
+              "value": "values.type",
+              "required": false
+            },
+            {
+              "field": "category",
+              "source": "event",
+              "value": "values.category",
+              "required": false
+            },
+            {
+              "field": "description",
+              "source": "event",
+              "value": "values.description",
+              "required": false
+            },
+            {
+              "field": "active",
+              "source": "event",
+              "value": "values.active",
+              "required": false
+            },
+            {
+              "field": "geometry_json",
+              "source": "event",
+              "value": "values.geometry_json",
+              "required": true
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-geofence-create-open",
+        "type": "action",
+        "title": "Open Create a geofence",
+        "operation": {
+          "kind": "openForm",
+          "target": "geofence-create",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-geofence-update-submit",
+        "type": "action",
+        "title": "Submit Update a geofence",
+        "operation": {
+          "kind": "update",
+          "target": "geofence-update",
+          "mappings": [
+            {
+              "field": "record_id",
+              "source": "event",
+              "value": "values.record_id",
+              "required": true
+            },
+            {
+              "field": "name",
+              "source": "event",
+              "value": "values.name",
+              "required": false
+            },
+            {
+              "field": "type",
+              "source": "event",
+              "value": "values.type",
+              "required": false
+            },
+            {
+              "field": "description",
+              "source": "event",
+              "value": "values.description",
+              "required": false
+            },
+            {
+              "field": "active",
+              "source": "event",
+              "value": "values.active",
+              "required": false
+            },
+            {
+              "field": "geometry_json",
+              "source": "event",
+              "value": "values.geometry_json",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-geofence-update-open",
+        "type": "action",
+        "title": "Open Update a geofence",
+        "operation": {
+          "kind": "openForm",
+          "target": "geofence-update",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-geofence-delete-submit",
+        "type": "action",
+        "title": "Submit Delete a geofence",
+        "operation": {
+          "kind": "delete",
+          "target": "geofence-delete",
+          "mappings": [
+            {
+              "field": "record_id",
+              "source": "event",
+              "value": "values.record_id",
+              "required": true
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-geofence-delete-open",
+        "type": "action",
+        "title": "Open Delete a geofence",
+        "operation": {
+          "kind": "openForm",
+          "target": "geofence-delete",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      }
+    ]
+  },
+  "source": {
+    "repository": "https://github.com/vku-open-source-2026/SynapseCity",
+    "path": "plugins/city-gis-workspace.plugin.json",
+    "revision": "2026-11-15.business"
+  },
+  "checksum": "sha256:34072a70d993e8b1548406a3a639789ebe4846c61163c8523ef6050cab19c880"
+}

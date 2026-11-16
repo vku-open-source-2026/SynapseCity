@@ -7,9 +7,11 @@ or datasets. When working in the workspace, the workspace-level
 
 The repository is split into product parts:
 
-- `apps/gateway`: public API boundary and console proxy;
+- `apps/gateway`: public API boundary and console proxy (Rust/Axum);
 - `apps/city-service`: Tier-3 city infrastructure backend;
 - `apps/console`: city operations console;
+- `apps/contribution-service`: Rust backend for the public contribution portal;
+- `apps/contribution-console`: React UI for the contribution portal;
 - `infra`: edge/deployment files.
 
 ## Dependency contract
@@ -26,6 +28,30 @@ The repository is split into product parts:
 - Do not call, import or proxy SynapseCitySOS. A link to
   `https://sos.synapsecity.sbs` is public navigation only.
 - Do not add cross-product imports or API calls anywhere in the workspace.
+- **Contribution exception:** `apps/contribution-service` currently uses the
+  published `synapseone` Rust SDK from crates.io to read/write the `contribution_*` SynapseBase
+  collections. This is a scoped legacy exception while those collections move
+  to Tier-2 datasets. It must not be copied into `city-service`, the gateway or
+  the console; no other City app may call Tier 1 directly.
+
+## Contribution portal
+
+The public data-contribution portal at `https://contribution.synapsecity.sbs`
+is owned by this repository. It was migrated from the OpenInfra reference
+implementation; the `openinfra/` checkout has been removed and must not be recreated.
+
+- Backend: `apps/contribution-service` (Rust/Axum).
+- UI: `apps/contribution-console` (React/Vite).
+- Compose: services `contribution-service` and `contribution-console` in
+  `docker-compose.yml`; aliases `contribution-backend` and
+  `contribution-frontend` on the shared edge network.
+- Env prefix: `CONTRIBUTION_*` in `.env` / `.env.example`.
+- Data: `contribution_features`, `contribution_submissions`,
+  `contribution_sos_reports` (legacy SynapseBase exception; target is Tier-2).
+- The portal may collect public citizen infrastructure submissions and SOS
+  reports, but it is **not** the SOS operations product. It must not add
+  dispatch, EOP, SITREP, AAR, hazard feeds or emergency command-centre
+  features. SOS operations remain in SynapseCitySOS.
 
 ## Feature ownership
 
@@ -41,6 +67,10 @@ centre/phase boards/rescue operations, public hazard map. Never add these
 modules, routes, types or datasets here.
 
 ## API namespace ownership
+
+The contribution portal is a separate public surface on
+`https://contribution.synapsecity.sbs` (`/api/*`). It does not add routes to the
+`/v1/city` operations API.
 
 Owned:
 
@@ -64,15 +94,10 @@ The gateway must return `404` with `{ "error": "not_found" }` for
 `/v1/emergency*`, `/v1/hazards*` and `/v1/sos*` before proxying. `/v1/users` is
 City operator administration; it is never an SOS identity source.
 
-`/v1/auth/*` verifies credentials through the Tier-2 auth capability by default
-(`CITY_AUTH_MODE=tier2`, Tier-1 IAM backed) and keeps the Tier-1 token inside the
-signed City session. It stores no passwords and creates no shared identity or
-session table. City roles come from City operator profiles or the
-`CITY_BOOTSTRAP_ADMIN_EMAILS` allow-list, never from the request body or an
-unverified claim. `CITY_AUTH_MODE=demo` is the explicit development-only shell
-and is honoured only with `AUTH_DEMO_MODE=true`. `AUTH_SECRET` is optional and
-falls back to an ephemeral start-up secret with a warning. `/v1/users` requires a
-City session and must never accept, store or return password fields.
+Tier-3 login/session management is retired. Every `/v1/auth/*` path answers
+`410 workspace_moved`; login, registration and sessions belong to SynapseDX.
+City stores no password or shared identity table. `/v1/users` is City operator
+administration and must never accept, store or return password fields.
 
 Every operator namespace requires a session **and** a role-derived permission
 (`assets:write`, `budgets:approve`, `files:write`, `users:admin`, ...). Deny by
@@ -83,6 +108,11 @@ adding a route.
 ## Dataset ownership
 
 Use only `city-*` datasets:
+
+The contribution portal uses the legacy `contribution_*` SynapseBase
+collections; those are an explicit exception, not `city-*` datasets. Do not
+reuse them from `city-service`. Migration target: `city-contribution-*`
+datasets through Tier 2.
 
 ```text
 city-assets                 city-incidents
@@ -102,17 +132,28 @@ private and must not be published to the open-data layer.
 
 ## Console route ownership
 
-Keep: `/`, `/about`, `/docs`, `/map`, `/login`, `/register`, `/asset/$id`,
-`/public/report`, `/public/report/$assetId`, `/public/incidents/$incidentId`,
-`/admin`, `/admin/map`, `/admin/assets[/$id]`,
-`/admin/incidents[/create|/$id]`, `/admin/alerts[/list]`,
-`/admin/iot[/create|/$id]`, `/admin/budgets[/create|/$id]`,
-`/admin/reports[/create]`, `/admin/users[/create|/$id]`, `/admin/ingest`,
-`/admin/settings`, and `/technician[/tasks/$taskId|/maintenance/$id|/settings]`.
+Tier 3 is **public presentation only** (2026-11-14 workspace contract). Keep:
+`/`, `/about`, `/docs`, `/map`, `/asset/$id`, `/public/report`,
+`/public/report/$assetId`, `/public/incidents/$incidentId`.
 
-Asset registration (`/admin/assets/create`), asset editing
-(`/admin/assets/edit/$id`) and GIS coverage analytics (`/admin/analytics`) are
-City-owned routes. Never add `/disaster`, `/admin/emergency-center*` or any
+Retired work surfaces redirect to `https://synapsedx.sbs/workspace`:
+`/login`, `/register`, `/workspace/**`, `/admin/**`, `/technician/**`. They
+return `308` from `apps/console/nginx.conf` and `infra/nginx/`, and the root
+route redirects client-side. Route modules are redirect stubs/notices — never
+mount a local dashboard, login form or technician portal again.
+Every `/v1/auth/*` path answers `410 workspace_moved`; there is no legacy
+session surface. DX owns login and sessions.
+
+**Release gate (closed for representative operations, 2026-11-14):** the
+redirects are deployed after production DX verification of all 28 pages and
+representative City/SOS create/update flows. Individual form coverage and the
+remaining action gap are tracked in `plugins/workflows/README.md`; do not
+re-open a local dashboard to work around a missing binding.
+
+Work interfaces are product plugins in DX; portable bundles live in `plugins/`
+with `npm run plugins:check` / `npm run plugins:test` and
+`docs/PLUGIN_SYNC.md`. Pre-migration route source is archived (not built) in
+`plugins/source/`. Never add `/disaster`, `/admin/emergency-center*` or any
 hazard, EOP, dispatch, SITREP, AAR or command-centre page. `routeTree.gen.ts`
 must contain only owned routes.
 
@@ -125,7 +166,12 @@ npm run build
 npm test
 npm run start:service                              # city service
 npm run dev --workspace=@synapsecity/console       # console dev server
+npm run dev:contribution                           # contribution UI dev server
+npm run build:contribution                         # contribution UI build
+(cd apps/gateway && cargo test)                    # Rust gateway tests
+(cd apps/contribution-service && cargo test)       # contribution backend tests
 docker compose up -d --build                       # production stack
+docker compose -p synapsecity up -d --no-deps --build contribution-service contribution-console
 ```
 
 Before release, verify:

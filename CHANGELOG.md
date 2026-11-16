@@ -5,6 +5,51 @@ Keep a Changelog format and version tags use Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+- City nearby/bounds/polygon endpoints call the Tier-2 PostGIS spatial
+  capability first and fall back to the bounded in-process scan only when the
+  capability is unavailable.
+- Full City work-page catalog (14 portable bundles): operations command center,
+  asset registry, incident desk, maintenance workshop, alert center, IoT
+  network, budget office, report studio, GIS workspace, people directory, data
+  ingest, manager review, technician work and volunteer desk. The catalog
+  covers every non-public City role and mirrors the retired admin/technician
+  surfaces with declarative widgets.
+- Generic `city-workspace-actions` workflow dispatcher plus its checked-in
+  generator. It supports allowlisted create/update/delete/execute actions for
+  assets, incidents, maintenance, IoT sensors/readings, alerts, budgets,
+  transactions, reports, users, geofences, ingest jobs, files and notifications
+  through the Tier-2 records API with the organization technical credential.
+- Portable City workspace plugin bundles under `plugins/` with
+  `scripts/plugin-bundle.mjs` for strict validation, checksum verification and
+  HTTPS DX export/import/sync (`docs/PLUGIN_SYNC.md`).
+- Product-owned Tier-1 workflow artifacts under `plugins/workflows/` for
+  incidents.create/assign/resolve and maintenance.create/assign/start/complete: create HTTP POST, transition GET(`includeInput:true`) → domain merge →
+  conditional PATCH (`ifVersion`), AAR-before-event-close. Auth is the portable
+  `synapsedx-organization` credentialRef; plugin bundles bind forms with
+  `workflowRef`/action create|update. Source-ready and engine-tested, inactive
+  until DX binds the credential/pins.
+- `plugins/source/` preserves the exact pre-migration City route and page source
+  (with revision and SHA-256 manifest) as reference; it is outside the build.
+
+### Changed
+- DX repository export is now published-only; a draft answers `409
+  plugin_not_published`. `plugin-bundle.mjs sync` compares `source` provenance
+  as well as the plugin checksum, so a path/repository-only change is written
+  instead of being reported as `in-sync`.
+- Tier 3 is public presentation only (2026-11-14 workspace contract). Login,
+  registration, operations dashboards and the technician portal moved to
+  `https://synapsedx.sbs/workspace`; `/login`, `/register`, `/admin/**`,
+  `/technician/**` and `/workspace/**` return `308` (nginx and client root
+  route). Public map, asset detail, public reports and contribution intake stay.
+- `/v1/auth/*` answers `410 workspace_moved` with `workspace_url` before any
+  credential handling; production ignores `TIER3_AUTH_MODE=legacy`.
+- Mobile app: new Synapse logo system (app icon, adaptive/monochrome icon,
+  splash, notification icon); Android version 0.1.1 (versionCode 2).
+- The public gateway is now a Rust/Axum service (`apps/gateway/src/main.rs`);
+  it keeps the existing City boundary, auth gate, console proxy, CORS,
+  correlation-ID and binary-body behavior.
+
 ## [0.3.0] - 2026-11-10
 
 ### Added
@@ -22,6 +67,12 @@ Keep a Changelog format and version tags use Semantic Versioning.
 
 ### Fixed
 
+- Every legacy `/v1/auth/*` path now returns `410 workspace_moved`; the
+  previously reachable `/me`/`logout` paths no longer answer 401/404.
+- Gateway health failures return a generic `upstream_unavailable` instead of
+  echoing upstream error text.
+- The public browser gate covers the live map/navigation surface; retired
+  login/admin specs no longer gate CI.
 - Incident sidecars now use `internal-<incidentId>` because Tier-2 record ids
   are unique across datasets; the operator view still merges the sidecar and
   reads the legacy id as a fallback.

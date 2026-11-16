@@ -38,7 +38,7 @@ const Footer = () => {
         <footer className="border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
             <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-[1.4fr_repeat(4,1fr)] lg:px-8">
                 <div>
-                    <p className="font-montserrat text-lg font-bold text-[#087f83] dark:text-teal-400">SynapseCity</p>
+                    <p className="font-montserrat text-lg font-bold text-[#1D4ED8] dark:text-blue-300">SynapseCity</p>
                     <p className="mt-2 max-w-xs text-sm text-slate-600 dark:text-slate-400">{m.footer.tagline}</p>
                 </div>
 

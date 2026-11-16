@@ -7,18 +7,26 @@ theme and re-audits the widget end to end.
 Status: **PASS with documented medium/low limitations; no open critical or high
 finding.**
 
+## Known issue (0.1.1)
+
+The production public asset-detail lookup by asset code
+(`GET /v1/public/assets/:code`) returns 404 for assets beyond the first
+records page; lookup by record id works. A server-side fix is pending
+(`findRecord` should scan all pages, not one 500-record page). The Android
+build itself is signed and verified; this is a backend contract issue.
+
 ## 1. Delivered
 
 | Item | Location |
 | --- | --- |
 | React Native/Expo app | `mobile/` |
 | Native Android widget | `mobile/android/app/src/main/java/sbs/synapsecity/mobile/widget/` |
-| Release APK (signed, public) | <https://synapsedx.sbs/v1/capabilities/public/files/synapsecity-android-0.1.0-arm64-x86_64/content> |
-| APK SHA-256 | `c423be659bed055a2fd2811946ad5d5264635743db8897685978f8b3d7be26c4` |
+| Release APK (signed, public) | <https://synapsedx.sbs/v1/capabilities/public/files/synapsecity-android-0.1.1-arm64-x86_64/content> |
+| APK SHA-256 | `dce9b691ef578d81370b86d7ef767b3eb12aa96e7c149cd7001698a6c0515aa5` |
 | Evidence screenshots | `docs/evidence/` |
 | Plan | `docs/MOBILE_APP_PLAN.md` |
 
-Package: `sbs.synapsecity.mobile`, versionName `0.1.0`, versionCode `1`,
+Package: `sbs.synapsecity.mobile`, versionName `0.1.1`, versionCode `2`,
 minSdk 24, target/compile SDK 37.
 
 ## 2. Design — light-first, based on the web console

@@ -315,6 +315,15 @@ export async function startMockTier2(): Promise<MockTier2> {
       return send(res, 404, { error: { code: 'route_not_found' } });
     }
 
+    // ---- shared security provider ----
+    if (path === '/v1/capabilities/security/turnstile/verify' && req.method === 'POST') {
+      const token = String(body?.token || '');
+      if (!token) return send(res, 400, { error: { code: 'turnstile_token_required' } });
+      return token === 'valid-token'
+        ? send(res, 200, { ok: true, configured: true })
+        : send(res, 200, { ok: false, configured: true, error: 'turnstile_failed' });
+    }
+
     // ---- notifications ----
     if (path.startsWith('/v1/capabilities/notifications')) {
       if (!notifications.available) return send(res, 503, { error: { code: 'notification_delivery_unavailable' } });
