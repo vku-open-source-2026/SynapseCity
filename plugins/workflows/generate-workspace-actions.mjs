@@ -132,15 +132,18 @@ const SCHEMAS = {
     defaults: { status: 'pending' },
   },
   users: {
+    // Role/permission grants are City administration, never a workflow field.
+    // The dispatcher can create a citizen profile only; elevation stays behind
+    // the authenticated /v1/users permission matrix.
     dataset: 'city-users', recordType: 'CityUser', publish: false,
     terminal: ['deleted'],
     statuses: ['active', 'inactive', 'suspended', 'deleted'],
     fields: {
-      username: S(120), email: S(320), full_name: S(200), phone: S(40), role: S(40),
-      status: S(40), department: S(160), permissions_json: JSONV(),
+      username: S(120), email: S(320), full_name: S(200), phone: S(40),
+      status: S(40), department: S(160),
     },
-    required: ['username', 'email', 'full_name', 'role'],
-    defaults: { status: 'active' },
+    required: ['username', 'email', 'full_name'],
+    defaults: { status: 'active', role: 'citizen' },
   },
   geofences: {
     dataset: 'city-geofences', recordType: 'Geofence', publish: false,

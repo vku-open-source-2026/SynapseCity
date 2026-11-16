@@ -33,6 +33,9 @@ every operation is migrated.
   Status-transition artifacts keep their existing fields but every incident
   PATCH is sent with `publish:false`, so those records never enter the public
   projection until the City service publishes a redacted copy.
+- The generic `users` schema cannot set `role` or `permissions_json`; workflow
+  registrations create citizen profiles only. Role elevation remains in City
+  `/v1/users` administration.
 - Body is `{ data: <domain record>, publish: <boolean> }` (Tier-2 records
   create contract). No Base SDK, no LDS projection, no Tier-3 API.
 - Auth is `parameters.auth = {credentialRef: "synapsedx-organization", header:

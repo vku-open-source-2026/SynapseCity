@@ -203,6 +203,14 @@ test('incident workflows keep internal fields out of public writes', () => {
         .map((node) => node.parameters.code)
         .join('\n');
     assert.match(allCode, /action\.resource === 'incidents' \? \{ publish: false \}/);
+    // Role/permission elevation stays behind City user administration.
+    const usersStart = code.indexOf('"users":{');
+    const usersEnd = code.indexOf(',"geofences":', usersStart);
+    assert.ok(usersStart !== -1 && usersEnd > usersStart, 'users schema is missing');
+    const usersSchema = code.slice(usersStart, usersEnd);
+    assert.ok(!usersSchema.includes('"role":{"kind"'), 'users schema exposes role');
+    assert.ok(!usersSchema.includes('"permissions_json"'), 'users schema exposes permissions');
+    assert.match(usersSchema, /"defaults":\{"status":"active","role":"citizen"\}/);
 });
 
 test('transition action design is implemented and keeps invariants', () => {
