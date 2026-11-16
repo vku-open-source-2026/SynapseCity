@@ -61,6 +61,7 @@ export interface MockTier2 {
     refusedExchange: boolean;
   };
   geo: { available: boolean; results: Array<Record<string, unknown>> };
+  approvals: Map<string, Record<string, any>>;
   /** Controls the AI capability contract exposed by the mock. */
   ai: { available: boolean; reply: string };
   seed: (datasetId: string, id: string, data: Record<string, unknown>) => void;
@@ -91,6 +92,65 @@ function sha256(bytes: Uint8Array): string {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
+type MockWhere = Record<string, unknown>;
+
+function mockCompare(actual: unknown, op: string, expected: unknown): boolean {
+  switch (op) {
+    case 'eq': return String(actual ?? '') === String(expected ?? '');
+    case 'ne': return String(actual ?? '') !== String(expected ?? '');
+    case 'in': return Array.isArray(expected) && expected.map(String).includes(String(actual ?? ''));
+    case 'nin': return Array.isArray(expected) && !expected.map(String).includes(String(actual ?? ''));
+    case 'gt': return actual !== undefined && String(actual) > String(expected);
+    case 'gte': return actual !== undefined && String(actual) >= String(expected);
+    case 'lt': return actual !== undefined && String(actual) < String(expected);
+    case 'lte': return actual !== undefined && String(actual) <= String(expected);
+    case 'exists': return (actual !== undefined) === Boolean(expected);
+    case 'contains': return String(actual ?? '').includes(String(expected ?? ''));
+    case 'startsWith': return String(actual ?? '').startsWith(String(expected ?? ''));
+    case 'endsWith': return String(actual ?? '').endsWith(String(expected ?? ''));
+    default: return false;
+  }
+}
+
+function matchesMockWhere(data: Record<string, unknown>, where: unknown): boolean {
+  if (!where || typeof where !== 'object') return true;
+  const node = where as MockWhere;
+  if (Array.isArray(node.and)) return (node.and as unknown[]).every((entry) => matchesMockWhere(data, entry));
+  if (Array.isArray(node.or)) return (node.or as unknown[]).some((entry) => matchesMockWhere(data, entry));
+  if (node.not !== undefined) return !matchesMockWhere(data, node.not);
+  if (node.field !== undefined) {
+    return mockCompare(data[String(node.field)], String(node.op || 'eq'), node.value);
+  }
+  for (const [key, expected] of Object.entries(node)) {
+    const actual = data[key];
+    if (expected && typeof expected === 'object' && !Array.isArray(expected)) {
+      for (const [op, value] of Object.entries(expected as Record<string, unknown>)) {
+        if (!mockCompare(actual, op, value)) return false;
+      }
+    } else if (!mockCompare(actual, 'eq', expected)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function mockOrder(items: Array<{ id: string; data: Record<string, unknown> }>, orderBy: unknown): Array<{ id: string; data: Record<string, unknown> }> {
+  if (!orderBy) return items;
+  const parsed = typeof orderBy === 'string'
+    ? (() => {
+        const [field, direction] = orderBy.split(':');
+        return { field, direction: direction || 'asc' };
+      })()
+    : orderBy as { field?: string; direction?: string };
+  if (!parsed?.field) return items;
+  const direction = String(parsed.direction || 'asc').toLowerCase() === 'desc' ? -1 : 1;
+  return [...items].sort((left, right) => {
+    const a = String(left.data[parsed.field!] ?? '');
+    const b = String(right.data[parsed.field!] ?? '');
+    return a < b ? -direction : a > b ? direction : 0;
+  });
+}
+
 export async function startMockTier2(): Promise<MockTier2> {
   const datasets = new Map<string, Record<string, unknown>>();
   const records = new Map<string, Map<string, Record<string, unknown>>>();
@@ -112,6 +172,7 @@ export async function startMockTier2(): Promise<MockTier2> {
     refusedExchange: false,
   };
   const geo = { available: true, results: [] as Array<Record<string, unknown>> };
+  const approvals = new Map<string, Record<string, any>>();
 
   const recordsFor = (datasetId: string): Map<string, Record<string, unknown>> => {
     if (!records.has(datasetId)) records.set(datasetId, new Map());
@@ -142,6 +203,44 @@ export async function startMockTier2(): Promise<MockTier2> {
         tier: 2,
         dependencies: [{ name: 'base', status: 'ok', critical: true, latency_ms: 1 }],
       });
+    }
+
+    // ---- HITL approvals (#30) ----
+    if (path === '/v1/capabilities/approvals' && req.method === 'POST') {
+      const id = String(body?.id || randomUUID());
+      const now = new Date().toISOString();
+      const approval = {
+        id, tenant: 'demo', title: String(body?.title || 'Approval'), module: String(body?.module || ''),
+        action: String(body?.action || ''), entityType: body?.entityType, entityId: body?.entityId,
+        payload: body?.payload, requester: String(body?.requester || 'city-user'),
+        approverRoles: Array.isArray(body?.approverRoles) ? body.approverRoles : [],
+        requiredApprovals: Number(body?.requiredApprovals || 1), status: 'pending', decisions: [],
+        dueAt: body?.dueAt, createdAt: now, updatedAt: now,
+      };
+      approvals.set(id, approval);
+      return send(res, 201, { approval });
+    }
+    if (path === '/v1/capabilities/approvals' && req.method === 'GET') {
+      const items = [...approvals.values()].filter((item) => !url.searchParams.get('status') || item.status === url.searchParams.get('status'));
+      return send(res, 200, { items, total: items.length });
+    }
+    const approvalMatch = path.match(/^\/v1\/capabilities\/approvals\/([^/]+)$/);
+    if (approvalMatch && req.method === 'GET') {
+      const item = approvals.get(approvalMatch[1]);
+      return item ? send(res, 200, { approval: item }) : send(res, 404, { error: { code: 'approval_not_found' } });
+    }
+    const decideMatch = path.match(/^\/v1\/capabilities\/approvals\/([^/]+)\/decide$/);
+    if (decideMatch && req.method === 'POST') {
+      const item = approvals.get(decideMatch[1]);
+      if (!item) return send(res, 404, { error: { code: 'approval_not_found' } });
+      if (item.status !== 'pending') return send(res, 409, { error: { code: 'approval_not_pending' } });
+      const decision = String(body?.decision || '');
+      if (!['approve', 'reject'].includes(decision)) return send(res, 400, { error: { code: 'invalid_request' } });
+      item.decisions.push({ actor: String(body?.actor || 'approver'), decision, note: body?.note, at: new Date().toISOString() });
+      item.status = decision === 'approve' ? 'approved' : 'rejected';
+      item.updatedAt = new Date().toISOString();
+      approvals.set(item.id, item);
+      return send(res, 200, { approval: item });
     }
 
     // ---- auth ----
@@ -214,6 +313,15 @@ export async function startMockTier2(): Promise<MockTier2> {
       if (path === '/v1/capabilities/geo/reverse') return send(res, 200, { items: geo.results });
       if (path === '/v1/capabilities/geo/place') return send(res, 200, { result: geo.results[0] || null });
       return send(res, 404, { error: { code: 'route_not_found' } });
+    }
+
+    // ---- shared security provider ----
+    if (path === '/v1/capabilities/security/turnstile/verify' && req.method === 'POST') {
+      const token = String(body?.token || '');
+      if (!token) return send(res, 400, { error: { code: 'turnstile_token_required' } });
+      return token === 'valid-token'
+        ? send(res, 200, { ok: true, configured: true })
+        : send(res, 200, { ok: false, configured: true, error: 'turnstile_failed' });
     }
 
     // ---- notifications ----
@@ -391,6 +499,16 @@ export async function startMockTier2(): Promise<MockTier2> {
         const offset = Number(url.searchParams.get('offset') || 0);
         return send(res, 200, { items: items.slice(offset, offset + limit), total: items.length, limit, offset });
       }
+      if (parts.length === 6 && parts[4] === 'records' && parts[5] === 'query' && req.method === 'POST') {
+        const input = (body || {}) as { where?: unknown; orderBy?: unknown; limit?: number; offset?: number };
+        const filtered = Array.from(recordsFor(datasetId).entries())
+          .map(([id, data]) => ({ id, data }))
+          .filter(({ data }) => matchesMockWhere(data, input.where));
+        const ordered = mockOrder(filtered, input.orderBy);
+        const limit = Number(input.limit || 100);
+        const offset = Number(input.offset || 0);
+        return send(res, 200, { items: ordered.slice(offset, offset + limit), total: ordered.length, limit, offset });
+      }
       if (parts.length === 5 && parts[4] === 'records' && req.method === 'POST') {
         const input = (body || {}) as { id?: string; data?: Record<string, unknown>; publish?: boolean };
         const id = String(input.id || `record-${recordsFor(datasetId).size + 1}`);
@@ -449,6 +567,7 @@ export async function startMockTier2(): Promise<MockTier2> {
     notifications,
     auth,
     geo,
+    approvals,
     ai,
     seed: (datasetId, id, data) => { recordsFor(datasetId).set(id, { ...data, id }); },
     close: () => new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve()))),

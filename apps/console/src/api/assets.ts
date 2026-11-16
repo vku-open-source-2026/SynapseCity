@@ -135,6 +135,20 @@ export const assetsApi = {
         return response.data;
     },
 
+    getRisk: async (id: string): Promise<{
+        asset_id: string;
+        score: number;
+        band: 'low' | 'moderate' | 'high' | 'critical';
+        confidence: number;
+        factors: Array<{ name: string; weight: number; score: number; explanation: string }>;
+        flags: string[];
+        data_freshness: { sensor_observed_at: string | null; age_minutes: number | null; stale: boolean };
+        recommendations: string[];
+    }> => {
+        const response = await httpClient.get(`/assets/${id}/risk`);
+        return response.data;
+    },
+
     getDocuments: async (id: string): Promise<AssetAttachment[]> => {
         if (USE_MOCK_DATA) {
             await delay(300);

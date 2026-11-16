@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 import L from 'leaflet';
 import ReactDOMServer from 'react-dom/server';
-import { Zap, BatteryCharging, UtilityPole, TrafficCone, Lightbulb, Droplet, Waves, Activity } from 'lucide-react';
+import { Zap, BatteryCharging, UtilityPole, TrafficCone, Lightbulb, Droplet, Droplets, Waves, Activity } from 'lucide-react';
 import React from 'react';
 
 // Define a mapping from feature_code to Lucide icon and color
@@ -15,9 +15,34 @@ export const iconMapping: Record<string, { icon: React.ElementType, color: strin
     'tru_chua_chay': { icon: Droplet, color: '#3b82f6', bgColor: '#dbeafe' }, // Blue
     'cong_thoat_nuoc': { icon: Waves, color: '#06b6d4', bgColor: '#cffafe' }, // Cyan
     'duong_ong_dien': { icon: Activity, color: '#8b5cf6', bgColor: '#e9d5ff' }, // Violet
+    'ong_dan_nuoc': { icon: Droplets, color: '#0ea5e9', bgColor: '#e0f2fe' }, // Sky
 };
 
+/** Vietnamese labels for the legacy feature codes used by the data import. */
+export const FEATURE_LABELS: Record<string, string> = {
+    tram_dien: 'Trạm điện',
+    tram_sac: 'Trạm sạc',
+    cot_dien: 'Cột điện',
+    den_giao_thong: 'Đèn giao thông',
+    den_duong: 'Đèn đường',
+    tru_chua_chay: 'Trụ chữa cháy',
+    cong_thoat_nuoc: 'Cống thoát nước',
+    duong_ong_dien: 'Đường ống điện',
+    ong_dan_nuoc: 'Ống dẫn nước',
+};
+
+export function featureLabel(featureCode: string, fallback?: string): string {
+    return FEATURE_LABELS[featureCode] || fallback || featureCode || 'Tài sản';
+}
+
+// Leaflet div icons are immutable strings, so build each variant once. The map
+// used to re-render a Lucide SVG for every asset on every pan.
+const iconCache = new Map<string, L.DivIcon>();
+
 export const getIconForAsset = (featureCode: string, isSelected: boolean = false) => {
+    const cacheKey = `${featureCode}:${isSelected ? 'selected' : 'normal'}`;
+    const cached = iconCache.get(cacheKey);
+    if (cached) return cached;
     const config = iconMapping[featureCode] || { icon: Activity, color: '#94a3b8', bgColor: '#f1f5f9' };
     const IconComponent = config.icon;
 
@@ -60,13 +85,15 @@ export const getIconForAsset = (featureCode: string, isSelected: boolean = false
         </div>
     `;
 
-    return L.divIcon({
+    const icon = L.divIcon({
         html: iconHtml,
         className: 'custom-marker-icon',
         iconSize: [size, size],
         iconAnchor: [size / 2, size],
         popupAnchor: [0, -size],
     });
+    iconCache.set(cacheKey, icon);
+    return icon;
 };
 
 export const getColorForFeatureCode = (featureCode: string): string => {

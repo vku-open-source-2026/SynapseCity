@@ -1,0 +1,3157 @@
+{
+  "format": "synapsedx-plugin",
+  "formatVersion": 1,
+  "plugin": {
+    "product": "city",
+    "name": "Common workspace",
+    "slug": "city-common-workspace",
+    "audience": "member",
+    "roles": [
+      "admin",
+      "manager",
+      "technician",
+      "volunteer"
+    ],
+    "widgets": [
+      {
+        "id": "welcome",
+        "type": "heading",
+        "title": "Your team’s work, connected",
+        "width": "full",
+        "text": "Projects, tasks, knowledge and decisions for this app’s members."
+      },
+      {
+        "id": "common-tools",
+        "type": "tabs",
+        "title": "Common workspace",
+        "width": "full",
+        "links": [
+          {
+            "label": "Tasks",
+            "target": "section:tasks",
+            "actionId": "act-common-tools-link1"
+          },
+          {
+            "label": "Projects",
+            "target": "section:projects",
+            "actionId": "act-common-tools-link2"
+          },
+          {
+            "label": "Wiki & knowledge",
+            "target": "section:workspace",
+            "actionId": "act-common-tools-link3"
+          },
+          {
+            "label": "Inbox",
+            "target": "section:inbox",
+            "actionId": "act-common-tools-link4"
+          },
+          {
+            "label": "Forms & approvals",
+            "target": "section:forms",
+            "actionId": "act-common-tools-link5"
+          },
+          {
+            "label": "Reports",
+            "target": "section:reports",
+            "actionId": "act-common-tools-link6"
+          },
+          {
+            "label": "Files & attachments",
+            "target": "section:files",
+            "actionId": "act-common-tools-link7"
+          },
+          {
+            "label": "Document extraction",
+            "target": "section:ocr",
+            "actionId": "act-common-tools-link8"
+          },
+          {
+            "label": "Assistant",
+            "target": "section:assistant",
+            "actionId": "act-common-tools-link9"
+          }
+        ]
+      },
+      {
+        "id": "task-count",
+        "type": "metric",
+        "title": "Team tasks",
+        "width": "quarter",
+        "resource": "commonTasks",
+        "section": "tasks",
+        "onLoad": "act-task-count-load"
+      },
+      {
+        "id": "project-count",
+        "type": "metric",
+        "title": "Projects",
+        "width": "quarter",
+        "resource": "commonProjects",
+        "section": "tasks",
+        "onLoad": "act-project-count-load"
+      },
+      {
+        "id": "knowledge-count",
+        "type": "metric",
+        "title": "Knowledge pages",
+        "width": "quarter",
+        "resource": "commonPages",
+        "section": "tasks",
+        "onLoad": "act-knowledge-count-load"
+      },
+      {
+        "id": "inbox-count",
+        "type": "metric",
+        "title": "Inbox items",
+        "width": "quarter",
+        "resource": "commonInbox",
+        "section": "tasks",
+        "onLoad": "act-inbox-count-load"
+      },
+      {
+        "id": "task-board",
+        "type": "kanban",
+        "title": "Task board",
+        "width": "full",
+        "resource": "commonTasks",
+        "columns": [
+          "title",
+          "status",
+          "assignee",
+          "endDate",
+          "projectId"
+        ],
+        "groupBy": "status",
+        "groups": [
+          "todo",
+          "doing",
+          "done"
+        ],
+        "updateForm": "task-status",
+        "section": "tasks",
+        "onLoad": "act-task-board-load",
+        "onRowClick": "act-task-board-row",
+        "onExport": "act-task-board-export",
+        "onChange": "act-task-board-change"
+      },
+      {
+        "id": "task-timeline",
+        "type": "timeline",
+        "title": "Upcoming work",
+        "width": "half",
+        "resource": "commonTasks",
+        "columns": [
+          "title",
+          "endDate",
+          "status",
+          "assignee"
+        ],
+        "section": "tasks",
+        "onLoad": "act-task-timeline-load",
+        "onRowClick": "act-task-timeline-row",
+        "onExport": "act-task-timeline-export"
+      },
+      {
+        "id": "task-list",
+        "type": "table",
+        "title": "All tasks",
+        "width": "half",
+        "resource": "commonTasks",
+        "columns": [
+          "title",
+          "status",
+          "assignee",
+          "estimateHours",
+          "endDate"
+        ],
+        "section": "tasks",
+        "onLoad": "act-task-list-load",
+        "onRowClick": "act-task-list-row",
+        "onExport": "act-task-list-export"
+      },
+      {
+        "id": "task-create",
+        "type": "form",
+        "title": "Create task",
+        "width": "full",
+        "resource": "commonTasks",
+        "action": "create",
+        "fields": [
+          {
+            "name": "projectId",
+            "label": "Project",
+            "type": "select",
+            "required": true,
+            "optionsResource": "commonProjects",
+            "optionsAction": "act-task-create-opt-projectid"
+          },
+          {
+            "name": "title",
+            "label": "Task title",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "assignee",
+            "label": "Assignee",
+            "type": "text"
+          },
+          {
+            "name": "status",
+            "label": "Status",
+            "type": "select",
+            "options": [
+              "todo",
+              "doing",
+              "done"
+            ],
+            "defaultValue": "todo"
+          },
+          {
+            "name": "startDate",
+            "label": "Start date",
+            "type": "date"
+          },
+          {
+            "name": "endDate",
+            "label": "Due date",
+            "type": "date"
+          },
+          {
+            "name": "estimateHours",
+            "label": "Estimate (hours)",
+            "type": "number"
+          }
+        ],
+        "section": "tasks",
+        "onSubmit": "act-task-create-submit"
+      },
+      {
+        "id": "task-edit",
+        "type": "form",
+        "title": "Edit task",
+        "width": "full",
+        "resource": "commonTasks",
+        "action": "update",
+        "fields": [
+          {
+            "name": "record_id",
+            "label": "Record ID",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "title",
+            "label": "Task title",
+            "type": "text"
+          },
+          {
+            "name": "assignee",
+            "label": "Assignee",
+            "type": "text"
+          },
+          {
+            "name": "estimateHours",
+            "label": "Estimate (hours)",
+            "type": "number"
+          }
+        ],
+        "section": "tasks",
+        "onSubmit": "act-task-edit-submit"
+      },
+      {
+        "id": "task-status",
+        "type": "form",
+        "title": "Change task status",
+        "width": "full",
+        "resource": "commonTasks",
+        "action": "update",
+        "fields": [
+          {
+            "name": "record_id",
+            "label": "Record ID",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "status",
+            "label": "Status",
+            "type": "select",
+            "required": true,
+            "options": [
+              "todo",
+              "doing",
+              "done"
+            ]
+          }
+        ],
+        "section": "tasks",
+        "onSubmit": "act-task-status-submit"
+      },
+      {
+        "id": "project-list",
+        "type": "table",
+        "title": "Project portfolio",
+        "width": "full",
+        "resource": "commonProjects",
+        "columns": [
+          "name",
+          "program",
+          "startDate",
+          "endDate",
+          "stage",
+          "budget"
+        ],
+        "section": "projects",
+        "onLoad": "act-project-list-load",
+        "onRowClick": "act-project-list-row",
+        "onExport": "act-project-list-export"
+      },
+      {
+        "id": "project-timeline",
+        "type": "timeline",
+        "title": "Project schedule",
+        "width": "full",
+        "resource": "commonProjects",
+        "columns": [
+          "name",
+          "endDate",
+          "program"
+        ],
+        "section": "projects",
+        "onLoad": "act-project-timeline-load",
+        "onRowClick": "act-project-timeline-row",
+        "onExport": "act-project-timeline-export"
+      },
+      {
+        "id": "project-create",
+        "type": "form",
+        "title": "Create project",
+        "width": "full",
+        "resource": "commonProjects",
+        "action": "create",
+        "fields": [
+          {
+            "name": "name",
+            "label": "Project name",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "program",
+            "label": "Program",
+            "type": "text"
+          },
+          {
+            "name": "startDate",
+            "label": "Start date",
+            "type": "date",
+            "required": true
+          },
+          {
+            "name": "endDate",
+            "label": "End date",
+            "type": "date",
+            "required": true
+          },
+          {
+            "name": "budget",
+            "label": "Budget",
+            "type": "number"
+          }
+        ],
+        "section": "projects",
+        "onSubmit": "act-project-create-submit"
+      },
+      {
+        "id": "project-edit",
+        "type": "form",
+        "title": "Edit project",
+        "width": "full",
+        "resource": "commonProjects",
+        "action": "update",
+        "fields": [
+          {
+            "name": "record_id",
+            "label": "Record ID",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "name",
+            "label": "Project name",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "program",
+            "label": "Program",
+            "type": "text"
+          },
+          {
+            "name": "startDate",
+            "label": "Start date",
+            "type": "date",
+            "required": true
+          },
+          {
+            "name": "endDate",
+            "label": "End date",
+            "type": "date",
+            "required": true
+          },
+          {
+            "name": "budget",
+            "label": "Budget",
+            "type": "number"
+          }
+        ],
+        "section": "projects",
+        "onSubmit": "act-project-edit-submit"
+      },
+      {
+        "id": "wiki-spaces",
+        "type": "table",
+        "title": "Knowledge spaces",
+        "width": "half",
+        "resource": "commonWorkspaces",
+        "columns": [
+          "name",
+          "para",
+          "visibility",
+          "description"
+        ],
+        "section": "workspace",
+        "onLoad": "act-wiki-spaces-load",
+        "onRowClick": "act-wiki-spaces-row",
+        "onExport": "act-wiki-spaces-export"
+      },
+      {
+        "id": "wiki-pages",
+        "type": "table",
+        "title": "Wiki pages",
+        "width": "half",
+        "resource": "commonPages",
+        "columns": [
+          "title",
+          "folder",
+          "updatedAt",
+          "tags"
+        ],
+        "section": "workspace",
+        "onLoad": "act-wiki-pages-load",
+        "onRowClick": "act-wiki-pages-row",
+        "onExport": "act-wiki-pages-export"
+      },
+      {
+        "id": "wiki-space-create",
+        "type": "form",
+        "title": "Create knowledge space",
+        "width": "full",
+        "resource": "commonWorkspaces",
+        "action": "create",
+        "fields": [
+          {
+            "name": "name",
+            "label": "Space name",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "description",
+            "label": "Description",
+            "type": "textarea"
+          },
+          {
+            "name": "para",
+            "label": "Folder",
+            "type": "select",
+            "required": true,
+            "options": [
+              "projects",
+              "areas",
+              "resources",
+              "archive"
+            ],
+            "defaultValue": "areas"
+          },
+          {
+            "name": "visibility",
+            "label": "Visibility",
+            "type": "select",
+            "required": true,
+            "options": [
+              "team",
+              "private"
+            ],
+            "defaultValue": "team"
+          }
+        ],
+        "section": "workspace",
+        "onSubmit": "act-wiki-space-create-submit"
+      },
+      {
+        "id": "wiki-create",
+        "type": "form",
+        "title": "Create wiki page",
+        "width": "full",
+        "resource": "commonPages",
+        "action": "create",
+        "fields": [
+          {
+            "name": "workspaceId",
+            "label": "Knowledge space",
+            "type": "select",
+            "required": true,
+            "optionsResource": "commonWorkspaces",
+            "optionsAction": "act-wiki-create-opt-workspaceid"
+          },
+          {
+            "name": "title",
+            "label": "Page title",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "markdown",
+            "label": "Page content",
+            "type": "markdown",
+            "required": true
+          },
+          {
+            "name": "tags",
+            "label": "Tags (JSON array)",
+            "type": "json",
+            "defaultValue": "[]"
+          }
+        ],
+        "section": "workspace",
+        "onSubmit": "act-wiki-create-submit"
+      },
+      {
+        "id": "wiki-edit",
+        "type": "form",
+        "title": "Edit wiki page",
+        "width": "full",
+        "resource": "commonPages",
+        "action": "update",
+        "fields": [
+          {
+            "name": "record_id",
+            "label": "Record ID",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "title",
+            "label": "Page title",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "markdown",
+            "label": "Page content",
+            "type": "markdown",
+            "required": true
+          },
+          {
+            "name": "tags",
+            "label": "Tags (JSON array)",
+            "type": "json",
+            "defaultValue": "[]"
+          }
+        ],
+        "section": "workspace",
+        "onSubmit": "act-wiki-edit-submit"
+      },
+      {
+        "id": "inbox-list",
+        "type": "table",
+        "title": "Your inbox",
+        "width": "full",
+        "resource": "commonInbox",
+        "columns": [
+          "title",
+          "status",
+          "body",
+          "createdAt"
+        ],
+        "section": "inbox",
+        "onLoad": "act-inbox-list-load",
+        "onRowClick": "act-inbox-list-row",
+        "onExport": "act-inbox-list-export"
+      },
+      {
+        "id": "inbox-read",
+        "type": "form",
+        "title": "Mark as read",
+        "width": "full",
+        "resource": "commonInbox",
+        "action": "execute",
+        "fields": [
+          {
+            "name": "record_id",
+            "label": "Record ID",
+            "type": "text",
+            "required": true
+          }
+        ],
+        "section": "inbox",
+        "onSubmit": "act-inbox-read-submit"
+      },
+      {
+        "id": "inbox-archive",
+        "type": "form",
+        "title": "Archive notification",
+        "width": "full",
+        "resource": "commonInbox",
+        "action": "delete",
+        "fields": [
+          {
+            "name": "record_id",
+            "label": "Record ID",
+            "type": "text",
+            "required": true
+          }
+        ],
+        "section": "inbox",
+        "onSubmit": "act-inbox-archive-submit"
+      },
+      {
+        "id": "forms-list",
+        "type": "table",
+        "title": "Form library",
+        "width": "half",
+        "resource": "commonForms",
+        "columns": [
+          "name",
+          "description",
+          "version",
+          "published"
+        ],
+        "section": "forms",
+        "onLoad": "act-forms-list-load",
+        "onRowClick": "act-forms-list-row",
+        "onExport": "act-forms-list-export"
+      },
+      {
+        "id": "approvals-list",
+        "type": "table",
+        "title": "Approval requests",
+        "width": "half",
+        "resource": "commonApprovals",
+        "columns": [
+          "title",
+          "status",
+          "requester",
+          "dueAt"
+        ],
+        "section": "forms",
+        "onLoad": "act-approvals-list-load",
+        "onRowClick": "act-approvals-list-row",
+        "onExport": "act-approvals-list-export"
+      },
+      {
+        "id": "form-create",
+        "type": "form",
+        "title": "Create form schema",
+        "width": "full",
+        "resource": "commonForms",
+        "action": "create",
+        "fields": [
+          {
+            "name": "name",
+            "label": "Form name",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "description",
+            "label": "Description",
+            "type": "textarea"
+          },
+          {
+            "name": "schema",
+            "label": "JSON schema",
+            "type": "json",
+            "required": true,
+            "defaultValue": "{\"type\":\"object\",\"properties\":{\"notes\":{\"type\":\"string\"}},\"required\":[\"notes\"]}",
+            "editor": "schema"
+          },
+          {
+            "name": "published",
+            "label": "Published",
+            "type": "checkbox"
+          }
+        ],
+        "section": "forms",
+        "onSubmit": "act-form-create-submit"
+      },
+      {
+        "id": "form-validate",
+        "type": "form",
+        "title": "Validate form data",
+        "width": "full",
+        "resource": "commonForms",
+        "action": "execute",
+        "fields": [
+          {
+            "name": "record_id",
+            "label": "Record ID",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "values",
+            "label": "Form values (JSON)",
+            "type": "json",
+            "required": true,
+            "defaultValue": "{}"
+          }
+        ],
+        "section": "forms",
+        "onSubmit": "act-form-validate-submit"
+      },
+      {
+        "id": "approval-create",
+        "type": "form",
+        "title": "Request approval",
+        "width": "full",
+        "resource": "commonApprovals",
+        "action": "create",
+        "fields": [
+          {
+            "name": "title",
+            "label": "Request title",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "module",
+            "label": "Module",
+            "type": "text",
+            "required": true,
+            "defaultValue": "common"
+          },
+          {
+            "name": "action",
+            "label": "Requested action",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "approverRoles",
+            "label": "Approver roles (JSON array)",
+            "type": "json",
+            "required": true,
+            "defaultValue": "[\"synapsedx:manager\"]"
+          },
+          {
+            "name": "payload",
+            "label": "Request details (JSON)",
+            "type": "json",
+            "defaultValue": "{}"
+          }
+        ],
+        "section": "forms",
+        "onSubmit": "act-approval-create-submit"
+      },
+      {
+        "id": "approval-decide",
+        "type": "form",
+        "title": "Record approval decision",
+        "width": "full",
+        "resource": "commonApprovals",
+        "action": "execute",
+        "fields": [
+          {
+            "name": "record_id",
+            "label": "Record ID",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "decision",
+            "label": "Decision",
+            "type": "select",
+            "required": true,
+            "options": [
+              "approve",
+              "reject"
+            ]
+          },
+          {
+            "name": "note",
+            "label": "Decision note",
+            "type": "textarea"
+          }
+        ],
+        "section": "forms",
+        "onSubmit": "act-approval-decide-submit"
+      },
+      {
+        "id": "reports-list",
+        "type": "table",
+        "title": "Saved reports",
+        "width": "full",
+        "resource": "commonReports",
+        "columns": [
+          "name",
+          "kind",
+          "datasetId",
+          "description"
+        ],
+        "section": "reports",
+        "onLoad": "act-reports-list-load",
+        "onRowClick": "act-reports-list-row",
+        "onExport": "act-reports-list-export"
+      },
+      {
+        "id": "report-create",
+        "type": "form",
+        "title": "Create report",
+        "width": "full",
+        "resource": "commonReports",
+        "action": "create",
+        "fields": [
+          {
+            "name": "name",
+            "label": "Report name",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "description",
+            "label": "Description",
+            "type": "textarea"
+          },
+          {
+            "name": "datasetId",
+            "label": "Authorized dataset ID",
+            "type": "text"
+          },
+          {
+            "name": "kind",
+            "label": "Report type",
+            "type": "select",
+            "required": true,
+            "options": [
+              "table",
+              "metric",
+              "bar",
+              "trend",
+              "status"
+            ],
+            "defaultValue": "table"
+          },
+          {
+            "name": "query",
+            "label": "Query configuration (JSON)",
+            "type": "json",
+            "required": true,
+            "defaultValue": "{}",
+            "editor": "query"
+          }
+        ],
+        "section": "reports",
+        "onSubmit": "act-report-create-submit"
+      },
+      {
+        "id": "report-run",
+        "type": "form",
+        "title": "Run report",
+        "width": "full",
+        "resource": "commonReports",
+        "action": "execute",
+        "fields": [
+          {
+            "name": "record_id",
+            "label": "Record ID",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "params",
+            "label": "Parameters (JSON)",
+            "type": "json",
+            "defaultValue": "{}"
+          }
+        ],
+        "section": "reports",
+        "onSubmit": "act-report-run-submit"
+      },
+      {
+        "id": "ocr-list",
+        "type": "table",
+        "title": "Extraction jobs",
+        "width": "full",
+        "resource": "commonOcr",
+        "columns": [
+          "fileId",
+          "status",
+          "source",
+          "createdAt"
+        ],
+        "section": "ocr",
+        "onLoad": "act-ocr-list-load",
+        "onRowClick": "act-ocr-list-row",
+        "onExport": "act-ocr-list-export"
+      },
+      {
+        "id": "ocr-create",
+        "type": "form",
+        "title": "Extract document",
+        "width": "full",
+        "resource": "commonOcr",
+        "action": "create",
+        "fields": [
+          {
+            "name": "fileId",
+            "label": "App document",
+            "type": "select",
+            "required": true,
+            "optionsResource": "commonFiles",
+            "optionsAction": "act-ocr-create-opt-fileid"
+          },
+          {
+            "name": "text",
+            "label": "Pre-extracted text (optional)",
+            "type": "textarea"
+          }
+        ],
+        "section": "ocr",
+        "onSubmit": "act-ocr-create-submit"
+      },
+      {
+        "id": "ocr-redact",
+        "type": "form",
+        "title": "Redact personal data",
+        "width": "full",
+        "resource": "commonOcr",
+        "action": "execute",
+        "fields": [
+          {
+            "name": "record_id",
+            "label": "Record ID",
+            "type": "text",
+            "required": true
+          }
+        ],
+        "section": "ocr",
+        "onSubmit": "act-ocr-redact-submit"
+      },
+      {
+        "id": "knowledge-list",
+        "type": "table",
+        "title": "Knowledge sources",
+        "width": "full",
+        "resource": "commonKnowledge",
+        "columns": [
+          "title",
+          "sourceType",
+          "chars"
+        ],
+        "section": "assistant",
+        "onLoad": "act-knowledge-list-load",
+        "onRowClick": "act-knowledge-list-row",
+        "onExport": "act-knowledge-list-export"
+      },
+      {
+        "id": "knowledge-create",
+        "type": "form",
+        "title": "Add knowledge source",
+        "width": "full",
+        "resource": "commonKnowledge",
+        "action": "create",
+        "fields": [
+          {
+            "name": "title",
+            "label": "Document title",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "text",
+            "label": "Document text",
+            "type": "markdown",
+            "required": true
+          },
+          {
+            "name": "acl",
+            "label": "Access roles (JSON array)",
+            "type": "json",
+            "defaultValue": "[]"
+          }
+        ],
+        "section": "assistant",
+        "onSubmit": "act-knowledge-create-submit"
+      },
+      {
+        "id": "assistant-query",
+        "type": "form",
+        "title": "Ask your app assistant",
+        "width": "full",
+        "resource": "commonAssistant",
+        "action": "execute",
+        "fields": [
+          {
+            "name": "question",
+            "label": "Question",
+            "type": "textarea",
+            "required": true
+          }
+        ],
+        "presentation": "inline",
+        "section": "assistant",
+        "onSubmit": "act-assistant-query-submit"
+      },
+      {
+        "id": "files-list",
+        "type": "table",
+        "title": "Files & attachments",
+        "width": "full",
+        "resource": "commonFiles",
+        "columns": [
+          "filename",
+          "contentType",
+          "size",
+          "createdAt"
+        ],
+        "section": "files",
+        "onLoad": "act-files-list-load",
+        "onRowClick": "act-files-list-row",
+        "onExport": "act-files-list-export"
+      },
+      {
+        "id": "file-upload",
+        "type": "form",
+        "title": "Upload file",
+        "width": "half",
+        "resource": "commonFiles",
+        "action": "execute",
+        "section": "files",
+        "fields": [
+          {
+            "name": "file_id",
+            "label": "File",
+            "type": "file",
+            "required": true,
+            "maxBytes": 10485760,
+            "uploadAction": "act-file-upload-upload-file-id"
+          }
+        ],
+        "presentation": "inline",
+        "onSubmit": "act-file-upload-submit"
+      },
+      {
+        "id": "file-download",
+        "type": "button",
+        "title": "Download selected file",
+        "width": "half",
+        "section": "files",
+        "onClick": "download-file"
+      },
+      {
+        "id": "download-file",
+        "type": "action",
+        "title": "Download selected file",
+        "operation": {
+          "kind": "download",
+          "target": "files-list",
+          "mappings": [
+            {
+              "field": "file_id",
+              "source": "selected",
+              "widgetId": "files-list",
+              "value": "id",
+              "required": true
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        },
+        "section": "files"
+      },
+      {
+        "id": "act-common-tools-link1",
+        "type": "action",
+        "title": "Navigate Tasks",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "section:tasks"
+        }
+      },
+      {
+        "id": "act-common-tools-link2",
+        "type": "action",
+        "title": "Navigate Projects",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "section:projects"
+        }
+      },
+      {
+        "id": "act-common-tools-link3",
+        "type": "action",
+        "title": "Navigate Wiki & knowledge",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "section:workspace"
+        }
+      },
+      {
+        "id": "act-common-tools-link4",
+        "type": "action",
+        "title": "Navigate Inbox",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "section:inbox"
+        }
+      },
+      {
+        "id": "act-common-tools-link5",
+        "type": "action",
+        "title": "Navigate Forms & approvals",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "section:forms"
+        }
+      },
+      {
+        "id": "act-common-tools-link6",
+        "type": "action",
+        "title": "Navigate Reports",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "section:reports"
+        }
+      },
+      {
+        "id": "act-common-tools-link7",
+        "type": "action",
+        "title": "Navigate Files & attachments",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "section:files"
+        }
+      },
+      {
+        "id": "act-common-tools-link8",
+        "type": "action",
+        "title": "Navigate Document extraction",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "section:ocr"
+        }
+      },
+      {
+        "id": "act-common-tools-link9",
+        "type": "action",
+        "title": "Navigate Assistant",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "section:assistant"
+        }
+      },
+      {
+        "id": "act-task-count-load",
+        "type": "action",
+        "title": "Read Team tasks",
+        "operation": {
+          "kind": "query",
+          "target": "task-count",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "commonTasks"
+        }
+      },
+      {
+        "id": "act-project-count-load",
+        "type": "action",
+        "title": "Read Projects",
+        "operation": {
+          "kind": "query",
+          "target": "project-count",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "commonProjects"
+        }
+      },
+      {
+        "id": "act-knowledge-count-load",
+        "type": "action",
+        "title": "Read Knowledge pages",
+        "operation": {
+          "kind": "query",
+          "target": "knowledge-count",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "commonPages"
+        }
+      },
+      {
+        "id": "act-inbox-count-load",
+        "type": "action",
+        "title": "Read Inbox items",
+        "operation": {
+          "kind": "query",
+          "target": "inbox-count",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "commonInbox"
+        }
+      },
+      {
+        "id": "act-task-board-load",
+        "type": "action",
+        "title": "Read Task board",
+        "operation": {
+          "kind": "query",
+          "target": "task-board",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "commonTasks"
+        }
+      },
+      {
+        "id": "act-task-board-row",
+        "type": "action",
+        "title": "Inspect Task board",
+        "operation": {
+          "kind": "showRecord",
+          "target": "task-board",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-task-board-export",
+        "type": "action",
+        "title": "Export Task board",
+        "operation": {
+          "kind": "export",
+          "target": "task-board",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-task-board-change",
+        "type": "action",
+        "title": "Move Task board",
+        "operation": {
+          "kind": "update",
+          "target": "task-status",
+          "mappings": [
+            {
+              "field": "record_id",
+              "source": "event",
+              "value": "row.id",
+              "required": true
+            },
+            {
+              "field": "status",
+              "source": "event",
+              "value": "value",
+              "required": true
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-task-timeline-load",
+        "type": "action",
+        "title": "Read Upcoming work",
+        "operation": {
+          "kind": "query",
+          "target": "task-timeline",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "commonTasks"
+        }
+      },
+      {
+        "id": "act-task-timeline-row",
+        "type": "action",
+        "title": "Inspect Upcoming work",
+        "operation": {
+          "kind": "showRecord",
+          "target": "task-timeline",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-task-timeline-export",
+        "type": "action",
+        "title": "Export Upcoming work",
+        "operation": {
+          "kind": "export",
+          "target": "task-timeline",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-task-list-load",
+        "type": "action",
+        "title": "Read All tasks",
+        "operation": {
+          "kind": "query",
+          "target": "task-list",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "commonTasks"
+        }
+      },
+      {
+        "id": "act-task-list-row",
+        "type": "action",
+        "title": "Inspect All tasks",
+        "operation": {
+          "kind": "showRecord",
+          "target": "task-list",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-task-list-export",
+        "type": "action",
+        "title": "Export All tasks",
+        "operation": {
+          "kind": "export",
+          "target": "task-list",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-task-create-opt-projectid",
+        "type": "action",
+        "title": "Options Create task · projectId",
+        "operation": {
+          "kind": "query",
+          "target": "task-create",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "commonProjects"
+        }
+      },
+      {
+        "id": "act-task-create-submit",
+        "type": "action",
+        "title": "Submit Create task",
+        "operation": {
+          "kind": "create",
+          "target": "task-create",
+          "mappings": [
+            {
+              "field": "projectId",
+              "source": "event",
+              "value": "values.projectId",
+              "required": true
+            },
+            {
+              "field": "title",
+              "source": "event",
+              "value": "values.title",
+              "required": true
+            },
+            {
+              "field": "assignee",
+              "source": "event",
+              "value": "values.assignee",
+              "required": false
+            },
+            {
+              "field": "status",
+              "source": "event",
+              "value": "values.status",
+              "required": false
+            },
+            {
+              "field": "startDate",
+              "source": "event",
+              "value": "values.startDate",
+              "required": false
+            },
+            {
+              "field": "endDate",
+              "source": "event",
+              "value": "values.endDate",
+              "required": false
+            },
+            {
+              "field": "estimateHours",
+              "source": "event",
+              "value": "values.estimateHours",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-task-create-open",
+        "type": "action",
+        "title": "Open Create task",
+        "operation": {
+          "kind": "openForm",
+          "target": "task-create",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-task-edit-submit",
+        "type": "action",
+        "title": "Submit Edit task",
+        "operation": {
+          "kind": "update",
+          "target": "task-edit",
+          "mappings": [
+            {
+              "field": "record_id",
+              "source": "event",
+              "value": "values.record_id",
+              "required": true
+            },
+            {
+              "field": "title",
+              "source": "event",
+              "value": "values.title",
+              "required": false
+            },
+            {
+              "field": "assignee",
+              "source": "event",
+              "value": "values.assignee",
+              "required": false
+            },
+            {
+              "field": "estimateHours",
+              "source": "event",
+              "value": "values.estimateHours",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-task-edit-open",
+        "type": "action",
+        "title": "Open Edit task",
+        "operation": {
+          "kind": "openForm",
+          "target": "task-edit",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-task-status-submit",
+        "type": "action",
+        "title": "Submit Change task status",
+        "operation": {
+          "kind": "update",
+          "target": "task-status",
+          "mappings": [
+            {
+              "field": "record_id",
+              "source": "event",
+              "value": "values.record_id",
+              "required": true
+            },
+            {
+              "field": "status",
+              "source": "event",
+              "value": "values.status",
+              "required": true
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-task-status-open",
+        "type": "action",
+        "title": "Open Change task status",
+        "operation": {
+          "kind": "openForm",
+          "target": "task-status",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-project-list-load",
+        "type": "action",
+        "title": "Read Project portfolio",
+        "operation": {
+          "kind": "query",
+          "target": "project-list",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "commonProjects"
+        }
+      },
+      {
+        "id": "act-project-list-row",
+        "type": "action",
+        "title": "Inspect Project portfolio",
+        "operation": {
+          "kind": "showRecord",
+          "target": "project-list",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-project-list-export",
+        "type": "action",
+        "title": "Export Project portfolio",
+        "operation": {
+          "kind": "export",
+          "target": "project-list",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-project-timeline-load",
+        "type": "action",
+        "title": "Read Project schedule",
+        "operation": {
+          "kind": "query",
+          "target": "project-timeline",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "commonProjects"
+        }
+      },
+      {
+        "id": "act-project-timeline-row",
+        "type": "action",
+        "title": "Inspect Project schedule",
+        "operation": {
+          "kind": "showRecord",
+          "target": "project-timeline",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-project-timeline-export",
+        "type": "action",
+        "title": "Export Project schedule",
+        "operation": {
+          "kind": "export",
+          "target": "project-timeline",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-project-create-submit",
+        "type": "action",
+        "title": "Submit Create project",
+        "operation": {
+          "kind": "create",
+          "target": "project-create",
+          "mappings": [
+            {
+              "field": "name",
+              "source": "event",
+              "value": "values.name",
+              "required": true
+            },
+            {
+              "field": "program",
+              "source": "event",
+              "value": "values.program",
+              "required": false
+            },
+            {
+              "field": "startDate",
+              "source": "event",
+              "value": "values.startDate",
+              "required": true
+            },
+            {
+              "field": "endDate",
+              "source": "event",
+              "value": "values.endDate",
+              "required": true
+            },
+            {
+              "field": "budget",
+              "source": "event",
+              "value": "values.budget",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-project-create-open",
+        "type": "action",
+        "title": "Open Create project",
+        "operation": {
+          "kind": "openForm",
+          "target": "project-create",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-project-edit-submit",
+        "type": "action",
+        "title": "Submit Edit project",
+        "operation": {
+          "kind": "update",
+          "target": "project-edit",
+          "mappings": [
+            {
+              "field": "record_id",
+              "source": "event",
+              "value": "values.record_id",
+              "required": true
+            },
+            {
+              "field": "name",
+              "source": "event",
+              "value": "values.name",
+              "required": true
+            },
+            {
+              "field": "program",
+              "source": "event",
+              "value": "values.program",
+              "required": false
+            },
+            {
+              "field": "startDate",
+              "source": "event",
+              "value": "values.startDate",
+              "required": true
+            },
+            {
+              "field": "endDate",
+              "source": "event",
+              "value": "values.endDate",
+              "required": true
+            },
+            {
+              "field": "budget",
+              "source": "event",
+              "value": "values.budget",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-project-edit-open",
+        "type": "action",
+        "title": "Open Edit project",
+        "operation": {
+          "kind": "openForm",
+          "target": "project-edit",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-wiki-spaces-load",
+        "type": "action",
+        "title": "Read Knowledge spaces",
+        "operation": {
+          "kind": "query",
+          "target": "wiki-spaces",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "commonWorkspaces"
+        }
+      },
+      {
+        "id": "act-wiki-spaces-row",
+        "type": "action",
+        "title": "Inspect Knowledge spaces",
+        "operation": {
+          "kind": "showRecord",
+          "target": "wiki-spaces",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-wiki-spaces-export",
+        "type": "action",
+        "title": "Export Knowledge spaces",
+        "operation": {
+          "kind": "export",
+          "target": "wiki-spaces",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-wiki-pages-load",
+        "type": "action",
+        "title": "Read Wiki pages",
+        "operation": {
+          "kind": "query",
+          "target": "wiki-pages",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "commonPages"
+        }
+      },
+      {
+        "id": "act-wiki-pages-row",
+        "type": "action",
+        "title": "Inspect Wiki pages",
+        "operation": {
+          "kind": "showRecord",
+          "target": "wiki-pages",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-wiki-pages-export",
+        "type": "action",
+        "title": "Export Wiki pages",
+        "operation": {
+          "kind": "export",
+          "target": "wiki-pages",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-wiki-space-create-submit",
+        "type": "action",
+        "title": "Submit Create knowledge space",
+        "operation": {
+          "kind": "create",
+          "target": "wiki-space-create",
+          "mappings": [
+            {
+              "field": "name",
+              "source": "event",
+              "value": "values.name",
+              "required": true
+            },
+            {
+              "field": "description",
+              "source": "event",
+              "value": "values.description",
+              "required": false
+            },
+            {
+              "field": "para",
+              "source": "event",
+              "value": "values.para",
+              "required": true
+            },
+            {
+              "field": "visibility",
+              "source": "event",
+              "value": "values.visibility",
+              "required": true
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-wiki-space-create-open",
+        "type": "action",
+        "title": "Open Create knowledge space",
+        "operation": {
+          "kind": "openForm",
+          "target": "wiki-space-create",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-wiki-create-opt-workspaceid",
+        "type": "action",
+        "title": "Options Create wiki page · workspaceId",
+        "operation": {
+          "kind": "query",
+          "target": "wiki-create",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "commonWorkspaces"
+        }
+      },
+      {
+        "id": "act-wiki-create-submit",
+        "type": "action",
+        "title": "Submit Create wiki page",
+        "operation": {
+          "kind": "create",
+          "target": "wiki-create",
+          "mappings": [
+            {
+              "field": "workspaceId",
+              "source": "event",
+              "value": "values.workspaceId",
+              "required": true
+            },
+            {
+              "field": "title",
+              "source": "event",
+              "value": "values.title",
+              "required": true
+            },
+            {
+              "field": "markdown",
+              "source": "event",
+              "value": "values.markdown",
+              "required": true
+            },
+            {
+              "field": "tags",
+              "source": "event",
+              "value": "values.tags",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-wiki-create-open",
+        "type": "action",
+        "title": "Open Create wiki page",
+        "operation": {
+          "kind": "openForm",
+          "target": "wiki-create",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-wiki-edit-submit",
+        "type": "action",
+        "title": "Submit Edit wiki page",
+        "operation": {
+          "kind": "update",
+          "target": "wiki-edit",
+          "mappings": [
+            {
+              "field": "record_id",
+              "source": "event",
+              "value": "values.record_id",
+              "required": true
+            },
+            {
+              "field": "title",
+              "source": "event",
+              "value": "values.title",
+              "required": true
+            },
+            {
+              "field": "markdown",
+              "source": "event",
+              "value": "values.markdown",
+              "required": true
+            },
+            {
+              "field": "tags",
+              "source": "event",
+              "value": "values.tags",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-wiki-edit-open",
+        "type": "action",
+        "title": "Open Edit wiki page",
+        "operation": {
+          "kind": "openForm",
+          "target": "wiki-edit",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-inbox-list-load",
+        "type": "action",
+        "title": "Read Your inbox",
+        "operation": {
+          "kind": "query",
+          "target": "inbox-list",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "commonInbox"
+        }
+      },
+      {
+        "id": "act-inbox-list-row",
+        "type": "action",
+        "title": "Inspect Your inbox",
+        "operation": {
+          "kind": "showRecord",
+          "target": "inbox-list",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-inbox-list-export",
+        "type": "action",
+        "title": "Export Your inbox",
+        "operation": {
+          "kind": "export",
+          "target": "inbox-list",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-inbox-read-submit",
+        "type": "action",
+        "title": "Submit Mark as read",
+        "operation": {
+          "kind": "execute",
+          "target": "inbox-read",
+          "mappings": [
+            {
+              "field": "record_id",
+              "source": "event",
+              "value": "values.record_id",
+              "required": true
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-inbox-read-open",
+        "type": "action",
+        "title": "Open Mark as read",
+        "operation": {
+          "kind": "openForm",
+          "target": "inbox-read",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-inbox-archive-submit",
+        "type": "action",
+        "title": "Submit Archive notification",
+        "operation": {
+          "kind": "delete",
+          "target": "inbox-archive",
+          "mappings": [
+            {
+              "field": "record_id",
+              "source": "event",
+              "value": "values.record_id",
+              "required": true
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-inbox-archive-open",
+        "type": "action",
+        "title": "Open Archive notification",
+        "operation": {
+          "kind": "openForm",
+          "target": "inbox-archive",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-forms-list-load",
+        "type": "action",
+        "title": "Read Form library",
+        "operation": {
+          "kind": "query",
+          "target": "forms-list",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "commonForms"
+        }
+      },
+      {
+        "id": "act-forms-list-row",
+        "type": "action",
+        "title": "Inspect Form library",
+        "operation": {
+          "kind": "showRecord",
+          "target": "forms-list",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-forms-list-export",
+        "type": "action",
+        "title": "Export Form library",
+        "operation": {
+          "kind": "export",
+          "target": "forms-list",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-approvals-list-load",
+        "type": "action",
+        "title": "Read Approval requests",
+        "operation": {
+          "kind": "query",
+          "target": "approvals-list",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "commonApprovals"
+        }
+      },
+      {
+        "id": "act-approvals-list-row",
+        "type": "action",
+        "title": "Inspect Approval requests",
+        "operation": {
+          "kind": "showRecord",
+          "target": "approvals-list",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-approvals-list-export",
+        "type": "action",
+        "title": "Export Approval requests",
+        "operation": {
+          "kind": "export",
+          "target": "approvals-list",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-form-create-submit",
+        "type": "action",
+        "title": "Submit Create form schema",
+        "operation": {
+          "kind": "create",
+          "target": "form-create",
+          "mappings": [
+            {
+              "field": "name",
+              "source": "event",
+              "value": "values.name",
+              "required": true
+            },
+            {
+              "field": "description",
+              "source": "event",
+              "value": "values.description",
+              "required": false
+            },
+            {
+              "field": "schema",
+              "source": "event",
+              "value": "values.schema",
+              "required": true
+            },
+            {
+              "field": "published",
+              "source": "event",
+              "value": "values.published",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-form-create-open",
+        "type": "action",
+        "title": "Open Create form schema",
+        "operation": {
+          "kind": "openForm",
+          "target": "form-create",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-form-validate-submit",
+        "type": "action",
+        "title": "Submit Validate form data",
+        "operation": {
+          "kind": "execute",
+          "target": "form-validate",
+          "mappings": [
+            {
+              "field": "record_id",
+              "source": "event",
+              "value": "values.record_id",
+              "required": true
+            },
+            {
+              "field": "values",
+              "source": "event",
+              "value": "values.values",
+              "required": true
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-form-validate-open",
+        "type": "action",
+        "title": "Open Validate form data",
+        "operation": {
+          "kind": "openForm",
+          "target": "form-validate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-approval-create-submit",
+        "type": "action",
+        "title": "Submit Request approval",
+        "operation": {
+          "kind": "create",
+          "target": "approval-create",
+          "mappings": [
+            {
+              "field": "title",
+              "source": "event",
+              "value": "values.title",
+              "required": true
+            },
+            {
+              "field": "module",
+              "source": "event",
+              "value": "values.module",
+              "required": true
+            },
+            {
+              "field": "action",
+              "source": "event",
+              "value": "values.action",
+              "required": true
+            },
+            {
+              "field": "approverRoles",
+              "source": "event",
+              "value": "values.approverRoles",
+              "required": true
+            },
+            {
+              "field": "payload",
+              "source": "event",
+              "value": "values.payload",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-approval-create-open",
+        "type": "action",
+        "title": "Open Request approval",
+        "operation": {
+          "kind": "openForm",
+          "target": "approval-create",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-approval-decide-submit",
+        "type": "action",
+        "title": "Submit Record approval decision",
+        "operation": {
+          "kind": "execute",
+          "target": "approval-decide",
+          "mappings": [
+            {
+              "field": "record_id",
+              "source": "event",
+              "value": "values.record_id",
+              "required": true
+            },
+            {
+              "field": "decision",
+              "source": "event",
+              "value": "values.decision",
+              "required": true
+            },
+            {
+              "field": "note",
+              "source": "event",
+              "value": "values.note",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-approval-decide-open",
+        "type": "action",
+        "title": "Open Record approval decision",
+        "operation": {
+          "kind": "openForm",
+          "target": "approval-decide",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-reports-list-load",
+        "type": "action",
+        "title": "Read Saved reports",
+        "operation": {
+          "kind": "query",
+          "target": "reports-list",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "commonReports"
+        }
+      },
+      {
+        "id": "act-reports-list-row",
+        "type": "action",
+        "title": "Inspect Saved reports",
+        "operation": {
+          "kind": "showRecord",
+          "target": "reports-list",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-reports-list-export",
+        "type": "action",
+        "title": "Export Saved reports",
+        "operation": {
+          "kind": "export",
+          "target": "reports-list",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-report-create-submit",
+        "type": "action",
+        "title": "Submit Create report",
+        "operation": {
+          "kind": "create",
+          "target": "report-create",
+          "mappings": [
+            {
+              "field": "name",
+              "source": "event",
+              "value": "values.name",
+              "required": true
+            },
+            {
+              "field": "description",
+              "source": "event",
+              "value": "values.description",
+              "required": false
+            },
+            {
+              "field": "datasetId",
+              "source": "event",
+              "value": "values.datasetId",
+              "required": false
+            },
+            {
+              "field": "kind",
+              "source": "event",
+              "value": "values.kind",
+              "required": true
+            },
+            {
+              "field": "query",
+              "source": "event",
+              "value": "values.query",
+              "required": true
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-report-create-open",
+        "type": "action",
+        "title": "Open Create report",
+        "operation": {
+          "kind": "openForm",
+          "target": "report-create",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-report-run-submit",
+        "type": "action",
+        "title": "Submit Run report",
+        "operation": {
+          "kind": "execute",
+          "target": "report-run",
+          "mappings": [
+            {
+              "field": "record_id",
+              "source": "event",
+              "value": "values.record_id",
+              "required": true
+            },
+            {
+              "field": "params",
+              "source": "event",
+              "value": "values.params",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-report-run-open",
+        "type": "action",
+        "title": "Open Run report",
+        "operation": {
+          "kind": "openForm",
+          "target": "report-run",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-ocr-list-load",
+        "type": "action",
+        "title": "Read Extraction jobs",
+        "operation": {
+          "kind": "query",
+          "target": "ocr-list",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "commonOcr"
+        }
+      },
+      {
+        "id": "act-ocr-list-row",
+        "type": "action",
+        "title": "Inspect Extraction jobs",
+        "operation": {
+          "kind": "showRecord",
+          "target": "ocr-list",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-ocr-list-export",
+        "type": "action",
+        "title": "Export Extraction jobs",
+        "operation": {
+          "kind": "export",
+          "target": "ocr-list",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-ocr-create-opt-fileid",
+        "type": "action",
+        "title": "Options Extract document · fileId",
+        "operation": {
+          "kind": "query",
+          "target": "ocr-create",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "commonFiles"
+        }
+      },
+      {
+        "id": "act-ocr-create-submit",
+        "type": "action",
+        "title": "Submit Extract document",
+        "operation": {
+          "kind": "create",
+          "target": "ocr-create",
+          "mappings": [
+            {
+              "field": "fileId",
+              "source": "event",
+              "value": "values.fileId",
+              "required": true
+            },
+            {
+              "field": "text",
+              "source": "event",
+              "value": "values.text",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-ocr-create-open",
+        "type": "action",
+        "title": "Open Extract document",
+        "operation": {
+          "kind": "openForm",
+          "target": "ocr-create",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-ocr-redact-submit",
+        "type": "action",
+        "title": "Submit Redact personal data",
+        "operation": {
+          "kind": "execute",
+          "target": "ocr-redact",
+          "mappings": [
+            {
+              "field": "record_id",
+              "source": "event",
+              "value": "values.record_id",
+              "required": true
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-ocr-redact-open",
+        "type": "action",
+        "title": "Open Redact personal data",
+        "operation": {
+          "kind": "openForm",
+          "target": "ocr-redact",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-knowledge-list-load",
+        "type": "action",
+        "title": "Read Knowledge sources",
+        "operation": {
+          "kind": "query",
+          "target": "knowledge-list",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "commonKnowledge"
+        }
+      },
+      {
+        "id": "act-knowledge-list-row",
+        "type": "action",
+        "title": "Inspect Knowledge sources",
+        "operation": {
+          "kind": "showRecord",
+          "target": "knowledge-list",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-knowledge-list-export",
+        "type": "action",
+        "title": "Export Knowledge sources",
+        "operation": {
+          "kind": "export",
+          "target": "knowledge-list",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-knowledge-create-submit",
+        "type": "action",
+        "title": "Submit Add knowledge source",
+        "operation": {
+          "kind": "create",
+          "target": "knowledge-create",
+          "mappings": [
+            {
+              "field": "title",
+              "source": "event",
+              "value": "values.title",
+              "required": true
+            },
+            {
+              "field": "text",
+              "source": "event",
+              "value": "values.text",
+              "required": true
+            },
+            {
+              "field": "acl",
+              "source": "event",
+              "value": "values.acl",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-knowledge-create-open",
+        "type": "action",
+        "title": "Open Add knowledge source",
+        "operation": {
+          "kind": "openForm",
+          "target": "knowledge-create",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-assistant-query-submit",
+        "type": "action",
+        "title": "Submit Ask your app assistant",
+        "operation": {
+          "kind": "execute",
+          "target": "assistant-query",
+          "mappings": [
+            {
+              "field": "question",
+              "source": "event",
+              "value": "values.question",
+              "required": true
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-assistant-query-open",
+        "type": "action",
+        "title": "Open Ask your app assistant",
+        "operation": {
+          "kind": "openForm",
+          "target": "assistant-query",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-files-list-load",
+        "type": "action",
+        "title": "Read Files & attachments",
+        "operation": {
+          "kind": "query",
+          "target": "files-list",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "commonFiles"
+        }
+      },
+      {
+        "id": "act-files-list-row",
+        "type": "action",
+        "title": "Inspect Files & attachments",
+        "operation": {
+          "kind": "showRecord",
+          "target": "files-list",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-files-list-export",
+        "type": "action",
+        "title": "Export Files & attachments",
+        "operation": {
+          "kind": "export",
+          "target": "files-list",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-file-upload-upload-file-id",
+        "type": "action",
+        "title": "Upload Upload file · file_id",
+        "operation": {
+          "kind": "upload",
+          "target": "file-upload",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "file_id"
+        }
+      },
+      {
+        "id": "act-file-upload-submit",
+        "type": "action",
+        "title": "Submit Upload file",
+        "operation": {
+          "kind": "execute",
+          "target": "file-upload",
+          "mappings": [
+            {
+              "field": "file_id",
+              "source": "event",
+              "value": "values.file_id",
+              "required": true
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-file-upload-open",
+        "type": "action",
+        "title": "Open Upload file",
+        "operation": {
+          "kind": "openForm",
+          "target": "file-upload",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      }
+    ]
+  },
+  "source": {
+    "repository": "https://github.com/vku-open-source-2026/SynapseCity",
+    "path": "plugins/city-common-workspace.plugin.json",
+    "revision": "2026-11-15.lcdp"
+  },
+  "checksum": "sha256:23426db4e93221c2422d13e114ab0bd86244fc73723b912a40200475c2c5520c"
+}

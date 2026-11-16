@@ -1,0 +1,616 @@
+{
+  "format": "synapsedx-plugin",
+  "formatVersion": 1,
+  "plugin": {
+    "product": "city",
+    "name": "City people directory",
+    "slug": "city-people-admin",
+    "audience": "admin",
+    "roles": [
+      "admin"
+    ],
+    "widgets": [
+      {
+        "id": "intro",
+        "text": "Administrative directory of City operators and their operational role/status. Account authentication and organization roles remain in Tier-1 IAM and the DX membership table; this page never stores passwords.",
+        "type": "heading",
+        "title": "City operator directory",
+        "width": "full"
+      },
+      {
+        "id": "workspace-navigation",
+        "type": "navigation",
+        "title": "Quick access",
+        "width": "full",
+        "links": [
+          {
+            "label": "Overview",
+            "target": "page:city-operations-overview",
+            "actionId": "act-workspace-navigation-link1"
+          },
+          {
+            "label": "Assets",
+            "target": "page:city-asset-registry",
+            "actionId": "act-workspace-navigation-link2"
+          },
+          {
+            "label": "Incidents",
+            "target": "page:city-incident-desk",
+            "actionId": "act-workspace-navigation-link3"
+          },
+          {
+            "label": "Maintenance",
+            "target": "page:city-maintenance-workshop",
+            "actionId": "act-workspace-navigation-link4"
+          },
+          {
+            "label": "Team tasks",
+            "target": "module:tasks",
+            "actionId": "act-workspace-navigation-link5"
+          }
+        ]
+      },
+      {
+        "id": "users-metric",
+        "type": "metric",
+        "title": "City operators",
+        "width": "half",
+        "resource": "users",
+        "onLoad": "act-users-metric-load"
+      },
+      {
+        "id": "records-section",
+        "type": "divider",
+        "title": "Your infrastructure",
+        "width": "full"
+      },
+      {
+        "id": "users-table",
+        "type": "table",
+        "title": "Operator directory",
+        "width": "full",
+        "columns": [
+          "id",
+          "username",
+          "full_name",
+          "email",
+          "role",
+          "status",
+          "department",
+          "last_login"
+        ],
+        "resource": "users",
+        "onLoad": "act-users-table-load",
+        "onRowClick": "act-users-table-row",
+        "onExport": "act-users-table-export"
+      },
+      {
+        "id": "actions-section",
+        "type": "divider",
+        "title": "Take action",
+        "width": "full"
+      },
+      {
+        "id": "user-create",
+        "type": "form",
+        "title": "Add an operator profile",
+        "width": "full",
+        "action": "create",
+        "fields": [
+          {
+            "name": "username",
+            "type": "text",
+            "label": "Username",
+            "required": true
+          },
+          {
+            "name": "email",
+            "type": "text",
+            "label": "Email",
+            "required": true
+          },
+          {
+            "name": "full_name",
+            "type": "text",
+            "label": "Full name",
+            "required": true
+          },
+          {
+            "name": "phone",
+            "type": "text",
+            "label": "Phone"
+          },
+          {
+            "name": "role",
+            "type": "text",
+            "label": "Role: admin, manager, technician or volunteer",
+            "required": true
+          },
+          {
+            "name": "department",
+            "type": "text",
+            "label": "Department"
+          },
+          {
+            "name": "permissions_json",
+            "type": "json",
+            "label": "Permissions (JSON array)",
+            "selectionPath": "permissions"
+          }
+        ],
+        "resource": "users",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        },
+        "onSubmit": "act-user-create-submit"
+      },
+      {
+        "id": "user-update",
+        "type": "form",
+        "title": "Update an operator profile",
+        "width": "half",
+        "action": "update",
+        "fields": [
+          {
+            "name": "record_id",
+            "type": "text",
+            "label": "User id",
+            "required": true
+          },
+          {
+            "name": "full_name",
+            "type": "text",
+            "label": "Full name"
+          },
+          {
+            "name": "phone",
+            "type": "text",
+            "label": "Phone"
+          },
+          {
+            "name": "role",
+            "type": "text",
+            "label": "Role"
+          },
+          {
+            "name": "status",
+            "type": "text",
+            "label": "Status"
+          },
+          {
+            "name": "department",
+            "type": "text",
+            "label": "Department"
+          },
+          {
+            "name": "permissions_json",
+            "type": "json",
+            "label": "Permissions (JSON array)",
+            "selectionPath": "permissions"
+          }
+        ],
+        "resource": "users",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        },
+        "onSubmit": "act-user-update-submit"
+      },
+      {
+        "id": "user-suspend",
+        "type": "form",
+        "title": "Suspend an operator profile",
+        "width": "half",
+        "action": "update",
+        "fields": [
+          {
+            "name": "record_id",
+            "type": "text",
+            "label": "User id",
+            "required": true
+          },
+          {
+            "name": "status",
+            "type": "text",
+            "label": "Status: suspended"
+          }
+        ],
+        "resource": "users",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        },
+        "onSubmit": "act-user-suspend-submit"
+      },
+      {
+        "id": "user-delete",
+        "type": "form",
+        "title": "Remove an operator profile",
+        "width": "half",
+        "action": "delete",
+        "fields": [
+          {
+            "name": "record_id",
+            "type": "text",
+            "label": "User id",
+            "required": true
+          }
+        ],
+        "resource": "users",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        },
+        "onSubmit": "act-user-delete-submit"
+      },
+      {
+        "id": "act-workspace-navigation-link1",
+        "type": "action",
+        "title": "Navigate Overview",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "page:city-operations-overview"
+        }
+      },
+      {
+        "id": "act-workspace-navigation-link2",
+        "type": "action",
+        "title": "Navigate Assets",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "page:city-asset-registry"
+        }
+      },
+      {
+        "id": "act-workspace-navigation-link3",
+        "type": "action",
+        "title": "Navigate Incidents",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "page:city-incident-desk"
+        }
+      },
+      {
+        "id": "act-workspace-navigation-link4",
+        "type": "action",
+        "title": "Navigate Maintenance",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "page:city-maintenance-workshop"
+        }
+      },
+      {
+        "id": "act-workspace-navigation-link5",
+        "type": "action",
+        "title": "Navigate Team tasks",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "module:tasks"
+        }
+      },
+      {
+        "id": "act-users-metric-load",
+        "type": "action",
+        "title": "Read City operators",
+        "operation": {
+          "kind": "query",
+          "target": "users-metric",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "users"
+        }
+      },
+      {
+        "id": "act-users-table-load",
+        "type": "action",
+        "title": "Read Operator directory",
+        "operation": {
+          "kind": "query",
+          "target": "users-table",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "users"
+        }
+      },
+      {
+        "id": "act-users-table-row",
+        "type": "action",
+        "title": "Inspect Operator directory",
+        "operation": {
+          "kind": "showRecord",
+          "target": "users-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-users-table-export",
+        "type": "action",
+        "title": "Export Operator directory",
+        "operation": {
+          "kind": "export",
+          "target": "users-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-user-create-submit",
+        "type": "action",
+        "title": "Submit Add an operator profile",
+        "operation": {
+          "kind": "create",
+          "target": "user-create",
+          "mappings": [
+            {
+              "field": "username",
+              "source": "event",
+              "value": "values.username",
+              "required": true
+            },
+            {
+              "field": "email",
+              "source": "event",
+              "value": "values.email",
+              "required": true
+            },
+            {
+              "field": "full_name",
+              "source": "event",
+              "value": "values.full_name",
+              "required": true
+            },
+            {
+              "field": "phone",
+              "source": "event",
+              "value": "values.phone",
+              "required": false
+            },
+            {
+              "field": "role",
+              "source": "event",
+              "value": "values.role",
+              "required": true
+            },
+            {
+              "field": "department",
+              "source": "event",
+              "value": "values.department",
+              "required": false
+            },
+            {
+              "field": "permissions_json",
+              "source": "event",
+              "value": "values.permissions_json",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-user-create-open",
+        "type": "action",
+        "title": "Open Add an operator profile",
+        "operation": {
+          "kind": "openForm",
+          "target": "user-create",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-user-update-submit",
+        "type": "action",
+        "title": "Submit Update an operator profile",
+        "operation": {
+          "kind": "update",
+          "target": "user-update",
+          "mappings": [
+            {
+              "field": "record_id",
+              "source": "event",
+              "value": "values.record_id",
+              "required": true
+            },
+            {
+              "field": "full_name",
+              "source": "event",
+              "value": "values.full_name",
+              "required": false
+            },
+            {
+              "field": "phone",
+              "source": "event",
+              "value": "values.phone",
+              "required": false
+            },
+            {
+              "field": "role",
+              "source": "event",
+              "value": "values.role",
+              "required": false
+            },
+            {
+              "field": "status",
+              "source": "event",
+              "value": "values.status",
+              "required": false
+            },
+            {
+              "field": "department",
+              "source": "event",
+              "value": "values.department",
+              "required": false
+            },
+            {
+              "field": "permissions_json",
+              "source": "event",
+              "value": "values.permissions_json",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-user-update-open",
+        "type": "action",
+        "title": "Open Update an operator profile",
+        "operation": {
+          "kind": "openForm",
+          "target": "user-update",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-user-suspend-submit",
+        "type": "action",
+        "title": "Submit Suspend an operator profile",
+        "operation": {
+          "kind": "update",
+          "target": "user-suspend",
+          "mappings": [
+            {
+              "field": "record_id",
+              "source": "event",
+              "value": "values.record_id",
+              "required": true
+            },
+            {
+              "field": "status",
+              "source": "event",
+              "value": "values.status",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-user-suspend-open",
+        "type": "action",
+        "title": "Open Suspend an operator profile",
+        "operation": {
+          "kind": "openForm",
+          "target": "user-suspend",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-user-delete-submit",
+        "type": "action",
+        "title": "Submit Remove an operator profile",
+        "operation": {
+          "kind": "delete",
+          "target": "user-delete",
+          "mappings": [
+            {
+              "field": "record_id",
+              "source": "event",
+              "value": "values.record_id",
+              "required": true
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-user-delete-open",
+        "type": "action",
+        "title": "Open Remove an operator profile",
+        "operation": {
+          "kind": "openForm",
+          "target": "user-delete",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      }
+    ]
+  },
+  "source": {
+    "repository": "https://github.com/vku-open-source-2026/SynapseCity",
+    "path": "plugins/city-people-admin.plugin.json",
+    "revision": "2026-11-15.business"
+  },
+  "checksum": "sha256:e4824278845522a89e5834b09323ebbd6da1a34b31acb978b6166adbfb7d8c0b"
+}

@@ -12,11 +12,10 @@ remain under their upstream licenses.
 | Leaflet, MapLibre, Turf | BSD-2-Clause/BSD-3-Clause/MIT | Public map and geospatial tools |
 | Font Awesome free icons | MIT or CC-BY-4.0 dual licensing | UI icons, used with attribution |
 
-The Tier-2 client (`@synapsedx/capabilities`) is vendored as a pinned,
-checksummed npm tarball (`vendor/synapsedx-capabilities-0.3.0.tgz`) so a clean
-clone builds without a sibling checkout; it is installed unmodified and remains
-Apache-2.0. The release does not otherwise bundle `node_modules`; `npm ci`
-resolves the exact versions recorded in both lockfiles. No GPL, AGPL, LGPL, SSPL, RSAL, BUSL,
+The Tier-2 client (`@synapsedx/capabilities`) is installed unmodified from the
+public npm registry (`^0.3.0`) and remains Apache-2.0. The release does not
+bundle `node_modules`; `npm ci` resolves the exact versions recorded in both
+lockfiles. No GPL, AGPL, LGPL, SSPL, RSAL, BUSL,
 Hippocratic, Commons-Clause, PolyForm, Elastic or other source-available
 dependency is part of the release tree. Run `npm ls --all` before changing
 dependencies and keep every dependency unmodified.
