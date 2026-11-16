@@ -1,0 +1,512 @@
+{
+  "format": "synapsedx-plugin",
+  "formatVersion": 1,
+  "plugin": {
+    "product": "city",
+    "name": "City data ingest",
+    "slug": "city-data-ingest",
+    "audience": "admin",
+    "roles": [
+      "admin",
+      "manager"
+    ],
+    "widgets": [
+      {
+        "id": "intro",
+        "text": "Upload and preview a CSV, then import assets in validated batches. Processing results show imported, duplicate and invalid rows; retrying preserves existing records.",
+        "type": "heading",
+        "title": "CSV and batch ingest jobs",
+        "width": "full"
+      },
+      {
+        "id": "workspace-navigation",
+        "type": "navigation",
+        "title": "Quick access",
+        "width": "full",
+        "links": [
+          {
+            "label": "Overview",
+            "target": "page:city-operations-overview",
+            "actionId": "act-workspace-navigation-link1"
+          },
+          {
+            "label": "Assets",
+            "target": "page:city-asset-registry",
+            "actionId": "act-workspace-navigation-link2"
+          },
+          {
+            "label": "Incidents",
+            "target": "page:city-incident-desk",
+            "actionId": "act-workspace-navigation-link3"
+          },
+          {
+            "label": "Maintenance",
+            "target": "page:city-maintenance-workshop",
+            "actionId": "act-workspace-navigation-link4"
+          },
+          {
+            "label": "Team tasks",
+            "target": "module:tasks",
+            "actionId": "act-workspace-navigation-link5"
+          }
+        ]
+      },
+      {
+        "id": "ingest-metric",
+        "type": "metric",
+        "title": "Ingest jobs",
+        "width": "half",
+        "resource": "ingest",
+        "onLoad": "act-ingest-metric-load"
+      },
+      {
+        "id": "files-metric",
+        "type": "metric",
+        "title": "Stored files",
+        "width": "half",
+        "resource": "commonFiles",
+        "onLoad": "act-files-metric-load"
+      },
+      {
+        "id": "records-section",
+        "type": "divider",
+        "title": "Your infrastructure",
+        "width": "full"
+      },
+      {
+        "id": "ingest-table",
+        "type": "table",
+        "title": "Ingest jobs",
+        "width": "full",
+        "columns": [
+          "id",
+          "file_name",
+          "status",
+          "rows_total",
+          "batch_offset",
+          "rows_processed",
+          "rows_imported",
+          "rows_skipped",
+          "rows_invalid",
+          "created_at"
+        ],
+        "resource": "ingest",
+        "onLoad": "act-ingest-table-load",
+        "onRowClick": "act-ingest-table-row",
+        "onExport": "act-ingest-table-export"
+      },
+      {
+        "id": "files-table",
+        "type": "table",
+        "title": "File registry",
+        "width": "full",
+        "columns": [
+          "id",
+          "filename",
+          "contentType",
+          "size",
+          "createdAt"
+        ],
+        "resource": "commonFiles",
+        "onLoad": "act-files-table-load",
+        "onRowClick": "act-files-table-row",
+        "onExport": "act-files-table-export"
+      },
+      {
+        "id": "actions-section",
+        "type": "divider",
+        "title": "Take action",
+        "width": "full"
+      },
+      {
+        "id": "ingest-delete",
+        "type": "form",
+        "title": "Remove a job record",
+        "width": "half",
+        "action": "delete",
+        "fields": [
+          {
+            "name": "record_id",
+            "type": "text",
+            "label": "Job id",
+            "required": true
+          }
+        ],
+        "resource": "ingest",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        },
+        "onSubmit": "act-ingest-delete-submit"
+      },
+      {
+        "id": "csv-import",
+        "type": "form",
+        "presentation": "inline",
+        "title": "Import asset CSV",
+        "width": "full",
+        "resource": "ingest",
+        "action": "execute",
+        "workflowRef": {
+          "name": "city-csv-import",
+          "checksum": "58fd213ec51248db166e8e3a4aabd4d570c9584d560a97a814637285e9508566"
+        },
+        "onSubmit": "import-all-csv-batches",
+        "fields": [
+          {
+            "name": "file_id",
+            "label": "CSV file",
+            "type": "file",
+            "accept": "text/csv,application/vnd.ms-excel,application/octet-stream",
+            "maxBytes": 10485760,
+            "required": true,
+            "uploadAction": "act-csv-import-upload-file-id"
+          },
+          {
+            "name": "batch_offset",
+            "label": "Resume at row offset",
+            "type": "number",
+            "defaultValue": "0"
+          }
+        ]
+      },
+      {
+        "id": "import-all-csv-batches",
+        "type": "action",
+        "title": "Import all CSV batches",
+        "operation": {
+          "kind": "batch",
+          "target": "csv-import",
+          "source": "batch_offset",
+          "mappings": [
+            {
+              "field": "file_id",
+              "source": "event",
+              "value": "values.file_id",
+              "required": true
+            },
+            {
+              "field": "batch_offset",
+              "source": "event",
+              "value": "values.batch_offset",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "csv-help",
+        "type": "markdown",
+        "title": "CSV format",
+        "width": "full",
+        "text": "Required columns: `asset_code`, `name`, `feature_type`, `feature_code`, `latitude`, `longitude`. Optional: `category`, `status`, `address`, `properties` (JSON), `geometry` (GeoJSON). Coordinates must be in geographic range. Up to 50,000 rows per file; results identify row numbers that need correction. Existing asset IDs are skipped."
+      },
+      {
+        "id": "act-workspace-navigation-link1",
+        "type": "action",
+        "title": "Navigate Overview",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "page:city-operations-overview"
+        }
+      },
+      {
+        "id": "act-workspace-navigation-link2",
+        "type": "action",
+        "title": "Navigate Assets",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "page:city-asset-registry"
+        }
+      },
+      {
+        "id": "act-workspace-navigation-link3",
+        "type": "action",
+        "title": "Navigate Incidents",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "page:city-incident-desk"
+        }
+      },
+      {
+        "id": "act-workspace-navigation-link4",
+        "type": "action",
+        "title": "Navigate Maintenance",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "page:city-maintenance-workshop"
+        }
+      },
+      {
+        "id": "act-workspace-navigation-link5",
+        "type": "action",
+        "title": "Navigate Team tasks",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "module:tasks"
+        }
+      },
+      {
+        "id": "act-ingest-metric-load",
+        "type": "action",
+        "title": "Read Ingest jobs",
+        "operation": {
+          "kind": "query",
+          "target": "ingest-metric",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "ingest"
+        }
+      },
+      {
+        "id": "act-files-metric-load",
+        "type": "action",
+        "title": "Read Stored files",
+        "operation": {
+          "kind": "query",
+          "target": "files-metric",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "commonFiles"
+        }
+      },
+      {
+        "id": "act-ingest-table-load",
+        "type": "action",
+        "title": "Read Ingest jobs",
+        "operation": {
+          "kind": "query",
+          "target": "ingest-table",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "ingest"
+        }
+      },
+      {
+        "id": "act-ingest-table-row",
+        "type": "action",
+        "title": "Inspect Ingest jobs",
+        "operation": {
+          "kind": "showRecord",
+          "target": "ingest-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-ingest-table-export",
+        "type": "action",
+        "title": "Export Ingest jobs",
+        "operation": {
+          "kind": "export",
+          "target": "ingest-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-files-table-load",
+        "type": "action",
+        "title": "Read File registry",
+        "operation": {
+          "kind": "query",
+          "target": "files-table",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "commonFiles"
+        }
+      },
+      {
+        "id": "act-files-table-row",
+        "type": "action",
+        "title": "Inspect File registry",
+        "operation": {
+          "kind": "showRecord",
+          "target": "files-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-files-table-export",
+        "type": "action",
+        "title": "Export File registry",
+        "operation": {
+          "kind": "export",
+          "target": "files-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-ingest-delete-submit",
+        "type": "action",
+        "title": "Submit Remove a job record",
+        "operation": {
+          "kind": "delete",
+          "target": "ingest-delete",
+          "mappings": [
+            {
+              "field": "record_id",
+              "source": "event",
+              "value": "values.record_id",
+              "required": true
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-ingest-delete-open",
+        "type": "action",
+        "title": "Open Remove a job record",
+        "operation": {
+          "kind": "openForm",
+          "target": "ingest-delete",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-csv-import-upload-file-id",
+        "type": "action",
+        "title": "Upload Import asset CSV · file_id",
+        "operation": {
+          "kind": "upload",
+          "target": "csv-import",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "file_id"
+        }
+      },
+      {
+        "id": "act-csv-import-open",
+        "type": "action",
+        "title": "Open Import asset CSV",
+        "operation": {
+          "kind": "openForm",
+          "target": "csv-import",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      }
+    ]
+  },
+  "source": {
+    "repository": "https://github.com/vku-open-source-2026/SynapseCity",
+    "path": "plugins/city-data-ingest.plugin.json",
+    "revision": "2026-11-15.business"
+  },
+  "checksum": "sha256:c24765a33d0024bd2231bf78a5ce4993cdf39581a155610b3e71f349eb97aeed"
+}

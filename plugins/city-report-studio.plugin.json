@@ -1,0 +1,466 @@
+{
+  "format": "synapsedx-plugin",
+  "formatVersion": 1,
+  "plugin": {
+    "product": "city",
+    "name": "City report studio",
+    "slug": "city-report-studio",
+    "audience": "admin",
+    "roles": [
+      "admin",
+      "manager"
+    ],
+    "widgets": [
+      {
+        "id": "intro",
+        "text": "Generate complete CSV or JSON reports from the authorized City datasets, including lifecycle and replacement forecasts. Each completed report links to stored bytes with a checksum.",
+        "type": "heading",
+        "title": "Operational reporting",
+        "width": "full"
+      },
+      {
+        "id": "workspace-navigation",
+        "type": "navigation",
+        "title": "Quick access",
+        "width": "full",
+        "links": [
+          {
+            "label": "Overview",
+            "target": "page:city-operations-overview",
+            "actionId": "act-workspace-navigation-link1"
+          },
+          {
+            "label": "Assets",
+            "target": "page:city-asset-registry",
+            "actionId": "act-workspace-navigation-link2"
+          },
+          {
+            "label": "Incidents",
+            "target": "page:city-incident-desk",
+            "actionId": "act-workspace-navigation-link3"
+          },
+          {
+            "label": "Maintenance",
+            "target": "page:city-maintenance-workshop",
+            "actionId": "act-workspace-navigation-link4"
+          },
+          {
+            "label": "Team tasks",
+            "target": "module:tasks",
+            "actionId": "act-workspace-navigation-link5"
+          }
+        ]
+      },
+      {
+        "id": "reports-metric",
+        "type": "metric",
+        "title": "Reports",
+        "width": "half",
+        "resource": "reports",
+        "onLoad": "act-reports-metric-load"
+      },
+      {
+        "id": "records-section",
+        "type": "divider",
+        "title": "Your infrastructure",
+        "width": "full"
+      },
+      {
+        "id": "reports-table",
+        "type": "table",
+        "title": "Report history",
+        "width": "full",
+        "columns": [
+          "id",
+          "report_code",
+          "report_type",
+          "format",
+          "status",
+          "row_count",
+          "filename",
+          "file_id",
+          "created_at"
+        ],
+        "resource": "reports",
+        "onLoad": "act-reports-table-load",
+        "onRowClick": "act-reports-table-row",
+        "onExport": "act-reports-table-export"
+      },
+      {
+        "id": "actions-section",
+        "type": "divider",
+        "title": "Take action",
+        "width": "full"
+      },
+      {
+        "id": "report-delete",
+        "type": "form",
+        "title": "Delete a report record",
+        "width": "half",
+        "action": "delete",
+        "fields": [
+          {
+            "name": "record_id",
+            "type": "text",
+            "label": "Report id",
+            "required": true
+          }
+        ],
+        "resource": "reports",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+        },
+        "onSubmit": "act-report-delete-submit"
+      },
+      {
+        "id": "generate-report",
+        "type": "form",
+        "presentation": "inline",
+        "title": "Generate report",
+        "width": "full",
+        "resource": "reports",
+        "action": "execute",
+        "workflowRef": {
+          "name": "city-generate-report",
+          "checksum": "a28988f56c5e370c438c81cb46c3484abe233cbf16c12e19cfdbbd539c7746e0"
+        },
+        "fields": [
+          {
+            "name": "type",
+            "label": "Report type",
+            "type": "select",
+            "options": [
+              "maintenance_summary",
+              "incident_summary",
+              "lifecycle_overview",
+              "end_of_life_forecast",
+              "custom"
+            ],
+            "required": true,
+            "defaultValue": "maintenance_summary"
+          },
+          {
+            "name": "format",
+            "label": "File format",
+            "type": "select",
+            "options": [
+              "csv",
+              "json"
+            ],
+            "defaultValue": "csv",
+            "required": true
+          },
+          {
+            "name": "asset_id",
+            "label": "Asset ID (optional)",
+            "type": "text"
+          },
+          {
+            "name": "severity",
+            "label": "Severity (optional)",
+            "type": "select",
+            "options": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ]
+          },
+          {
+            "name": "date_from",
+            "label": "From date",
+            "type": "date"
+          },
+          {
+            "name": "date_to",
+            "label": "To date",
+            "type": "date"
+          }
+        ],
+        "onSubmit": "act-generate-report-submit"
+      },
+      {
+        "id": "download-report",
+        "type": "button",
+        "title": "Download selected report",
+        "width": "half",
+        "onClick": "download-report-file"
+      },
+      {
+        "id": "download-report-file",
+        "type": "action",
+        "title": "Download generated report",
+        "operation": {
+          "kind": "download",
+          "target": "reports-table",
+          "mappings": [
+            {
+              "field": "file_id",
+              "source": "selected",
+              "widgetId": "reports-table",
+              "value": "file_id",
+              "required": true
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-workspace-navigation-link1",
+        "type": "action",
+        "title": "Navigate Overview",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "page:city-operations-overview"
+        }
+      },
+      {
+        "id": "act-workspace-navigation-link2",
+        "type": "action",
+        "title": "Navigate Assets",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "page:city-asset-registry"
+        }
+      },
+      {
+        "id": "act-workspace-navigation-link3",
+        "type": "action",
+        "title": "Navigate Incidents",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "page:city-incident-desk"
+        }
+      },
+      {
+        "id": "act-workspace-navigation-link4",
+        "type": "action",
+        "title": "Navigate Maintenance",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "page:city-maintenance-workshop"
+        }
+      },
+      {
+        "id": "act-workspace-navigation-link5",
+        "type": "action",
+        "title": "Navigate Team tasks",
+        "operation": {
+          "kind": "navigate",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "destination": "module:tasks"
+        }
+      },
+      {
+        "id": "act-reports-metric-load",
+        "type": "action",
+        "title": "Read Reports",
+        "operation": {
+          "kind": "query",
+          "target": "reports-metric",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "reports"
+        }
+      },
+      {
+        "id": "act-reports-table-load",
+        "type": "action",
+        "title": "Read Report history",
+        "operation": {
+          "kind": "query",
+          "target": "reports-table",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "reports"
+        }
+      },
+      {
+        "id": "act-reports-table-row",
+        "type": "action",
+        "title": "Inspect Report history",
+        "operation": {
+          "kind": "showRecord",
+          "target": "reports-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-reports-table-export",
+        "type": "action",
+        "title": "Export Report history",
+        "operation": {
+          "kind": "export",
+          "target": "reports-table",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-report-delete-submit",
+        "type": "action",
+        "title": "Submit Delete a report record",
+        "operation": {
+          "kind": "delete",
+          "target": "report-delete",
+          "mappings": [
+            {
+              "field": "record_id",
+              "source": "event",
+              "value": "values.record_id",
+              "required": true
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-report-delete-open",
+        "type": "action",
+        "title": "Open Delete a report record",
+        "operation": {
+          "kind": "openForm",
+          "target": "report-delete",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-generate-report-submit",
+        "type": "action",
+        "title": "Submit Generate report",
+        "operation": {
+          "kind": "execute",
+          "target": "generate-report",
+          "mappings": [
+            {
+              "field": "type",
+              "source": "event",
+              "value": "values.type",
+              "required": true
+            },
+            {
+              "field": "format",
+              "source": "event",
+              "value": "values.format",
+              "required": true
+            },
+            {
+              "field": "asset_id",
+              "source": "event",
+              "value": "values.asset_id",
+              "required": false
+            },
+            {
+              "field": "severity",
+              "source": "event",
+              "value": "values.severity",
+              "required": false
+            },
+            {
+              "field": "date_from",
+              "source": "event",
+              "value": "values.date_from",
+              "required": false
+            },
+            {
+              "field": "date_to",
+              "source": "event",
+              "value": "values.date_to",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-generate-report-open",
+        "type": "action",
+        "title": "Open Generate report",
+        "operation": {
+          "kind": "openForm",
+          "target": "generate-report",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      }
+    ]
+  },
+  "source": {
+    "repository": "https://github.com/vku-open-source-2026/SynapseCity",
+    "path": "plugins/city-report-studio.plugin.json",
+    "revision": "2026-11-15.business"
+  },
+  "checksum": "sha256:01ab3ef5cf5c6e290a88fedca129e525809fdf268d05cf2b0013ead91d9cef28"
+}

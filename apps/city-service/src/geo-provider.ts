@@ -5,22 +5,11 @@ import { CapabilitiesError, type CapabilitiesClient } from '@synapsedx/capabilit
 /**
  * Geocoding boundary.
  *
- * The shared, provider-neutral adapter is the Tier-2 `geo` capability: one
- * deployment-owned provider credential serves every Tier-3 product. City uses
- * it by default and keeps no duplicate VietMap integration unless the operator
- * explicitly opts into the legacy local provider.
- *
- * `CITY_GEO_PROVIDER=tier2` (default)    -> Tier-2 geo capability.
- * `CITY_GEO_PROVIDER=vietmap`            -> legacy City-local VietMap calls.
- * `CITY_GEO_FALLBACK_VIETMAP=true`       -> fall back locally only when the
- *                                           Tier-2 adapter reports that no
- *                                           provider is configured (503).
- *
- * A provider outage is surfaced as a typed error, never hidden by a silent
- * fallback.
+ * City always uses the shared, provider-neutral Tier-2 `geo` capability. The
+ * deployment owns one provider credential in Tier 2; City holds no provider key
+ * and has no local provider fallback.
  */
-
-export type GeoProviderMode = 'tier2' | 'vietmap';
+export type GeoProviderMode = 'tier2';
 
 export interface GeoHit {
   address: string;
@@ -34,13 +23,7 @@ export interface GeoHit {
 }
 
 export function geoProviderMode(): GeoProviderMode {
-  const raw = (process.env.CITY_GEO_PROVIDER || 'tier2').trim().toLowerCase();
-  return raw === 'vietmap' || raw === 'local' ? 'vietmap' : 'tier2';
-}
-
-export function vietmapFallbackAllowed(): boolean {
-  const raw = (process.env.CITY_GEO_FALLBACK_VIETMAP || '').trim().toLowerCase();
-  return raw === 'true' || raw === '1';
+  return 'tier2';
 }
 
 export class GeoProviderError extends Error {
@@ -49,8 +32,6 @@ export class GeoProviderError extends Error {
   provider: GeoProviderMode;
   detail: string;
   constructor(code: string, status: number, provider: GeoProviderMode, detail = code) {
-    // The message is the stable error code consumed by the City error envelope;
-    // the human-readable explanation lives in `detail`.
     super(code);
     this.name = 'GeoProviderError';
     this.code = code;
@@ -100,11 +81,6 @@ export function geoError(error: unknown): GeoProviderError {
   return new GeoProviderError('geocoder_unavailable', 503, 'tier2', 'The geocoder is unavailable.');
 }
 
-/** True when Tier-2 said "no provider configured" (the only safe fallback case). */
-export function isUnconfiguredGeo(error: unknown): boolean {
-  return error instanceof CapabilitiesError && error.status === 503;
-}
-
 export async function tier2Autocomplete(client: CapabilitiesClient, query: string, limit = 5): Promise<GeoHit[]> {
   try {
     const items = await client.geo.autocomplete({ q: query, limit }) as Tier2GeoItem[];
@@ -135,18 +111,9 @@ export async function tier2Reverse(client: CapabilitiesClient, latitude: number,
 }
 
 export function geoCoderStatus(): Record<string, unknown> {
-  const mode = geoProviderMode();
-  return mode === 'tier2'
-    ? {
-        status: 'shared',
-        provider: 'tier2',
-        detail: 'Address search/geocode use the Tier-2 provider-neutral geo capability; City holds no provider key.',
-        fallback: vietmapFallbackAllowed(),
-      }
-    : {
-        status: 'local',
-        provider: 'vietmap',
-        detail: 'Legacy City-local VietMap integration (CITY_GEO_PROVIDER=vietmap). Prefer the shared Tier-2 adapter.',
-        fallback: false,
-      };
+  return {
+    status: 'shared',
+    provider: 'tier2',
+    detail: 'Address search/geocode use the Tier-2 provider-neutral geo capability; City holds no provider key.',
+  };
 }

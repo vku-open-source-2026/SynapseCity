@@ -1,4 +1,16 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="apps/console/public/brand/logo-lockup-dark.png">
+    <img src="apps/console/public/brand/logo-lockup-light.png" width="420" alt="SynapseCity">
+  </picture>
+</p>
+
 # SynapseCity — city infrastructure operations (Tier 3)
+
+## OLP 2026 demo
+
+A reproducible 15-minute DX-Lab story lives in [`docs/DEMO_PACK.md`](docs/DEMO_PACK.md). Seed/reset with `npm run demo:seed` and `npm run demo:reset` (requires `CITY_DEMO_TOKEN`).
+
 
 ![CI](https://github.com/vku-open-source-2026/SynapseCity/actions/workflows/ci.yml/badge.svg)
 ![Release](https://github.com/vku-open-source-2026/SynapseCity/actions/workflows/release.yml/badge.svg)
@@ -24,9 +36,11 @@ root. The repo-local summary is [`PRODUCT_BOUNDARY.md`](PRODUCT_BOUNDARY.md).
 ## Architecture
 
 ```text
-apps/gateway        public HTTPS API boundary and console proxy (port 8080)
+apps/gateway        public HTTPS API boundary and console proxy (Rust/Axum, port 8080)
 apps/city-service   city infrastructure domain backend (port 8083)
 apps/console        city operations console
+apps/contribution-service  public data-contribution backend (contribution.synapsecity.sbs)
+apps/contribution-console  public data-contribution UI
 infra/              public-edge snippets and deployment material
 ```
 
@@ -53,6 +67,8 @@ instances. None of them proxy SOS.
 - budgets and budget transactions;
 - operational reports;
 - city operators and user administration;
+- public data-contribution portal (submissions, moderation, leaderboard, CSV
+  export, map proxy);
 - geofences and CSV/data ingestion;
 - public asset map, public asset lookup and public incident reporting;
 - map tiles, geocoding, reverse geocoding, nearby and polygon search;
@@ -63,11 +79,45 @@ dispatch, emergency resource units, SITREP, AAR, live hazard streaming, the
 emergency command centre and the public hazard map. Those are SynapseCitySOS
 features.
 
+## Android app and home-screen widget
+
+The `mobile/` directory contains the SynapseCity Android client and a native
+4×3 home-screen widget. It talks directly to `https://synapsecity.sbs/v1`:
+nearby asset radar/map (GPS), QR/NFC asset lookup, public incident reporting,
+optional operator alerts, and a widget with nearest asset, status, mini-map,
+scan and refresh actions. The UI is light-first, using the production web
+console's teal/white palette. See [`mobile/README.md`](mobile/README.md) and the
+verification record in [`docs/MOBILE_AUDIT.md`](docs/MOBILE_AUDIT.md).
+
+```bash
+cd mobile
+npm ci
+npm run typecheck && npm test
+npm run verify
+npm run build:android
+```
+
+Release APK (public, served from Tier-1 SynapseOCS through Tier-2):
+<https://synapsedx.sbs/v1/capabilities/public/files/synapsecity-android-0.1.1-arm64-x86_64/content>
+
+GitHub release: <https://github.com/vku-open-source-2026/SynapseCity/releases/tag/mobile-v0.1.1>
+
+SHA-256: `dce9b691ef578d81370b86d7ef767b3eb12aa96e7c149cd7001698a6c0515aa5`
+
+> **Resolved (verified 2026-11-16):** production public asset-detail lookup by
+> asset code (`GET /v1/public/assets/:code`) returns `200`; the service tries
+> the record id first and then falls back to the asset/feature code. The
+> earlier 0.1.1 APK note is kept only for release history.
+
+CI builds an unsigned APK; the production release job signs it with the
+protected keystore and publishes it through the Tier-2 files capability. See
+[`mobile/RELEASING.md`](mobile/RELEASING.md).
+
 ## Run
 
-The Tier-2 client is a pinned, checksummed artifact in
-`vendor/synapsedx-capabilities-0.3.0.tgz`, so a clean clone builds without a
-sibling SynapseDX checkout or registry access:
+The Tier-2 client is published on npm as
+`@synapsedx/capabilities@^0.3.0`, so a clean clone builds without a sibling
+SynapseDX checkout:
 
 ```bash
 npm ci
@@ -76,10 +126,8 @@ npm run build
 SYNAPSEDX_BASE_URL=https://synapsedx.sbs npm run start:service
 ```
 
-`npm run check:release` verifies the tarball name, version and SHA-256. Registry
-publication of `@synapsedx/capabilities` is still tracked in SynapseDX #14; once
-it is published, replace the `file:` tarball with the semver range and the same
-check accepts it.
+`npm run check:release` verifies that the dependency is a registry semver
+release and rejects `file:`/sibling-checkout dependencies.
 
 Console development:
 
@@ -88,7 +136,91 @@ npm run dev --workspace=@synapsecity/console
 ```
 
 The production stack is reproducible with `docker compose up -d --build`; the
-Docker build copies `vendor/` and needs no sibling repository.
+Docker build installs the published npm package and needs no sibling repository.
+
+## Self-host
+
+Every release publishes three Apache-2.0 images to the public GitHub Container
+Registry (no registry login required):
+
+- `ghcr.io/vku-open-source-2026/synapsecity-city-service`
+- `ghcr.io/vku-open-source-2026/synapsecity-gateway`
+- `ghcr.io/vku-open-source-2026/synapsecity-console`
+
+> If `docker pull` returns `unauthorized`, the GHCR packages have not been
+> switched to public yet. An organization admin must add a `GHCR_PAT` secret
+> (package admin) and run the `packages-public` workflow in the SynapseOne
+> repository once.
+
+City is Tier 3: point `SYNAPSEDX_BASE_URL` at a Tier-2 SynapseDX deployment and
+set a scoped `SYNAPSEDX_API_KEY` issued for this product account. The default
+`https://synapsedx.sbs` is the public demo.
+
+### 1. Run the published images (recommended)
+
+```bash
+git clone https://github.com/vku-open-source-2026/SynapseCity.git
+cd SynapseCity
+cp .env.example .env       # set SYNAPSEDX_BASE_URL / API key and AUTH_SECRET
+export SYNAPSECITY_VERSION=v0.3.0   # or latest
+
+docker compose pull
+docker compose up -d --no-build
+curl http://127.0.0.1:8085/health
+```
+
+The gateway is bound to loopback; terminate TLS at your own edge and proxy
+`/v1` to the gateway (see `infra/nginx/synapsecity.conf`).
+
+### 2. Build from source
+
+Requirements: Node.js 20+, Docker Engine 24+ and Compose v2.24+.
+
+```bash
+git clone https://github.com/vku-open-source-2026/SynapseCity.git
+cd SynapseCity
+cp .env.example .env
+npm ci
+npm run check:release
+npm run build
+npm test
+docker compose build
+docker compose up -d --no-build
+```
+
+`docker compose up -d --build` combines the last two steps. Local builds use
+the same GHCR image names, so `pull` and `build` are interchangeable.
+
+### Legacy OpenInfra data migration
+
+`npm run import:openinfra` loads the legacy JSON export into the City datasets
+through the Tier-2 capabilities API. It never opens a database connection and
+never calls SynapseOne directly.
+
+```bash
+# Validate the mapping and count the selected rows without writing.
+npm run import:openinfra -- --dry-run
+
+# Full master data plus a compact seven-day time-series sample.
+npm run import:openinfra
+
+# Re-run safely: existing record ids are skipped.
+npm run import:openinfra
+
+# Optional: import every reading/alert instead of the compact sample.
+npm run import:openinfra -- --readings=all --alerts=all
+```
+
+The default data pack is `../nhan_tmp_data/openinfra_data_2026-11-09`; override
+it with `--data-dir`. Assets, sensors, incidents, work orders, budgets, users,
+reports and notifications are imported in full. `sensor_readings` and `alerts`
+are compacted (one reading per sensor per two hours inside the densest history
+window, plus the latest reading per sensor; meaningful alerts plus the latest
+offline alert per sensor). Use `--readings-interval-hours` and
+`--readings-window-hours` to change that sample. The run stores a resumable
+checkpoint in `.notes/import-openinfra.state.json`. Emergency, hazard, EOP,
+dispatch, SITREP, AAR and resource-unit collections are owned by
+SynapseCitySOS and are deliberately skipped.
 
 ## API
 
@@ -150,11 +282,12 @@ behind SynapseDX and SynapseOne.
 
 ### Authorization
 
-Every operator namespace requires a signed City session. The gateway rejects an
-operator request without an `Authorization` header before proxying, and the
-service independently verifies the HMAC session and the role-derived
-permission. Deny-by-default: an unknown operator action requires a valid session
-and then returns `404`.
+Operator namespaces are not a supported public client surface after the
+public-only migration; their work interfaces live in SynapseDX. The gateway
+still rejects an operator request without an `Authorization` header before
+proxying, and the service independently verifies a legacy session and the
+role-derived permission when one is presented. Deny-by-default: an unknown
+operator action requires a valid session and then returns `404`.
 
 | Permission | admin | manager | technician | volunteer | citizen |
 | --- | --- | --- | --- | --- | --- |
@@ -172,27 +305,21 @@ and then returns `404`.
 | `ingest:write` | ✓ | ✓ | – | – | – |
 | `geo:read` / `ai:use` | ✓ / ✓ | ✓ / ✓ | ✓ / – | ✓ / – | – / – |
 
-`/v1/users/me`, `/v1/auth/me` and `/v1/auth/verify` require a session but no
-additional permission. A technician only sees work orders assigned to their own
-principal. Anonymous surfaces are `/health`, `/ready`, `/metrics` (optional
-token), `/v1/city`, `/v1/auth/*`, `/v1/public/*` and `/v1/map/*`.
+`/v1/users/me` requires a session but no additional permission. A technician
+only sees work orders assigned to their own principal. Anonymous surfaces are
+`/health`, `/ready`, `/metrics` (optional token), `/v1/city`, `/v1/auth/*`
+(which returns `410`), `/v1/public/*` and `/v1/map/*`.
 
 `/v1/users` requires a Bearer session and never accepts, stores or returns
-password fields. In the default **`tier2` identity mode**, `/v1/auth/login` and
-`/v1/auth/register` verify credentials through the Tier-2 auth capability
-(Tier-1 IAM); the Tier-1 token stays inside the signed City session and is never
-returned to the browser. City roles are resolved from City-owned operator
-profiles (`city-users`) or the server-side `CITY_BOOTSTRAP_ADMIN_EMAILS`
-allow-list — never from a request body, request claim or unverified token.
+password fields.
 
-`CITY_AUTH_MODE=demo` selects the explicit development-only session shell. It is
-honoured only when `AUTH_DEMO_MODE=true` (default outside production); the demo
-role comes from `AUTH_DEMO_ROLE`. A demo session cannot change passwords and is
-refused in production unless deliberately enabled. Tokens are kept in tab-scoped
-`sessionStorage`, logout revokes the presented access/refresh tokens and the
-Tier-2 session, and `CITY_AUTH_EXCHANGE=true` additionally mints a delegated
-`synapsecity`-audience token when the deployment's service credential is allowed
-to exchange.
+**Tier-3 auth is retired (2026-11-14 workspace contract).** Every
+`/v1/auth/*` request returns `410` with
+`{ "error": "workspace_moved", "workspace_url": "https://synapsedx.sbs/workspace" }`
+before credential handling. Login, registration, session management and role
+assignment belong to SynapseDX. The remaining session code is reachable only in
+non-production test runs via `TIER3_AUTH_MODE=legacy`; production always ignores
+that variable and answers 410. Remove the code with the Rust migration.
 
 Autocomplete, forward geocoding and reverse geocoding use the shared,
 provider-neutral Tier-2 `geo` capability by default (`CITY_GEO_PROVIDER=tier2`);
@@ -255,31 +382,44 @@ for the exact formula), and the console exposes it at `/admin/analytics`.
 
 ## Console
 
-The City console serves these owned routes:
+The City console is **public presentation only** (2026-11-14 workspace
+contract). Login, registration, operations dashboards and the technician portal
+moved to the Tier-2 SynapseDX workspace at `https://synapsedx.sbs/workspace`.
+The console serves these public routes:
 
 ```text
 /                              city landing
 /about /docs                   product and API docs
 /map                           public city asset map
-/login /register               auth shell
 /asset/$id                     public asset detail
 /public/report                 citizen incident report
 /public/report/$assetId        report about an asset
 /public/incidents/$incidentId  public incident lookup
-/admin                         city operations dashboard
-/admin/map /admin/assets       internal map and asset registry
-/admin/assets/create           asset registration form
-/admin/assets/edit/$id         asset edit form
-/admin/incidents /admin/alerts city incidents and infrastructure alerts
-/admin/iot /admin/budgets      sensors and budgets
-/admin/reports /admin/users    reports and city operators
-/admin/analytics               GIS coverage analysis
-/admin/ingest /admin/settings  ingestion and profile
-/technician[/tasks|/maintenance|/settings] technician portal
 ```
 
-There is no `/disaster` route and no `/admin/emergency-center` route. Never add
-hazard, EOP, dispatch, SITREP, AAR or command-centre pages to this console.
+The retired paths `/login`, `/register`, `/admin/**`, `/technician/**` and
+`/workspace/**` return `308` to `https://synapsedx.sbs/workspace` from the
+console nginx and the public edge, and the console root route redirects
+client-side. No local dashboard can be mounted from a deep link.
+
+**Release gate (closed for representative operations, 2026-11-14):** all 28
+workspace pages across City and SOS loaded in production DX with zero page,
+console or HTTP errors; City incident and generic alert create/update executed
+against production and the records were removed; SOS event, dispatch and
+resource create/update also executed. Every one of the 107 forms was not
+submitted individually; the remaining action gap is tracked in
+`plugins/workflows/README.md`. Product-specific policy, approvals and pins stay
+in the owning workflows.
+
+Tier-3 work interfaces are product plugins in DX; their portable source
+artifacts live in `plugins/` and are validated/synced with
+`npm run plugins:check` and `docs/PLUGIN_SYNC.md`. The exact pre-migration route
+source is archived under `plugins/source/` as reference, not built or executed.
+
+`/v1/auth/*` answers `410 workspace_moved` (with `workspace_url`) before any
+credential handling, so no Tier-3 session can be created. There is no
+`/disaster` route and no `/admin/emergency-center` route. Never add hazard,
+EOP, dispatch, SITREP, AAR or command-centre pages to this console.
 
 ## Public edge
 
@@ -304,3 +444,9 @@ evidence checklist are in
 - Issue tracker: [GitHub Issues](https://github.com/vku-open-source-2026/SynapseCity/issues).
 - Change history: [`CHANGELOG.md`](CHANGELOG.md). Versioned release tags are published on GitHub.
 - Dependency inventory: [`THIRD-PARTY.md`](THIRD-PARTY.md); dependencies are not modified or bundled into the repository.
+
+## Brand
+
+Logo, icon and social-preview assets live in [`apps/console/public/brand`](apps/console/public/brand). The console serves the favicon, web app manifest and icons from `apps/console/public`.
+
+To set the GitHub repository social preview, upload [`apps/console/public/brand/social-preview.png`](apps/console/public/brand/social-preview.png) in **Settings → Social preview**.

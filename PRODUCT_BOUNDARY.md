@@ -1,6 +1,6 @@
 # SynapseCity — product boundary
 
-Status: repo-local reference for the 2026-11-03 feature split. The authoritative
+Status: repo-local reference updated 2026-11-16. The authoritative
 workspace contract is `FEATURE_BOUNDARY.md` at the workspace root (outside this
 repository).
 
@@ -15,6 +15,7 @@ repository).
 | Console | `https://synapsecity.sbs` (served through the gateway) |
 | Optional console alias | `https://cloud.synapsecity.sbs` (same console/gateway; operator-managed DNS/TLS) |
 | API | `https://synapsecity.sbs/v1` |
+| Contribution portal | `https://contribution.synapsecity.sbs` (`/api/*`) |
 | Sibling product | SynapseCitySOS at `https://sos.synapsecity.sbs` |
 | License | Apache-2.0 (`LICENSE`, `NOTICE`, `THIRD-PARTY.md`) |
 
@@ -66,7 +67,16 @@ These belong to SynapseCitySOS. The only permitted reference is a public HTTPS
 navigation link to `https://sos.synapsecity.sbs`; never an API call, shared
 dataset or embedded data source.
 
+The contribution portal has a legacy public `/api/sos` intake for citizen SOS
+reports. It is a data-collection surface only, not the SOS operations product:
+it must not add dispatch, EOP, SITREP, AAR, hazard feeds or command-centre
+features. SOS operations remain owned by SynapseCitySOS.
+
 ## API namespace ownership
+
+The contribution portal is deployed on its own host,
+`https://contribution.synapsecity.sbs`, under `/api/*`. It is a separate public
+data-collection edge and does not add routes to the `/v1/city` operations API.
 
 Owned:
 
@@ -106,18 +116,12 @@ not-owned emergency features. `/v1/users` is City operator administration; it
 is never an identity source for SOS responders. `/v1/users` requires a City
 session; passwords are never accepted, stored or published.
 
-### Auth shell
+### Auth retired
 
-`/v1/auth/*` is a session adapter for the console. In the default `tier2` mode
-credentials are verified by the Tier-2 auth capability (Tier-1 IAM) and the
-Tier-1 token stays inside the signed City session; City stores no password or
-identity table. City roles are resolved from City operator profiles or the
-`CITY_BOOTSTRAP_ADMIN_EMAILS` allow-list — never from the request body or an
-unverified token. `CITY_AUTH_MODE=demo` is the explicit development-only shell,
-honoured only with `AUTH_DEMO_MODE=true`; the demo role comes from
-`AUTH_DEMO_ROLE`. Set `AUTH_SECRET` for stable sessions. `/v1/users` and
-`/v1/auth/me` derive the principal from the signed session, not from the first
-row of a dataset.
+Tier-3 login/session management is retired. Every `/v1/auth/*` path returns `410 workspace_moved`; there is no supported
+legacy session surface. Login, registration, sessions and roles
+belong to SynapseDX. City stores no password or identity table and never
+accepts a password on `/v1/users`.
 
 Every operator namespace requires a session and the role-derived permission for
 the action (for example `assets:write`, `budgets:approve`, `users:admin`).
@@ -129,7 +133,13 @@ Only `/health`, `/ready`, `/metrics` (optional token), `/v1/city`, `/v1/auth/*`,
 
 ## Dataset ownership
 
-Every dataset uses the `city-` prefix. A `sos-` dataset is foreign and must
+The contribution portal currently uses the legacy SynapseBase collections
+`contribution_features`, `contribution_submissions` and
+`contribution_sos_reports`. This is a scoped exception while the portal moves to
+Tier-2 datasets; the target names are `city-contribution-*`. Do not reuse these
+collections from `city-service`.
+
+Every City operations dataset uses the `city-` prefix. A `sos-` dataset is foreign and must
 never be read or written. The service fails at start-up if a configured dataset
 does not use the City prefix.
 
@@ -162,34 +172,36 @@ city-ingest-jobs            city-files
 
 ## Console route ownership
 
-Owned:
+Tier 3 is public presentation only (2026-11-14 workspace contract). Work,
+login and dashboard surfaces live in the Tier-2 SynapseDX workspace at
+`https://synapsedx.sbs/workspace`.
+
+Served by this console:
 
 ```text
 /                              city landing
 /about                         city product
 /docs                          city API docs
 /map                           public city asset map
-/login /register               auth shell
 /asset/$id                     public asset detail
 /public/report                 citizen incident report
 /public/report/$assetId        report about an asset
 /public/incidents/$incidentId  public incident lookup
-/admin                         city operations dashboard
-/admin/map                     internal asset map
-/admin/assets[/$id]            asset registry
-/admin/assets/create           asset registration
-/admin/assets/edit/$id         asset edit
-/admin/analytics               GIS coverage analysis
-/admin/incidents[/create|/$id] city incidents
-/admin/alerts[/list]           infrastructure alerts
-/admin/iot[/create|/$id]       IoT sensors
-/admin/budgets[/create|/$id]   budgets
-/admin/reports[/create]        operational reports
-/admin/users[/create|/$id]     city operators
-/admin/ingest                  data ingestion
-/admin/settings                self-service profile
-/technician[/tasks/$taskId|/maintenance/$id|/settings] technician portal
 ```
+
+Redirected to `https://synapsedx.sbs/workspace`:
+
+```text
+/login /register
+/admin/**  (operations dashboards, assets, incidents, alerts, IoT, budgets,
+            reports, users, ingest, analytics, settings)
+/technician/**
+/workspace/**
+```
+
+Every `/v1/auth/*` path returns `410 workspace_moved` before credential
+handling. The
+portable City plugin bundles that replace the retired pages live in `plugins/`.
 
 Never add:
 

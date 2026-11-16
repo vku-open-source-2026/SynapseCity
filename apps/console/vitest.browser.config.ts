@@ -23,7 +23,14 @@ export default defineConfig({
     // seed or clear the auth store and must not interleave.
     fileParallelism: false,
     setupFiles: ['./e2e/setup.ts'],
-    include: ['e2e/**/*.spec.ts'],
+    // The operator/admin surfaces are retired by the public-only contract and
+    // redirect to SynapseDX; their old browser specs are kept for history but
+    // must not gate CI. Public map/geo/navigation specs are the live surface.
+    include: [
+      'e2e/geospatial.spec.ts',
+      'e2e/map.spec.ts',
+      'e2e/navigation.spec.ts',
+    ],
     browser: {
       enabled: true,
       provider: playwright(),

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
-import { asList, httpClient } from '../lib/httpClient';
+import { asList, asListPage, httpClient } from '../lib/httpClient';
 import type {
   Budget,
   BudgetTransaction,
@@ -21,6 +21,11 @@ export const budgetsApi = {
   list: async (params?: BudgetListParams): Promise<Budget[]> => {
     const response = await httpClient.get<Budget[]>('/budgets', { params });
     return asList<Budget>(response.data);
+  },
+
+  listPage: async (params?: BudgetListParams) => {
+    const response = await httpClient.get<Budget[]>('/budgets', { params });
+    return asListPage<Budget>(response.data, response.headers['x-total-count']);
   },
 
   getById: async (id: string): Promise<Budget> => {

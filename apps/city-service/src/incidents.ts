@@ -26,6 +26,9 @@ export const INTERNAL_INCIDENT_FIELDS = [
   'maintenance_record_id',
   'cost_status',
   'cost_approved_at',
+  'cost_approval_id',
+  'cost_approved_by',
+  'cost_approval_roles',
 ] as const;
 
 const PUBLIC_FIELDS = [

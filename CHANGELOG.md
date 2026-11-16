@@ -3,7 +3,173 @@
 All notable changes to SynapseCity are documented here. Entries follow the
 Keep a Changelog format and version tags use Semantic Versioning.
 
-## [Unreleased] - 2026-11-04
+## [Unreleased]
+
+### Added
+- City nearby/bounds/polygon endpoints call the Tier-2 PostGIS spatial
+  capability first and fall back to the bounded in-process scan only when the
+  capability is unavailable.
+- Full City work-page catalog (14 portable bundles): operations command center,
+  asset registry, incident desk, maintenance workshop, alert center, IoT
+  network, budget office, report studio, GIS workspace, people directory, data
+  ingest, manager review, technician work and volunteer desk. The catalog
+  covers every non-public City role and mirrors the retired admin/technician
+  surfaces with declarative widgets.
+- Generic `city-workspace-actions` workflow dispatcher plus its checked-in
+  generator. It supports allowlisted create/update/delete/execute actions for
+  assets, incidents, maintenance, IoT sensors/readings, alerts, budgets,
+  transactions, reports, users, geofences, ingest jobs, files and notifications
+  through the Tier-2 records API with the organization technical credential.
+- Portable City workspace plugin bundles under `plugins/` with
+  `scripts/plugin-bundle.mjs` for strict validation, checksum verification and
+  HTTPS DX export/import/sync (`docs/PLUGIN_SYNC.md`).
+- Product-owned Tier-1 workflow artifacts under `plugins/workflows/` for
+  incidents.create/assign/resolve and maintenance.create/assign/start/complete: create HTTP POST, transition GET(`includeInput:true`) → domain merge →
+  conditional PATCH (`ifVersion`), AAR-before-event-close. Auth is the portable
+  `synapsedx-organization` credentialRef; plugin bundles bind forms with
+  `workflowRef`/action create|update. Source-ready and engine-tested, inactive
+  until DX binds the credential/pins.
+- `plugins/source/` preserves the exact pre-migration City route and page source
+  (with revision and SHA-256 manifest) as reference; it is outside the build.
+
+### Changed
+- DX repository export is now published-only; a draft answers `409
+  plugin_not_published`. `plugin-bundle.mjs sync` compares `source` provenance
+  as well as the plugin checksum, so a path/repository-only change is written
+  instead of being reported as `in-sync`.
+- Tier 3 is public presentation only (2026-11-14 workspace contract). Login,
+  registration, operations dashboards and the technician portal moved to
+  `https://synapsedx.sbs/workspace`; `/login`, `/register`, `/admin/**`,
+  `/technician/**` and `/workspace/**` return `308` (nginx and client root
+  route). Public map, asset detail, public reports and contribution intake stay.
+- `/v1/auth/*` answers `410 workspace_moved` with `workspace_url` before any
+  credential handling; production ignores `TIER3_AUTH_MODE=legacy`.
+- Mobile app: new Synapse logo system (app icon, adaptive/monochrome icon,
+  splash, notification icon); Android version 0.1.1 (versionCode 2).
+- The public gateway is now a Rust/Axum service (`apps/gateway/src/main.rs`);
+  it keeps the existing City boundary, auth gate, console proxy, CORS,
+  correlation-ID and binary-body behavior.
+
+## [0.3.0] - 2026-11-10
+
+### Added
+- Public GHCR images for `city-service`, `gateway` and `console` with
+  `vX.Y.Z`, `latest` and `sha-<commit>` tags, plus a self-host guide covering
+  `docker compose pull` and building from source.
+
+### Added
+
+- `npm run import:openinfra` migrates the legacy JSON export through the Tier-2
+  capabilities API. It imports assets, sensors and every master record in full,
+  samples the unbounded readings/alerts collections, keeps reporter PII in the
+  private incident sidecar, never writes password hashes, and resumes from a
+  checkpoint. SOS-owned collections are explicitly skipped.
+
+### Fixed
+
+- Every legacy `/v1/auth/*` path now returns `410 workspace_moved`; the
+  previously reachable `/me`/`logout` paths no longer answer 401/404.
+- Gateway health failures return a generic `upstream_unavailable` instead of
+  echoing upstream error text.
+- The public browser gate covers the live map/navigation surface; retired
+  login/admin specs no longer gate CI.
+- Incident sidecars now use `internal-<incidentId>` because Tier-2 record ids
+  are unique across datasets; the operator view still merges the sidecar and
+  reads the legacy id as a fallback.
+- IoT reading endpoints query Tier-2 by sensor/asset instead of loading the
+  first 5000 records, so every sensor keeps its history after a large import.
+- The public gateway forwards `x-total-count`, `etag`, `x-dataset-version` and
+  `content-disposition`, restoring console pagination and download metadata.
+- The public map and admin map load the complete asset inventory instead of the
+  first 100/500 rows. The public projection accepts `include_inactive=true`
+  (and still hides deleted/explicitly private records), so retired assets stay
+  addressable by code and appear on the full map.
+- Map markers use the real `feature_code`; the public projection previously
+  assigned `asset_code` to that field, which made every marker fall back to one
+  generic icon.
+- Both the City map and the contribution portal cluster by screen cell at low
+  zoom, show the total plus per-type counts, and reveal individual type icons
+  at zoom 17+. Cluster/icon HTML is cached and the City map computes clusters
+  from projected coordinates, so panning does not rebuild them.
+- The admin map route now uses the shared `MapComponent` and the complete
+  `getAssets` query instead of a duplicate renderer capped at 100 records.
+
+## [Unreleased] - 2026-11-07
+
+### Fixed
+- Console UI audit: removed fabricated map online/offline status, escaped
+  Leaflet popup text, removed the fake VNeID flow, wired the incident/alert
+  filters, fixed list pagination via `x-total-count`, added the report-create
+  action and query polling, replaced placeholder dashboard actions and the
+  incorrect operational-rate KPI, preserved incident coordinates/map links,
+  and removed internal tier/architecture copy from operator screens.
+
+## [Unreleased] - 2026-11-06
+
+### Fixed
+- **Admin AI assistant on `/admin/map`**: public AI routes bypass the operator
+  middleware, so `capabilitiesFromRequest` forwarded the City HMAC session
+  token to Tier-2 and got `invalid_credential` (503). It now decodes the City
+  session itself and forwards only the user-scoped Tier-2 token, falling back
+  to the deployment service credential for anonymous callers. `/v1/ai/status`
+  reports `ready` and `/v1/ai/chat` returns real model output for administrators.
+- Desktop sign-in no longer offers biometric enrolment; WebAuthn is only
+  exposed on mobile/tablet devices (iPadOS touch devices included).
+- The login transition no longer loops `/v1/auth/refresh`: `ProtectedRoute`
+  refreshes at most once per mount, so the rotating token cannot retrigger the
+  effect.
+- A 401 from a secondary endpoint (for example notifications) no longer clears
+  the whole session or redirects to the landing page. Only auth-endpoint 401s
+  invalidate a session, and they redirect to `/login`.
+- “Bỏ qua” on the biometric setup screen now lands on `/admin` and stays there.
+- The public citizen-map AI assistant now works without a City session:
+  `/v1/ai/status` and `/v1/ai/chat` are proxied with the deployment's Tier-2
+  service credential and protected by a per-IP limiter
+  (`PUBLIC_AI_RATE_LIMIT`/`PUBLIC_AI_RATE_WINDOW_MS`, default 20/min), so the
+  widget shows "AI sẵn sàng" and answers instead of the misleading
+  "chưa khả dụng" message.
+
+### Security
+- `AUTH_SECRET` must be set in production: the service now fails fast instead
+  of silently generating an ephemeral session secret (which would invalidate
+  every session on restart).
+- Rate limiting trusts the last `X-Forwarded-For` hop appended by the edge,
+  not the client-controlled first entry.
+- The console ships a Content-Security-Policy (self + Turnstile + map tiles)
+  plus HSTS/nosniff/frame/referrer headers; the gateway adds the same security
+  headers and sanitizes echoed correlation IDs.
+- Public gateway ports are bound to 127.0.0.1; the public edge is the TLS
+  nginx only.
+
+
+### Fixed
+
+- AI assistant works end-to-end through the published Tier-2 inference
+  capability: the console probes `/v1/ai/status` and reflects ready /
+  degraded / unavailable in the header pill and welcome message, sends
+  authenticated requests through the shared axios client (the previous fetch
+  never carried the Bearer token, so even signed-in users got 401), reads the
+  `message` field the City service returns, and renders typed upstream errors
+  with their dependency link. The dead WebSocket path is removed; the REST
+  route is the published contract.
+
+### Security
+
+- The service now logs a loud production warning when `TURNSTILE_SECRET_KEY`
+  is not configured, making it explicit that anonymous `/v1/public/*` report
+  endpoints run without bot protection until the operator supplies the
+  Cloudflare Turnstile secret (and optionally `REQUIRE_TURNSTILE=true`).
+
+## [Unreleased] - 2026-11-05
+
+### Changed
+
+- Header links and buttons keep their place when the language changes, so a
+  click lands on the intended item.
+- Public website (home, about, open API docs, header, footer) is bilingual
+  (Vietnamese / English) and supports light, dark and system themes. The
+  home page no longer hotlinks a stock photo or shows a placeholder asset
+  count when the API is unreachable.
 
 ### Added
 
@@ -35,10 +201,9 @@ Keep a Changelog format and version tags use Semantic Versioning.
 - Tier-2 geo adoption: address search/geocode/reverse use the shared
   provider-neutral `geo` capability by default; `CITY_GEO_PROVIDER=vietmap`
   remains an explicit legacy opt-in and fallback is disabled by default.
-- `vendor/synapsedx-capabilities-0.3.0.tgz` plus a checksum; the City service
-  no longer needs a sibling SynapseDX checkout to install or build.
-  `npm run check:release` verifies the pinned artifact (and accepts a registry
-  semver release later).
+- `@synapsedx/capabilities@^0.3.0` from the public npm registry; the City
+  service needs no sibling SynapseDX checkout or vendored tarball.
+  `npm run check:release` enforces a registry semver dependency.
 - `docs/REPORTS.md` documents why report generation stays synchronous and when
   to adopt the Tier-2 `report.generate` runner.
 

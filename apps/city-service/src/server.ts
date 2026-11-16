@@ -4,7 +4,7 @@ import express, { NextFunction, Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { CapabilitiesError, CapabilitiesClient, type Dataset } from '@synapsedx/capabilities';
 import { DATASETS, TIER2_URL, capabilitiesFromRequest, ensureDataset, objectBody, requiredString } from './domain';
-import { proxyVietMapTile, vietMapAutocomplete, vietMapConfigured, vietMapGeocode, vietMapPlace, vietMapReverse, vietMapTileStyle } from './vietmap';
+import { proxyTier2Tile, tier2MapConfigured } from './tier2-map';
 import {
   AuthedRequest,
   Permission,
@@ -23,6 +23,7 @@ import {
   verifyToken,
 } from './auth';
 import { missingColumns, parseCsv } from './csv';
+import { workspaceMovedMiddleware } from './workspace-moved';
 import {
   buildNotification,
   dedupeKey,
@@ -67,11 +68,9 @@ import {
 } from './identity';
 import {
   geoCoderStatus,
-  geoProviderMode,
   tier2Autocomplete,
   tier2Geocode,
   tier2Reverse,
-  vietmapFallbackAllowed,
 } from './geo-provider';
 import {
   analyseCoverage,
@@ -81,6 +80,8 @@ import {
 } from './analytics';
 import { maintenanceFromAlert, shouldCreateMaintenance, type AlertForAutomation } from './alerts';
 import { derivePreventiveTasks, filterPreventiveTasks, type PreventivePlan } from './preventive';
+import { assertApproved, createApproval, decideApproval, hitlRequired, listPendingApprovals, type HitlError } from './hitl';
+import { rankAssetsByRisk, scoreAssetRisk, type RiskSensorReading } from './risk';
 import {
   generateReport,
   normalizeReportFormat,
@@ -160,6 +161,11 @@ app.set('trust proxy', true);
 // Binary upload endpoints must be parsed before the JSON body parser, otherwise
 // a JSON/PDF/PNG file whose content type is `application/json` arrives as an
 // object instead of bytes.
+function hitlActor(req: Request): string {
+  const session = (req as AuthedRequest).session || sessionFromRequest(req);
+  return String((session as any)?.username || (session as any)?.email || (session as any)?.sub || 'city-user');
+}
+
 const uploadRaw = express.raw({ type: () => true, limit: fileMaxBytes() + 1024 * 1024 });
 const isRawUploadPath = (pathname: string): boolean => pathname === '/v1/files/upload'
   || pathname === '/v1/public/files'
@@ -310,9 +316,12 @@ const PUBLIC_ASSET_FIELDS = [
   'geometry',
 ] as const;
 
-function assetIsPublic(asset: Record<string, unknown>): boolean {
+function assetIsPublic(asset: Record<string, unknown>, options: { includeInactive?: boolean } = {}): boolean {
   if (asset.deleted_at) return false;
   if (asset.public_visible === false) return false;
+  // The public map can ask for the complete infrastructure inventory; the
+  // default projection still keeps retired/decommissioned assets out.
+  if (options.includeInactive === true) return true;
   const status = String(asset.status || '').toLowerCase();
   const lifecycle = String(asset.lifecycle_stage || (asset.lifecycle as Record<string, unknown> | undefined)?.lifecycle_status || '').toLowerCase();
   return !['decommissioned', 'deleted', 'purged', 'retired'].includes(status)
@@ -374,6 +383,52 @@ async function listAllRecords(client: CapabilitiesClient, datasetId: string, max
     offset += pageSize;
     if (Number.isFinite(page.total) && offset >= page.total) return items;
   }
+}
+
+/**
+ * Ask Tier-2 for a filtered page instead of downloading a whole dataset. IoT
+ * readings grow without bound, so the old `list`-and-filter path hit its 5000
+ * record ceiling and hid every sensor after the first few thousand rows.
+ */
+async function queryRecords(
+  client: CapabilitiesClient,
+  datasetId: string,
+  where: Record<string, unknown>,
+  options: { limit?: number; offset?: number; orderBy?: { field: string; direction: 'asc' | 'desc' } } = {},
+): Promise<{ items: Array<Record<string, unknown>>; total: number }> {
+  const limit = Math.min(Math.max(options.limit ?? 500, 1), 1000);
+  const offset = Math.max(options.offset ?? 0, 0);
+  const page = await client.records.query<Record<string, unknown>>(datasetId, {
+    where,
+    // Tier-2 accepts the `field:asc|desc` string form; an object is rejected by
+    // its request validator even though the SDK type is wider.
+    ...(options.orderBy ? { orderBy: `${options.orderBy.field}:${options.orderBy.direction}` } : {}),
+    limit,
+    offset,
+  });
+  return { items: page.items.map((item) => recordData(item)), total: page.total };
+}
+
+async function queryAllRecords(
+  client: CapabilitiesClient,
+  datasetId: string,
+  where: Record<string, unknown>,
+  options: { maxRecords?: number; orderBy?: { field: string; direction: 'asc' | 'desc' } } = {},
+): Promise<Array<Record<string, unknown>>> {
+  const maxRecords = Math.min(Math.max(options.maxRecords ?? 5000, 1), 5000);
+  const items: Array<Record<string, unknown>> = [];
+  let offset = 0;
+  while (items.length < maxRecords) {
+    const page = await queryRecords(client, datasetId, where, {
+      limit: Math.min(500, maxRecords - items.length),
+      offset,
+      ...(options.orderBy ? { orderBy: options.orderBy } : {}),
+    });
+    items.push(...page.items);
+    if (page.items.length < 500 || items.length >= page.total) break;
+    offset += page.items.length;
+  }
+  return items;
 }
 
 const FILTER_IGNORED = new Set([
@@ -476,14 +531,26 @@ async function updateAsset(req: Request, id: string, patch: Record<string, unkno
   return assetView(updated);
 }
 
+/**
+ * Tier-2 record ids are unique across datasets. The public incident and its
+ * private sidecar therefore use different ids; `incident_id` ties them
+ * together. The legacy id is still read as a fallback so an older sidecar can
+ * be merged without a migration.
+ */
+function incidentInternalRecordId(incidentId: string): string {
+  return `internal-${incidentId}`;
+}
+
 async function findIncidentInternal(client: CapabilitiesClient, incidentId: string): Promise<Record<string, unknown> | null> {
-  try {
-    const dataset = await ensureDataset(client, DATASETS.incidentInternal);
-    return recordData(await client.records.get(dataset.id, incidentId));
-  } catch (error) {
-    if (error instanceof CapabilitiesError && error.status === 404) return null;
-    throw error;
+  const dataset = await ensureDataset(client, DATASETS.incidentInternal);
+  for (const id of [incidentInternalRecordId(incidentId), incidentId]) {
+    try {
+      return recordData(await client.records.get(dataset.id, id));
+    } catch (error) {
+      if (!(error instanceof CapabilitiesError) || error.status !== 404) throw error;
+    }
   }
+  return null;
 }
 
 async function writeIncidentInternal(req: Request, incidentId: string, record: Record<string, unknown>): Promise<void> {
@@ -491,12 +558,13 @@ async function writeIncidentInternal(req: Request, incidentId: string, record: R
   if (!internal) return;
   const client = capabilitiesFromRequest(req);
   const dataset = await ensureDataset(client, DATASETS.incidentInternal);
-  const payload = { ...internal, id: incidentId, incident_id: incidentId };
+  const internalId = incidentInternalRecordId(incidentId);
+  const payload = { ...internal, id: internalId, incident_id: incidentId };
   try {
-    await client.records.update(dataset.id, incidentId, payload);
+    await client.records.update(dataset.id, internalId, payload);
   } catch (error) {
     if (!(error instanceof CapabilitiesError) || error.status !== 404) throw error;
-    await client.records.create(dataset.id, payload, { id: incidentId, publish: false });
+    await client.records.create(dataset.id, payload, { id: internalId, publish: false });
   }
 }
 
@@ -775,6 +843,11 @@ function sessionForVerifiedIdentity(identity: Tier2Session['identity'], role: Se
   });
 }
 
+// Tier-3 auth surface is retired: every /v1/auth request is answered with
+// 410 workspace_moved before rate limiting, credential handling or session
+// code. Work interfaces live in the Tier-2 DX workspace.
+app.use('/v1/auth', workspaceMovedMiddleware('city'));
+
 app.post('/v1/auth/login', authRateLimit, async (req, res) => {
   const body = objectBody(req.body);
   const usernameOrEmail = String(body.email || body.username || '').trim();
@@ -1040,7 +1113,11 @@ function isAnonymousV1Path(rawPath: string): boolean {
   return within(path, '/v1/auth')
     || within(path, '/v1/city')
     || within(path, '/v1/public')
-    || within(path, '/v1/map');
+    || within(path, '/v1/map')
+    // Public assistant on the citizen map: status + chat are rate-limited and
+    // proxied with the deployment's Tier-2 service credential (no user data).
+    || path === '/v1/ai/status'
+    || path === '/v1/ai/chat';
 }
 
 function operatorPermission(method: string, rawPath: string): Permission | 'authenticated' {
@@ -1807,6 +1884,111 @@ function healthScore(asset: Record<string, unknown>, openIncidents: number): Rec
   };
 }
 
+async function assetRiskResult(req: Request, assetId: string): Promise<ReturnType<typeof scoreAssetRisk> | null> {
+  const c = capabilitiesFromRequest(req);
+  const assetsDataset = await ensureDataset(c, DATASETS.assets);
+  const assetRecord = await findRecord(c, assetsDataset.id, assetId, ['asset_code', 'feature_code', 'assetId', 'id']);
+  if (!assetRecord) return null;
+  const asset = assetView(assetRecord);
+  const [incidentsDataset, maintenanceDataset, sensorsDataset, readingsDataset] = await Promise.all([
+    ensureDataset(c, DATASETS.incidents), ensureDataset(c, DATASETS.maintenance),
+    ensureDataset(c, DATASETS.sensors), ensureDataset(c, DATASETS.sensorData),
+  ]);
+  const [incidentRecords, maintenanceRecords, sensorRecords, readingRecords] = await Promise.all([
+    listAllRecords(c, incidentsDataset.id), listAllRecords(c, maintenanceDataset.id),
+    listAllRecords(c, sensorsDataset.id), listAllRecords(c, readingsDataset.id),
+  ]);
+  const key = String(assetRecord.id || assetId);
+  const code = String(asset.asset_code || asset.feature_code || '');
+  const incidents = incidentRecords.map((row) => recordData(row.data))
+    .filter((row) => [row.asset_id, row.assetId, row.asset_code].some((value) => value && (String(value) === key || String(value) === code)));
+  const maintenance = maintenanceRecords.map((row) => recordData(row.data))
+    .filter((row) => [row.asset_id, row.assetId].some((value) => value && (String(value) === key || String(value) === code)));
+  const sensorIds = new Set(sensorRecords.map((row) => recordData(row.data))
+    .filter((row) => [row.asset_id, row.assetId].some((value) => value && (String(value) === key || String(value) === code)))
+    .map((row) => String(row.id || row.sensor_id || '')));
+  const sensors: RiskSensorReading[] = readingRecords.map((row) => recordData(row.data))
+    .filter((row) => sensorIds.size === 0 || sensorIds.has(String(row.sensor_id || row.sensorId || '')))
+    .map((row) => ({
+      metric: row.metric ? String(row.metric) : undefined,
+      value: row.value === undefined ? undefined : Number(row.value),
+      unit: row.unit ? String(row.unit) : undefined,
+      min: row.min === undefined ? undefined : Number(row.min),
+      max: row.max === undefined ? undefined : Number(row.max),
+      observed_at: row.observed_at ? String(row.observed_at) : row.timestamp ? String(row.timestamp) : undefined,
+    }));
+  return scoreAssetRisk({ asset: { ...asset, id: key }, incidents, maintenance, sensors });
+}
+
+app.put('/v1/assets/:id/criticality', async (req, res, next) => {
+  try {
+    const input = objectBody(req.body);
+    const criticality = {
+      service_impact: Math.max(1, Math.min(5, Number(input.service_impact ?? 3))),
+      population_served: Math.max(0, Number(input.population_served ?? 0)),
+      redundancy: Math.max(1, Math.min(5, Number(input.redundancy ?? 3))),
+      safety_impact: Math.max(1, Math.min(5, Number(input.safety_impact ?? 3))),
+    };
+    const existing = await findRecord(capabilitiesFromRequest(req), (await ensureDataset(capabilitiesFromRequest(req), DATASETS.assets)).id, req.params.id, ['asset_code', 'feature_code', 'assetId', 'id']);
+    if (!existing) return res.status(404).json({ error: 'asset_not_found' });
+    const updated = await updateAsset(req, req.params.id, { criticality });
+    res.json({ asset: updated, criticality });
+  } catch (error) { next(error); }
+});
+
+app.get('/v1/assets/:id/risk', async (req, res, next) => {
+  try {
+    const result = await assetRiskResult(req, req.params.id);
+    if (!result) return res.status(404).json({ error: 'asset_not_found' });
+    res.json(result);
+  } catch (error) { next(error); }
+});
+
+app.get('/v1/risk/top', async (req, res, next) => {
+  try {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 100);
+    const c = capabilitiesFromRequest(req);
+    const assets = await listAllRecords(c, (await ensureDataset(c, DATASETS.assets)).id);
+    const results = [] as ReturnType<typeof scoreAssetRisk>[];
+    for (const asset of assets.slice(0, 500)) {
+      const result = await assetRiskResult(req, String(asset.id));
+      if (result) results.push(result);
+    }
+    res.json({ items: rankAssetsByRisk(results).slice(0, limit), total: results.length });
+  } catch (error) { next(error); }
+});
+
+app.post('/v1/assets/:id/risk/work-order', async (req, res, next) => {
+  try {
+    const risk = await assetRiskResult(req, req.params.id);
+    if (!risk) return res.status(404).json({ error: 'asset_not_found' });
+    const input = objectBody(req.body);
+    const approvalId = String(input.approval_id || input.approvalId || '');
+    const actor = hitlActor(req);
+    if (hitlRequired() && !approvalId) {
+      const approval = await createApproval(req, {
+        title: `Predictive maintenance for ${risk.asset_id}`,
+        module: 'city.maintenance', action: 'maintenance.approve', entityType: 'asset', entityId: String(req.params.id),
+        payload: { risk_score: risk.score, band: risk.band, confidence: risk.confidence, factors: risk.factors },
+        requester: actor,
+      });
+      return res.status(202).json({ approval, hitl_required: true, risk });
+    }
+    if (approvalId) await assertApproved(req, approvalId, { entityId: String(req.params.id), action: 'maintenance.approve', actor });
+    const workOrder = await genericWrite(req, 'maintenance', {
+      title: String(input.title || `Predictive maintenance: ${risk.asset_id}`),
+      asset_id: String(req.params.id), type: 'preventive', source: 'predictive-risk',
+      priority: risk.band === 'critical' ? 'critical' : risk.band === 'high' ? 'high' : 'medium',
+      status: approvalId ? 'scheduled' : 'recommended',
+      risk_score: risk.score, risk_band: risk.band, risk_confidence: risk.confidence,
+      risk_factors: risk.factors, risk_flags: risk.flags, data_freshness: risk.data_freshness,
+      ...(approvalId ? { approval_id: approvalId, approved_by: actor } : {}),
+      scheduled_date: String(input.scheduled_date || new Date(Date.now() + 7 * 86_400_000).toISOString()),
+    });
+    res.status(201).json({ work_order: workOrder, risk });
+  } catch (error) { next(error); }
+});
+
 app.get('/v1/assets/:id/health-score', async (req, res, next) => {
   try {
     const client = capabilitiesFromRequest(req);
@@ -2207,9 +2389,54 @@ app.post('/v1/incidents/:id/reject', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
+app.get('/v1/hitl/approvals', async (req, res, next) => {
+  try {
+    const items = await listPendingApprovals(req, req.query.module ? String(req.query.module) : undefined);
+    const now = Date.now();
+    res.json({ items: items.map((item) => ({ ...item, escalated: !!item.dueAt && Date.parse(item.dueAt) < now })), total: items.length });
+  } catch (error) { next(error); }
+});
+
+app.post('/v1/hitl/approvals/:id/decide', async (req, res, next) => {
+  try {
+    const input = objectBody(req.body);
+    const decision = String(input.decision || '').toLowerCase();
+    if (!['approve', 'reject'].includes(decision)) return res.status(400).json({ error: 'invalid_decision' });
+    const approval = await decideApproval(req, req.params.id, decision as 'approve' | 'reject', input.note ? String(input.note) : undefined);
+    res.json({ approval });
+  } catch (error) { next(error); }
+});
+
+app.post('/v1/incidents/:id/cost-approval', async (req, res, next) => {
+  try {
+    const incident = await findIncident(req, req.params.id);
+    if (!incident) return res.status(404).json({ error: 'incident_not_found' });
+    const actor = hitlActor(req);
+    const approval = await createApproval(req, {
+      title: `Incident cost approval: ${String(incident.title || incident.id || req.params.id)}`,
+      module: 'city.incident', action: 'city.cost.approve',
+      entityType: 'incident', entityId: String(req.params.id),
+      payload: { cost: incident.cost ?? incident.estimated_cost ?? null, severity: incident.severity ?? null },
+      requester: actor,
+    });
+    res.status(202).json({ approval, hitl_required: true });
+  } catch (error) { next(error); }
+});
+
 app.post('/v1/incidents/:id/approve-cost', async (req, res, next) => {
   try {
     if (!(await findIncident(req, req.params.id))) return res.status(404).json({ error: 'incident_not_found' });
+    const input = objectBody(req.body);
+    const approvalId = String(input.approval_id || input.approvalId || '');
+    if (hitlRequired() || approvalId) {
+      if (!approvalId) return res.status(428).json({ error: 'approval_required', message: 'create a cost approval first' });
+      const actor = hitlActor(req);
+      const approval = await assertApproved(req, approvalId, { entityId: String(req.params.id), action: 'city.cost.approve', actor });
+      return res.json(await updateIncident(req, req.params.id, {
+        cost_status: 'approved', cost_approved_at: new Date().toISOString(),
+        cost_approval_id: approvalId, cost_approved_by: actor, cost_approval_roles: approval.approverRoles,
+      }));
+    }
     res.json(await updateIncident(req, req.params.id, { cost_status: 'approved', cost_approved_at: new Date().toISOString() }));
   } catch (error) { next(error); }
 });
@@ -2418,11 +2645,37 @@ app.get('/v1/maintenance/asset/:assetId', async (req, res, next) => {
     sendPage(res, rows, req);
   } catch (error) { next(error); }
 });
+app.post('/v1/maintenance/:id/approval', async (req, res, next) => {
+  try {
+    const workOrder = await genericGet(req, 'maintenance', req.params.id);
+    const actor = hitlActor(req);
+    const approval = await createApproval(req, {
+      title: `Maintenance approval: ${String(workOrder.title || workOrder.id || req.params.id)}`,
+      module: 'city.maintenance', action: 'maintenance.approve',
+      entityType: 'maintenance', entityId: String(req.params.id),
+      payload: { priority: workOrder.priority ?? null, cost: workOrder.cost ?? null, asset_id: workOrder.asset_id ?? null },
+      requester: actor,
+    });
+    res.status(202).json({ approval, hitl_required: true });
+  } catch (error) { next(error); }
+});
+
 installGenericCrud('/v1/maintenance', 'maintenance', { reserved: ['upcoming', 'asset'], scope: maintenanceScope, rowAllowed: maintenanceRowAllowed });
 for (const action of ['assign', 'start', 'complete', 'cancel', 'approve', 'reject']) {
   app.post(`/v1/maintenance/:id/${action}`, async (req, res, next) => {
     try {
       const body = Object.keys(genericBody(req)).length > 0 ? genericBody(req) : Object.fromEntries(Object.entries(req.query).map(([key, value]) => [key, String(value)]));
+      if (action === 'approve' || action === 'reject') {
+        const approvalId = String(body.approval_id || body.approvalId || '');
+        if (hitlRequired() || approvalId) {
+          if (!approvalId) return res.status(428).json({ error: 'approval_required', message: 'create a maintenance approval first' });
+          const actor = hitlActor(req);
+          const approval = await assertApproved(req, approvalId, { entityId: String(req.params.id), action: 'maintenance.approve', actor });
+          body.approval_id = approvalId;
+          body.approved_by = actor;
+          body.approval_roles = approval.approverRoles;
+        }
+      }
       const updated = await genericUpdate(req, 'maintenance', req.params.id, {
         ...body,
         ...(action === 'start' ? { status: 'in_progress' } : {}),
@@ -2486,11 +2739,6 @@ app.post('/v1/maintenance/:id/photos', async (req, res, next) => {
 });
 
 // IoT metadata and readings share two Tier-2 datasets.
-function readingTimestamp(reading: Record<string, unknown>): number {
-  const parsed = Date.parse(String(reading.timestamp || reading.recorded_at || reading.created_at || ''));
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
 function readingValue(reading: Record<string, unknown>, metric?: string): number | null {
   if (metric) {
     const readings = reading.readings && typeof reading.readings === 'object' ? reading.readings as Record<string, unknown> : {};
@@ -2510,12 +2758,11 @@ function readingValue(reading: Record<string, unknown>, metric?: string): number
   return null;
 }
 
-function scopedReadings(readings: Array<Record<string, unknown>>, sensorId: string, hours?: number): Array<Record<string, unknown>> {
-  const threshold = hours && hours > 0 ? Date.now() - hours * 3_600_000 : null;
-  return readings
-    .filter((reading) => String(reading.sensor_id || reading.sensorId || '') === sensorId)
-    .filter((reading) => threshold === null || readingTimestamp(reading) >= threshold)
-    .sort((a, b) => readingTimestamp(b) - readingTimestamp(a));
+function readingWhere(sensorId: string, hours?: number): Record<string, unknown> {
+  return {
+    sensor_id: sensorId,
+    ...(hours ? { timestamp: { gte: new Date(Date.now() - hours * 3_600_000).toISOString() } } : {}),
+  };
 }
 
 function sensorStatus(sensor: Record<string, unknown>, latestReading?: Record<string, unknown>): string {
@@ -2533,18 +2780,30 @@ app.delete('/v1/iot/sensors/:id', async (req, res, next) => { try { await generi
 app.get('/v1/iot/sensors/:id/data', async (req, res, next) => {
   try {
     const hours = req.query.hours !== undefined ? numberParam(req.query.hours, 24, 24 * 365) : undefined;
-    const readings = scopedReadings(await genericList(req, 'sensorData'), req.params.id, hours);
-    sendPage(res, readings, req);
+    const client = capabilitiesFromRequest(req);
+    const dataset = await ensureDataset(client, DATASETS.sensorData);
+    const page = await queryRecords(client, dataset.id, readingWhere(req.params.id, hours), {
+      limit: numberParam(req.query.limit, 100, 500),
+      offset: numberParam(req.query.offset ?? req.query.skip, 0, 1_000_000),
+      orderBy: { field: 'timestamp', direction: 'desc' },
+    });
+    res.setHeader('x-total-count', String(page.total));
+    res.json(page.items);
   } catch (error) { next(error); }
 });
 // Console alias: the chart client requests /readings.
 app.get('/v1/iot/sensors/:id/readings', async (req, res, next) => {
   try {
     const hours = req.query.hours !== undefined ? numberParam(req.query.hours, 24, 24 * 365) : undefined;
-    const readings = scopedReadings(await genericList(req, 'sensorData'), req.params.id, hours);
-    const paged = readings.slice(numberParam(req.query.offset ?? req.query.skip, 0, 1_000_000), numberParam(req.query.offset ?? req.query.skip, 0, 1_000_000) + numberParam(req.query.limit, 100, 500));
-    res.setHeader('x-total-count', String(readings.length));
-    res.json({ readings: paged, total: readings.length, sensor_id: req.params.id });
+    const client = capabilitiesFromRequest(req);
+    const dataset = await ensureDataset(client, DATASETS.sensorData);
+    const page = await queryRecords(client, dataset.id, readingWhere(req.params.id, hours), {
+      limit: numberParam(req.query.limit, 100, 500),
+      offset: numberParam(req.query.offset ?? req.query.skip, 0, 1_000_000),
+      orderBy: { field: 'timestamp', direction: 'desc' },
+    });
+    res.setHeader('x-total-count', String(page.total));
+    res.json({ readings: page.items, total: page.total, sensor_id: req.params.id });
   } catch (error) { next(error); }
 });
 app.post('/v1/iot/sensors/:id/data', async (req, res, next) => { try { res.status(201).json(await genericWrite(req, 'sensorData', { ...genericBody(req), sensor_id: req.params.id })); } catch (error) { next(error); } });
@@ -2552,8 +2811,13 @@ app.post('/v1/iot/sensors/batch-ingest', async (req, res, next) => { try { const
 app.get('/v1/iot/sensors/:id/status', async (req, res, next) => {
   try {
     const sensor = await genericGet(req, 'sensors', req.params.id);
-    const readings = scopedReadings(await genericList(req, 'sensorData'), req.params.id);
-    res.json({ ...sensor, status: sensorStatus(sensor, readings[0]), last_reading_at: readings[0]?.timestamp || null });
+    const client = capabilitiesFromRequest(req);
+    const dataset = await ensureDataset(client, DATASETS.sensorData);
+    const page = await queryRecords(client, dataset.id, { sensor_id: req.params.id }, {
+      limit: 1,
+      orderBy: { field: 'timestamp', direction: 'desc' },
+    });
+    res.json({ ...sensor, status: sensorStatus(sensor, page.items[0]), last_reading_at: page.items[0]?.timestamp || null });
   } catch (error) { next(error); }
 });
 app.get('/v1/iot/sensors/:id/statistics', async (req, res, next) => {
@@ -2561,7 +2825,12 @@ app.get('/v1/iot/sensors/:id/statistics', async (req, res, next) => {
     const sensor = await genericGet(req, 'sensors', req.params.id);
     const metric = req.query.metric ? String(req.query.metric) : undefined;
     const hours = req.query.hours !== undefined ? numberParam(req.query.hours, 24, 24 * 365) : undefined;
-    const readings = scopedReadings(await genericList(req, 'sensorData'), req.params.id, hours);
+    const client = capabilitiesFromRequest(req);
+    const dataset = await ensureDataset(client, DATASETS.sensorData);
+    const readings = await queryAllRecords(client, dataset.id, readingWhere(req.params.id, hours), {
+      maxRecords: 5000,
+      orderBy: { field: 'timestamp', direction: 'desc' },
+    });
     const values = readings.map((reading) => readingValue(reading, metric)).filter((value): value is number => value !== null);
     const sum = values.reduce((total, value) => total + value, 0);
     res.json({
@@ -2581,14 +2850,26 @@ app.get('/v1/iot/assets/:assetId/iot-data', async (req, res, next) => {
   try {
     const assetId = req.params.assetId;
     const hours = numberParam(req.query.hours, 24, 24 * 365);
-    const sensors = (await genericList(req, 'sensors')).filter((sensor) => String(sensor.asset_id || sensor.assetId || '') === assetId);
-    const sensorIds = new Set(sensors.map((sensor) => String(sensor.id)));
-    const readings = (await genericList(req, 'sensorData'))
-      .filter((reading) => sensorIds.has(String(reading.sensor_id || reading.sensorId || '')))
-      .filter((reading) => readingTimestamp(reading) >= Date.now() - hours * 3_600_000)
-      .sort((a, b) => readingTimestamp(b) - readingTimestamp(a));
-    const activeAlerts = (await genericList(req, 'alerts'))
-      .filter((alert) => String(alert.asset_id || alert.assetId || '') === assetId)
+    const client = capabilitiesFromRequest(req);
+    const sensorsDataset = await ensureDataset(client, DATASETS.sensors);
+    const readingsDataset = await ensureDataset(client, DATASETS.sensorData);
+    const alertsDataset = await ensureDataset(client, DATASETS.alerts);
+    const sensors = (await queryRecords(client, sensorsDataset.id, { asset_id: assetId }, { limit: 500 })).items;
+    const sensorIds = sensors.map((sensor) => String(sensor.id));
+    let readings: Array<Record<string, unknown>> = [];
+    let totalReadings = 0;
+    if (sensorIds.length > 0) {
+      const page = await queryRecords(client, readingsDataset.id, {
+        sensor_id: { in: sensorIds },
+        timestamp: { gte: new Date(Date.now() - hours * 3_600_000).toISOString() },
+      }, {
+        limit: 500,
+        orderBy: { field: 'timestamp', direction: 'desc' },
+      });
+      readings = page.items;
+      totalReadings = page.total;
+    }
+    const activeAlerts = (await queryRecords(client, alertsDataset.id, { asset_id: assetId }, { limit: 500 })).items
       .filter((alert) => !['resolved', 'dismissed', 'closed'].includes(String(alert.status || '').toLowerCase()));
     res.json({
       asset_id: assetId,
@@ -2598,7 +2879,7 @@ app.get('/v1/iot/assets/:assetId/iot-data', async (req, res, next) => {
       alerts: activeAlerts,
       summary: {
         total_sensors: sensors.length,
-        total_readings: readings.length,
+        total_readings: totalReadings,
         active_alerts: activeAlerts.length,
         offline_sensors: sensors.filter((sensor) => sensorStatus(sensor, readings.find((reading) => String(reading.sensor_id) === String(sensor.id))) === 'offline').length,
       },
@@ -2695,7 +2976,36 @@ installGenericCrud('/v1/budgets', 'budgets');
 for (const action of ['submit', 'approve']) app.post(`/v1/budgets/:id/${action}`, async (req, res, next) => { try { res.json(await genericUpdate(req, 'budgets', req.params.id, { status: action === 'submit' ? 'submitted' : 'approved' })); } catch (error) { next(error); } });
 app.get('/v1/budgets/:id/transactions', async (req, res, next) => { try { res.json((await genericList(req, 'transactions')).filter((row) => String(row.budget_id || '') === req.params.id)); } catch (error) { next(error); } });
 app.post('/v1/budgets/:id/transactions', async (req, res, next) => { try { res.status(201).json(await genericWrite(req, 'transactions', { ...genericBody(req), budget_id: req.params.id })); } catch (error) { next(error); } });
-app.post('/v1/budgets/transactions/:id/approve', async (req, res, next) => { try { res.json(await genericUpdate(req, 'transactions', req.params.id, { status: 'approved' })); } catch (error) { next(error); } });
+app.post('/v1/budgets/transactions/:id/approval', async (req, res, next) => {
+  try {
+    const transaction = await genericGet(req, 'transactions', req.params.id);
+    const actor = hitlActor(req);
+    const approval = await createApproval(req, {
+      title: `Budget transaction approval: ${String(transaction.description || transaction.id || req.params.id)}`,
+      module: 'city.budget', action: 'budget.transaction.approve',
+      entityType: 'budget_transaction', entityId: String(req.params.id),
+      payload: { amount: transaction.amount ?? null, budget_id: transaction.budget_id ?? null },
+      requester: actor,
+    });
+    res.status(202).json({ approval, hitl_required: true });
+  } catch (error) { next(error); }
+});
+app.post('/v1/budgets/transactions/:id/approve', async (req, res, next) => {
+  try {
+    const input = objectBody(req.body);
+    const approvalId = String(input.approval_id || input.approvalId || '');
+    if (hitlRequired() || approvalId) {
+      if (!approvalId) return res.status(428).json({ error: 'approval_required', message: 'create a transaction approval first' });
+      const actor = hitlActor(req);
+      const approval = await assertApproved(req, approvalId, { entityId: String(req.params.id), action: 'budget.transaction.approve', actor });
+      return res.json(await genericUpdate(req, 'transactions', req.params.id, {
+        status: 'approved', approved_at: new Date().toISOString(), approval_id: approvalId,
+        approved_by: actor, approval_roles: approval.approverRoles,
+      }));
+    }
+    res.json(await genericUpdate(req, 'transactions', req.params.id, { status: 'approved' }));
+  } catch (error) { next(error); }
+});
 
 // Reports are City-owned artifacts: creation/generation stores real CSV/JSON
 // bytes on the report record and download streams those bytes.
@@ -3044,54 +3354,29 @@ app.get('/v1/geo/search-address', async (req, res, next) => {
   try {
     const query = String(req.query.q || '').trim();
     if (query.length < 2) return res.json([]);
-    if (geoProviderMode() === 'tier2') {
-      try {
-        const hits = await tier2Autocomplete(capabilitiesFromRequest(req), query, 5);
-        return res.json(hits.map((hit) => ({
-          address: hit.address,
-          coordinates: hit.coordinates,
-          city: hit.city,
-          country: hit.country,
-          ...(hit.id ? { ref_id: hit.id } : {}),
-          provider: 'synapsedx',
-        })));
-      } catch (error) {
-        if (!vietmapFallbackAllowed()) throw error;
-        console.warn('[synapsecity] geo_tier2_fallback', (error as Error).message);
-      }
-    }
-    const suggestions = await vietMapAutocomplete(query);
-    const enriched = await Promise.all(suggestions.slice(0, 5).map(async (item) => {
-      const place = item.ref_id ? await vietMapPlace(item.ref_id).catch(() => null) : null;
-      return { address: item.display || item.address || item.name || query, coordinates: { latitude: Number(place?.lat || 0), longitude: Number(place?.lng || 0) }, city: place?.city || '', country: 'Vietnam', ref_id: item.ref_id, provider: 'vietmap' };
-    }));
-    res.json(enriched.filter((item) => item.coordinates.latitude !== 0 || item.coordinates.longitude !== 0));
+    const hits = await tier2Autocomplete(capabilitiesFromRequest(req), query, 5);
+    res.json(hits.map((hit) => ({
+      address: hit.address,
+      coordinates: hit.coordinates,
+      city: hit.city,
+      country: hit.country,
+      ...(hit.id ? { ref_id: hit.id } : {}),
+      provider: 'synapsedx',
+    })));
   } catch (error) { next(error); }
 });
 app.post('/v1/geo/geocode', async (req, res, next) => {
   try {
     const text = String(privateInput(req).address || '').trim();
     if (!text) return res.status(400).json({ error: 'address_required' });
-    if (geoProviderMode() === 'tier2') {
-      try {
-        const hit = await tier2Geocode(capabilitiesFromRequest(req), text);
-        if (!hit) return res.status(404).json({ error: 'address_not_found' });
-        return res.json({
-          coordinates: hit.coordinates,
-          geojson: { type: 'Point', coordinates: [hit.coordinates.longitude, hit.coordinates.latitude] },
-          display_name: hit.address || text,
-          provider: 'synapsedx',
-        });
-      } catch (error) {
-        if (!vietmapFallbackAllowed()) throw error;
-        console.warn('[synapsecity] geo_tier2_fallback', (error as Error).message);
-      }
-    }
-    const [match] = await vietMapGeocode(text);
-    if (!match?.ref_id) return res.status(404).json({ error: 'address_not_found' });
-    const place = await vietMapPlace(match.ref_id);
-    if (!Number.isFinite(place.lat) || !Number.isFinite(place.lng)) return res.status(404).json({ error: 'coordinates_not_found' });
-    res.json({ coordinates: { latitude: place.lat, longitude: place.lng }, geojson: { type: 'Point', coordinates: [place.lng, place.lat] }, display_name: place.display || match.display || text, provider: 'vietmap' });
+    const hit = await tier2Geocode(capabilitiesFromRequest(req), text);
+    if (!hit) return res.status(404).json({ error: 'address_not_found' });
+    res.json({
+      coordinates: hit.coordinates,
+      geojson: { type: 'Point', coordinates: [hit.coordinates.longitude, hit.coordinates.latitude] },
+      display_name: hit.address || text,
+      provider: 'synapsedx',
+    });
   } catch (error) { next(error); }
 });
 app.post('/v1/geo/reverse-geocode', async (req, res, next) => {
@@ -3100,19 +3385,9 @@ app.post('/v1/geo/reverse-geocode', async (req, res, next) => {
     const latitude = Number(input.latitude);
     const longitude = Number(input.longitude);
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return res.status(400).json({ error: 'coordinates_required' });
-    if (geoProviderMode() === 'tier2') {
-      try {
-        const hit = await tier2Reverse(capabilitiesFromRequest(req), latitude, longitude);
-        if (!hit) return res.status(404).json({ error: 'address_not_found' });
-        return res.json({ address: hit.address, city: hit.city, country: hit.country, provider: 'synapsedx' });
-      } catch (error) {
-        if (!vietmapFallbackAllowed()) throw error;
-        console.warn('[synapsecity] geo_tier2_fallback', (error as Error).message);
-      }
-    }
-    const [place] = await vietMapReverse(latitude, longitude);
-    if (!place) return res.status(404).json({ error: 'address_not_found' });
-    res.json({ address: place.display || place.address || '', city: place.city || '', country: 'Vietnam', provider: 'vietmap' });
+    const hit = await tier2Reverse(capabilitiesFromRequest(req), latitude, longitude);
+    if (!hit) return res.status(404).json({ error: 'address_not_found' });
+    res.json({ address: hit.address, city: hit.city, country: hit.country, provider: 'synapsedx' });
   } catch (error) { next(error); }
 });
 
@@ -3192,6 +3467,15 @@ app.post('/v1/ingest/csv', async (req, res, next) => {
     const dataset = await ensureDataset(client, DATASETS.assets);
     const errors: Array<{ row: number; message: string }> = [];
     let created = 0;
+    // Build the asset rows first, then persist them through the Tier-2 bulk
+    // endpoint in chunks of 100. A 1,000-row contribution import used to make
+    // 1,000 sequential Tier-2 calls; batching keeps the import inside the
+    // public gateway timeout and makes daily contribution sync practical.
+    const entries: Array<{ id: string; data: Record<string, unknown>; publish: true }> = [];
+    const rowNumbers: number[] = [];
+    let skipped = 0;
+    const isDuplicateFailure = (failure: { code?: string; message?: string }): boolean =>
+      /already_exists|record_already_exists|duplicate/i.test(`${failure.code || ''} ${failure.message || ''}`);
     for (const [index, row] of parsed.rows.entries()) {
       const latitude = Number(row.latitude);
       const longitude = Number(row.longitude);
@@ -3213,43 +3497,126 @@ app.post('/v1/ingest/csv', async (req, res, next) => {
           continue;
         }
       }
-      const asset = {
-        assetId: row.asset_code,
-        asset_code: row.asset_code,
-        name: row.name,
-        feature_type: row.feature_type,
-        feature_code: row.feature_code,
-        category: row.category || row.feature_type,
-        status: row.status || 'active',
-        geometry: { type: 'Point', coordinates: [longitude, latitude] },
-        location: { address: row.address || '', coordinates: { longitude, latitude } },
-        properties,
-        source: 'synapsecity-ingest',
-        sourceVersion: '1.0.0',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      try {
-        await client.records.create(dataset.id, asset, { id: row.asset_code, publish: true });
-        created += 1;
-      } catch (error) {
-        errors.push({ row: index + 2, message: error instanceof Error ? error.message : 'asset_create_failed' });
+      // Optional GeoJSON geometry column. Points can still be sent as
+      // latitude/longitude; lines and polygons keep their real geometry.
+      let geometry: Record<string, unknown> = { type: 'Point', coordinates: [longitude, latitude] };
+      if (row.geometry) {
+        try {
+          const parsedGeometry = JSON.parse(row.geometry);
+          if (!parsedGeometry || typeof parsedGeometry !== 'object' || typeof parsedGeometry.type !== 'string' || !Array.isArray(parsedGeometry.coordinates)) {
+            errors.push({ row: index + 2, message: 'geometry_must_be_geojson' });
+            continue;
+          }
+          geometry = parsedGeometry;
+        } catch {
+          errors.push({ row: index + 2, message: 'geometry_must_be_valid_json' });
+          continue;
+        }
       }
+      entries.push({
+        id: row.asset_code,
+        publish: true,
+        data: {
+          assetId: row.asset_code,
+          asset_code: row.asset_code,
+          name: row.name,
+          feature_type: row.feature_type,
+          feature_code: row.feature_code,
+          category: row.category || row.feature_type,
+          status: row.status || 'active',
+          geometry,
+          location: { address: row.address || '', coordinates: { longitude, latitude } },
+          properties,
+          source: 'synapsecity-ingest',
+          sourceVersion: '1.0.0',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      });
+      rowNumbers.push(index + 2);
     }
+    // Idempotent daily sync: skip assets the dataset already has instead of
+    // sending duplicate ids through the Tier-2 bulk endpoint.
+    const existingIds = new Set(
+      (await listAllRecords(client, dataset.id)).map((record) => String(record.id)),
+    );
+    const fresh: typeof entries = [];
+    const freshRowNumbers: number[] = [];
+    for (let i = 0; i < entries.length; i += 1) {
+      if (existingIds.has(entries[i].id)) continue;
+      fresh.push(entries[i]);
+      freshRowNumbers.push(rowNumbers[i]);
+    }
+    skipped += entries.length - fresh.length;
+    // Tier-2 bulk writes one record at a time internally, so a 100-record
+    // request can exceed the 20s SDK timeout. Use small chunks with bounded
+    // concurrency: a 200-row import finishes in a few waves while keeping the
+    // public request below the edge/workflow timeout.
+    const CHUNK = 25;
+    const CONCURRENCY = 4;
+    let cursor = 0;
+    const runChunk = async (offset: number, chunk: typeof fresh): Promise<void> => {
+      try {
+        const result = await client.records.bulkCreate(dataset.id, chunk);
+        created += result.created.length;
+        for (const failure of result.errors) {
+          if (isDuplicateFailure(failure)) {
+            skipped += 1;
+            continue;
+          }
+          const absolute = offset + Number(failure.index || 0);
+          errors.push({ row: freshRowNumbers[absolute] ?? absolute + 2, message: failure.message || 'asset_create_failed' });
+        }
+      } catch (error) {
+        // A wholly duplicate chunk returns 400. Treat it as an idempotent skip
+        // so a retried daily sync can still acknowledge the batch.
+        const bodyErrors = (error as { body?: { errors?: Array<{ index?: number; code?: string; message?: string }> } })?.body?.errors;
+        if (Array.isArray(bodyErrors) && bodyErrors.length > 0) {
+          for (const failure of bodyErrors) {
+            if (isDuplicateFailure(failure)) {
+              skipped += 1;
+              continue;
+            }
+            const absolute = offset + Number(failure.index || 0);
+            errors.push({ row: freshRowNumbers[absolute] ?? absolute + 2, message: failure.message || 'asset_create_failed' });
+          }
+          return;
+        }
+        const message = error instanceof Error ? error.message : 'asset_bulk_create_failed';
+        for (let i = 0; i < chunk.length; i += 1) {
+          errors.push({ row: freshRowNumbers[offset + i] ?? offset + i + 2, message });
+        }
+      }
+    };
+    const worker = async (): Promise<void> => {
+      for (;;) {
+        const offset = cursor;
+        cursor += CHUNK;
+        if (offset >= fresh.length) return;
+        await runChunk(offset, fresh.slice(offset, offset + CHUNK));
+      }
+    };
+    const workerCount = Math.min(CONCURRENCY, Math.max(1, Math.ceil(fresh.length / CHUNK)));
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
     const job = await genericWrite(req, 'ingest', {
       filename,
       status: 'completed',
       accepted: parsed.rows.length,
       created,
+      skipped,
       failed: errors.length,
       errors: errors.slice(0, 50),
       completed_at: new Date().toISOString(),
     });
-    res.status(202).json({
-      message: `Ingested ${created} of ${parsed.rows.length} asset rows`,
+    // A completely failed batch must not look like a successful sync: the
+    // workflow only acknowledges features after a 2xx response.
+    const allFailed = created === 0 && skipped === 0 && errors.length > 0;
+    res.status(allFailed ? 502 : 202).json({
+      message: `Ingested ${created} of ${parsed.rows.length} asset rows (${skipped} already present)`,
       job_id: job.id,
       accepted: parsed.rows.length,
       created,
+      skipped,
       errors,
     });
   } catch (error) { next(error); }
@@ -3321,9 +3688,10 @@ app.get('/v1/public/assets', async (req, res, next) => {
   try {
     const client = capabilitiesFromRequest(req);
     const dataset = await ensureDataset(client, DATASETS.assets);
+    const includeInactive = ['true', '1'].includes(String(req.query.include_inactive || '').toLowerCase());
     const rows = (await listAllRecords(client, dataset.id))
       .map((record) => record.data)
-      .filter(assetIsPublic)
+      .filter((asset) => assetIsPublic(asset, { includeInactive }))
       .map(publicAssetView);
     sendPage(res, rows, req);
   } catch (error) { next(error); }
@@ -3334,7 +3702,7 @@ app.get('/v1/public/assets/:code/qr-code', async (req, res, next) => {
     const client = capabilitiesFromRequest(req);
     const dataset = await ensureDataset(client, DATASETS.assets);
     const asset = await findRecord(client, dataset.id, req.params.code, ['asset_code', 'feature_code', 'assetId', 'id']);
-    if (!asset || !assetIsPublic(asset)) return res.status(404).json({ error: 'asset_not_found' });
+    if (!asset || !assetIsPublic(asset, { includeInactive: true })) return res.status(404).json({ error: 'asset_not_found' });
     const view = publicAssetView(asset);
     res.json({ asset_code: view.asset_code, qr_code: view.qr_code, url: view.public_url });
   } catch (error) { next(error); }
@@ -3345,7 +3713,7 @@ app.get('/v1/public/assets/:code/maintenance-summary', async (req, res, next) =>
     const client = capabilitiesFromRequest(req);
     const assetDataset = await ensureDataset(client, DATASETS.assets);
     const asset = await findRecord(client, assetDataset.id, req.params.code, ['asset_code', 'feature_code', 'assetId', 'id']);
-    if (!asset || !assetIsPublic(asset)) return res.status(404).json({ error: 'asset_not_found' });
+    if (!asset || !assetIsPublic(asset, { includeInactive: true })) return res.status(404).json({ error: 'asset_not_found' });
     const maintenanceDataset = await ensureDataset(client, DATASETS.maintenance);
     const assetIds = new Set([String(asset.id), String(asset.asset_code || '')].filter(Boolean));
     const orders = (await listAllRecords(client, maintenanceDataset.id))
@@ -3369,7 +3737,7 @@ app.get('/v1/public/assets/:code', async (req, res, next) => {
     const client = capabilitiesFromRequest(req);
     const dataset = await ensureDataset(client, DATASETS.assets);
     const asset = await findRecord(client, dataset.id, req.params.code, ['asset_code', 'feature_code', 'assetId', 'id']);
-    if (!asset || !assetIsPublic(asset)) return res.status(404).json({ error: 'asset_not_found' });
+    if (!asset || !assetIsPublic(asset, { includeInactive: true })) return res.status(404).json({ error: 'asset_not_found' });
     res.json(publicAssetView(asset));
   } catch (error) { next(error); }
 });
@@ -3467,19 +3835,27 @@ app.get('/v1/public/incidents/:incidentId', async (req, res, next) => {
 // ---------------------------------------------------------------------------
 // AI and map capability instances
 // ---------------------------------------------------------------------------
-app.get('/v1/map/config', (_req, res) => res.json(vietMapConfigured() ? { provider: 'vietmap', tileUrl: '/v1/map/tiles/{z}/{x}/{y}.png', attribution: '&copy; VIETMAP', maxZoom: 20, maxNativeZoom: 20, style: vietMapTileStyle() } : { provider: 'openstreetmap', tileUrl: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attribution: '&copy; OpenStreetMap contributors', maxZoom: 20, maxNativeZoom: 19 }));
-app.get('/v1/map/tiles/:z/:x/:y.png', async (req, res, next) => { try { await proxyVietMapTile(Number(req.params.z), Number(req.params.x), Number(req.params.y), res); } catch (error) { next(error); } });
-app.get('/v1/map/status', (_req, res) => res.json({ provider: vietMapConfigured() ? 'vietmap' : 'openstreetmap', configured: vietMapConfigured(), service: 'synapsecity' }));
+app.get('/v1/map/config', (_req, res) => res.json({ provider: 'synapsedx', tileUrl: '/v1/map/tiles/{z}/{x}/{y}.png', attribution: '&copy; VIETMAP', maxZoom: 20, maxNativeZoom: 20, style: 'tm' }));
+app.get('/v1/map/tiles/:z/:x/:y.png', async (req, res, next) => { try { await proxyTier2Tile(Number(req.params.z), Number(req.params.x), Number(req.params.y), res); } catch (error) { next(error); } });
+app.get('/v1/map/status', (_req, res) => res.json({ provider: 'synapsedx', configured: tier2MapConfigured(), service: 'synapsecity' }));
+
+// Public assistant: anonymous visitors get a strict per-IP budget; signed-in
+// operators share the same limiter (the session still scopes upstream calls).
+const publicAiRateLimit = rateLimit({
+  name: 'public-ai',
+  windowMs: Math.max(1000, Number(process.env.PUBLIC_AI_RATE_WINDOW_MS || 60_000)),
+  max: Math.max(1, Number(process.env.PUBLIC_AI_RATE_LIMIT || 20)),
+});
 
 // AI is answered by the Tier-2 capability. When the deployment/provider does
 // not expose it the endpoint returns a typed 503 instead of canned text.
-app.get('/v1/ai/status', async (req, res, next) => {
+app.get('/v1/ai/status', publicAiRateLimit, async (req, res, next) => {
   try {
     const status = await aiStatus(capabilitiesFromRequest(req));
     res.status(status.status === 'unavailable' ? 503 : 200).json(status);
   } catch (error) { next(error); }
 });
-app.post('/v1/ai/chat', async (req, res, next) => {
+app.post('/v1/ai/chat', publicAiRateLimit, async (req, res, next) => {
   try {
     const body = privateInput(req);
     const message = String(body.message || '').trim();
@@ -3514,5 +3890,8 @@ app.use((error: any, _req: Request, res: Response, _next: NextFunction) => {
 export function createServer() { return app; }
 
 if (require.main === module) {
+  if (process.env.NODE_ENV === 'production' && process.env.REQUIRE_TURNSTILE !== 'true') {
+    console.warn('[synapsecity] REQUIRE_TURNSTILE is not enabled; anonymous reports rely on the Tier-2 Turnstile adapter when configured.');
+  }
   app.listen(PORT, () => console.log(`[synapsecity] Tier-3 API listening on :${PORT}; Tier-2=${TIER2_URL}`));
 }

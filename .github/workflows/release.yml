@@ -18,6 +18,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -26,7 +27,7 @@ jobs:
       - name: Install
         run: npm ci
 
-      - name: Verify pinned Tier-2 SDK
+      - name: Verify registry Tier-2 SDK
         run: npm run check:release
 
       - name: Build and test
@@ -34,11 +35,19 @@ jobs:
           npm run build
           npm test
 
+      - name: Test contribution backend
+        run: cargo test --locked
+        working-directory: apps/contribution-service
+
       - name: Prepare compose env
         run: cp .env.example .env
 
       - name: Build images
-        run: docker compose build
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          OWNER="$(echo "${OWNER}" | tr '[:upper:]' '[:lower:]')"
+          SYNAPSECITY_IMAGE_OWNER="$OWNER" SYNAPSECITY_VERSION=latest docker compose build
 
       - name: Log in to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
@@ -51,15 +60,28 @@ jobs:
         run: |
           set -euo pipefail
           OWNER="$(echo "${OWNER}" | tr '[:upper:]' '[:lower:]')"
-          images="synapsecity-city-service synapsecity-gateway synapsecity-console"
+          images="synapsecity-city-service synapsecity-gateway synapsecity-console synapsecity-contribution-service synapsecity-contribution-console"
           for image in $images; do
             remote="ghcr.io/${OWNER}/${image}"
-            docker tag "${image}:latest" "${remote}:${TAG}"
-            docker tag "${image}:latest" "${remote}:latest"
-            docker tag "${image}:latest" "${remote}:sha-${SHA}"
+            docker tag "${remote}:latest" "${remote}:${TAG}"
+            docker tag "${remote}:latest" "${remote}:sha-${SHA}"
             docker push "${remote}:${TAG}"
             docker push "${remote}:latest"
             docker push "${remote}:sha-${SHA}"
+          done
+
+      - name: Make GHCR packages public
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GHCR_PAT || secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -uo pipefail
+          OWNER="$(echo "${OWNER}" | tr '[:upper:]' '[:lower:]')"
+          for image in synapsecity-city-service synapsecity-gateway synapsecity-console synapsecity-contribution-service synapsecity-contribution-console; do
+            if ! gh api --method PATCH "/orgs/${OWNER}/packages/container/${image}" -f visibility=public >/dev/null 2>&1; then
+              echo "::warning::Could not set ${image} public; set it in GitHub package settings."
+            fi
           done
 
       - name: Create GitHub release
@@ -70,8 +92,6 @@ jobs:
           files: |
             docker-compose.yml
             infra/nginx/synapsecity.conf
-            vendor/synapsedx-capabilities-0.3.0.tgz
-            vendor/synapsedx-capabilities-0.3.0.tgz.sha256
           body: |
             SynapseCity ${{ github.ref_name }}
 
@@ -79,5 +99,7 @@ jobs:
             - `ghcr.io/${{ github.repository_owner }}/synapsecity-city-service:${{ github.ref_name }}`
             - `ghcr.io/${{ github.repository_owner }}/synapsecity-gateway:${{ github.ref_name }}`
             - `ghcr.io/${{ github.repository_owner }}/synapsecity-console:${{ github.ref_name }}`
+            - `ghcr.io/${{ github.repository_owner }}/synapsecity-contribution-service:${{ github.ref_name }}`
+            - `ghcr.io/${{ github.repository_owner }}/synapsecity-contribution-console:${{ github.ref_name }}`
 
             The pinned Tier-2 SDK tarball and checksum are attached.

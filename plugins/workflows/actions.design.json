@@ -1,0 +1,331 @@
+{
+  "format": "synapsedx-action-design",
+  "formatVersion": 1,
+  "product": "city",
+  "repository": "https://github.com/vku-open-source-2026/SynapseCity",
+  "revision": "2026-11-14",
+  "status": "implemented_source_ready",
+  "blocker": "Resolved by the Tier-1 httpRequest includeInput option. Residual: Tier-2 PATCH conditional support is ifVersion/If-Match (optimistic CAS); concurrent conflicts return 409 and must surface to the user.",
+  "requiredEnabler": "Engine prior-node context (e.g. $node[\"Validate\"]) or a Tier-2 conditional/merge update contract with tenant/product authz and audit.",
+  "credentialRef": "synapsedx-organization",
+  "credentialHeader": "X-API-Key",
+  "widgetActionGap": "DX action vocabulary is create|update|delete|execute; these transitions are bound with action=update and workflowRef in the plugin bundles.",
+  "actions": [
+    {
+      "operation": "incidents.assign",
+      "method": "PATCH",
+      "dataset": "city-incidents",
+      "recordIdField": "incident_id",
+      "fields": [
+        {
+          "name": "incident_id",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "assigned_to",
+          "type": "text",
+          "required": true
+        }
+      ],
+      "allowedFrom": [
+        "reported",
+        "acknowledged",
+        "assigned",
+        "investigating",
+        "in_progress",
+        "waiting_approval"
+      ],
+      "patch": {
+        "assigned_to": "{assigned_to}",
+        "status": "assigned",
+        "assigned_at": "{now}"
+      },
+      "invariants": [
+        "the incident must exist in the caller tenant and be readable by the workflow credential",
+        "assigned_to must be a non-empty operator identifier",
+        "resolved/closed incidents cannot be reassigned",
+        "the assignment notification is a separate Tier-2 notification action, never a silent side effect"
+      ]
+    },
+    {
+      "operation": "incidents.resolve",
+      "method": "PATCH",
+      "dataset": "city-incidents",
+      "recordIdField": "incident_id",
+      "fields": [
+        {
+          "name": "incident_id",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "resolution_notes",
+          "type": "textarea"
+        },
+        {
+          "name": "resolution_type",
+          "type": "text",
+          "required": false
+        }
+      ],
+      "allowedFrom": [
+        "reported",
+        "acknowledged",
+        "assigned",
+        "investigating",
+        "in_progress",
+        "waiting_approval"
+      ],
+      "idempotentWhen": {
+        "status": "resolved"
+      },
+      "patch": {
+        "status": "resolved",
+        "resolution_notes": "{resolution_notes}",
+        "resolution_type": "{resolution_type|fixed}",
+        "resolved_at": "{now}"
+      },
+      "invariants": [
+        "resolution_type must be fixed|duplicate|not_an_issue|transferred (default fixed)",
+        "an already resolved incident returns the current record without a second write",
+        "closed incidents cannot be resolved again",
+        "the resolution notification is a separate Tier-2 notification action"
+      ]
+    },
+    {
+      "operation": "maintenance.assign",
+      "method": "PATCH",
+      "dataset": "city-maintenance",
+      "recordIdField": "work_order_id",
+      "fields": [
+        {
+          "name": "work_order_id",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "assigned_to",
+          "type": "text",
+          "required": true
+        }
+      ],
+      "allowedFrom": [
+        "scheduled",
+        "on_hold",
+        "waiting_approval"
+      ],
+      "patch": {
+        "assigned_to": "{assigned_to}",
+        "assigned_at": "{now}"
+      },
+      "invariants": [
+        "completed/cancelled work orders cannot be reassigned",
+        "assignee must be a non-empty operator identifier"
+      ]
+    },
+    {
+      "operation": "maintenance.start",
+      "method": "PATCH",
+      "dataset": "city-maintenance",
+      "recordIdField": "work_order_id",
+      "fields": [
+        {
+          "name": "work_order_id",
+          "type": "text",
+          "required": true
+        }
+      ],
+      "allowedFrom": [
+        "scheduled",
+        "on_hold"
+      ],
+      "patch": {
+        "status": "in_progress",
+        "actual_start_time": "{now}"
+      },
+      "invariants": [
+        "cannot start a completed or cancelled work order",
+        "starting an already in-progress order is idempotent"
+      ]
+    },
+    {
+      "operation": "maintenance.complete",
+      "method": "PATCH",
+      "dataset": "city-maintenance",
+      "recordIdField": "work_order_id",
+      "fields": [
+        {
+          "name": "work_order_id",
+          "type": "text",
+          "required": true
+        }
+      ],
+      "allowedFrom": [
+        "in_progress"
+      ],
+      "patch": {
+        "status": "completed",
+        "completed_at": "{now}",
+        "actual_end_time": "{now}"
+      },
+      "invariants": [
+        "a work order must be in_progress before completion",
+        "completed/cancelled orders cannot be re-completed",
+        "the completion notification is a separate Tier-2 notification action"
+      ]
+    }
+  ],
+  "implementation": "Implemented with the Tier-1 httpRequest includeInput:true option: GET -> code invariants/merge -> PATCH full data with ifVersion optimistic CAS. Source-ready, inactive until DX binds credentialRef and pins artifacts.",
+  "lifecycleActions": [
+    {
+      "operation": "incidents.acknowledge",
+      "method": "PATCH",
+      "dataset": "city-incidents",
+      "fields": [
+        {
+          "name": "incident_id",
+          "type": "text",
+          "required": true
+        }
+      ],
+      "allowedFrom": [
+        "reported",
+        "open",
+        "assigned",
+        "investigating"
+      ],
+      "patch": {
+        "status": "acknowledged",
+        "acknowledged_at": "{now}"
+      },
+      "invariants": [
+        "already acknowledged is idempotent",
+        "resolved/closed incidents are not acknowledged"
+      ]
+    },
+    {
+      "operation": "incidents.close",
+      "method": "PATCH",
+      "dataset": "city-incidents",
+      "fields": [
+        {
+          "name": "incident_id",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "notes",
+          "type": "textarea"
+        }
+      ],
+      "allowedFrom": [
+        "reported",
+        "open",
+        "acknowledged",
+        "assigned",
+        "investigating",
+        "in_progress",
+        "waiting_approval",
+        "resolved"
+      ],
+      "patch": {
+        "status": "closed",
+        "closed_at": "{now}"
+      },
+      "invariants": [
+        "an already closed incident is refused",
+        "closing preserves unrelated fields"
+      ]
+    },
+    {
+      "operation": "incidents.reject",
+      "method": "PATCH",
+      "dataset": "city-incidents",
+      "fields": [
+        {
+          "name": "incident_id",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "reason",
+          "type": "textarea"
+        }
+      ],
+      "allowedFrom": [
+        "reported",
+        "open",
+        "acknowledged",
+        "assigned",
+        "investigating",
+        "in_progress",
+        "waiting_approval"
+      ],
+      "patch": {
+        "status": "closed",
+        "resolution_type": "not_an_issue",
+        "resolved_at": "{now}"
+      },
+      "invariants": [
+        "rejection records not_an_issue and reason",
+        "closed incidents are refused"
+      ]
+    },
+    {
+      "operation": "incidents.verify",
+      "method": "PATCH",
+      "dataset": "city-incidents",
+      "fields": [
+        {
+          "name": "incident_id",
+          "type": "text",
+          "required": true
+        }
+      ],
+      "allowedFrom": [
+        "reported",
+        "open",
+        "acknowledged",
+        "assigned",
+        "investigating",
+        "in_progress",
+        "waiting_approval"
+      ],
+      "patch": {
+        "ai_verification_status": "verified",
+        "ai_confidence_score": 1
+      },
+      "invariants": [
+        "verification is operator-attributed via audit",
+        "closed incidents are refused"
+      ]
+    },
+    {
+      "operation": "maintenance.cancel",
+      "method": "PATCH",
+      "dataset": "city-maintenance",
+      "fields": [
+        {
+          "name": "work_order_id",
+          "type": "text",
+          "required": true
+        }
+      ],
+      "allowedFrom": [
+        "scheduled",
+        "on_hold",
+        "in_progress",
+        "waiting_approval"
+      ],
+      "patch": {
+        "status": "cancelled",
+        "cancelled_at": "{now}"
+      },
+      "invariants": [
+        "completed/cancelled work orders are refused",
+        "assignment history is preserved"
+      ]
+    }
+  ]
+}

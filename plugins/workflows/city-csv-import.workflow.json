@@ -1,0 +1,173 @@
+{
+  "name": "city-csv-import",
+  "nodes": [
+    {
+      "name": "DX manual execution",
+      "type": "manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        200,
+        300
+      ],
+      "parameters": {}
+    },
+    {
+      "name": "Validate City import",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        300
+      ],
+      "parameters": {
+        "code": "const input = $input || {};\nif (Object.keys(input).some(key => !['pluginId','widgetId','product','resource','action','submittedBy','submittedAt','fields'].includes(key))) throw new Error('unknown_envelope_fields');\nif (input.product !== 'city' || input.resource !== 'ingest' || input.action !== 'execute' || !input.submittedBy || !input.pluginId || !input.widgetId) throw new Error('invalid_operation_envelope');\nconst fields = input.fields;\nif (!fields || typeof fields !== 'object' || Array.isArray(fields) || Object.keys(fields).some(key => ![\"file_id\",\"batch_offset\"].includes(key))) throw new Error('unknown_fields');\n\nif (typeof fields.file_id !== 'string' || !/^[A-Za-z0-9._-]{1,80}$/.test(fields.file_id)) throw new Error('file_id_required');\nconst offset = fields.batch_offset === undefined ? 0 : fields.batch_offset;\nif (!Number.isInteger(offset) || offset < 0 || offset > 50000) throw new Error('invalid_batch_offset');\nreturn { input, file_id: fields.file_id, body: { datasetId: 'city-assets', schema: { columns: [{\"column\":\"asset_code\",\"field\":\"asset_code\",\"required\":true,\"maxLength\":120},{\"column\":\"asset_code\",\"field\":\"assetId\",\"required\":true,\"maxLength\":120},{\"column\":\"name\",\"field\":\"name\",\"required\":true,\"maxLength\":200},{\"column\":\"feature_type\",\"field\":\"feature_type\",\"required\":true,\"maxLength\":80},{\"column\":\"feature_code\",\"field\":\"feature_code\",\"required\":true,\"maxLength\":120},{\"column\":\"latitude\",\"field\":\"latitude\",\"type\":\"number\",\"required\":true,\"min\":-90,\"max\":90},{\"column\":\"longitude\",\"field\":\"longitude\",\"type\":\"number\",\"required\":true,\"min\":-180,\"max\":180},{\"column\":\"latitude\",\"field\":\"location.coordinates.latitude\",\"type\":\"number\",\"required\":true,\"min\":-90,\"max\":90},{\"column\":\"longitude\",\"field\":\"location.coordinates.longitude\",\"type\":\"number\",\"required\":true,\"min\":-180,\"max\":180},{\"column\":\"address\",\"field\":\"location.address\",\"maxLength\":300},{\"column\":\"category\",\"field\":\"category\",\"maxLength\":80},{\"column\":\"status\",\"field\":\"status\",\"options\":[\"active\",\"inactive\",\"maintenance\",\"retired\",\"disposed\"]},{\"column\":\"properties\",\"field\":\"properties\",\"type\":\"json\"},{\"column\":\"geometry\",\"field\":\"geometry\",\"type\":\"json\"}], defaults: { type: 'Asset', status: 'active', source: 'synapsecity-ingest', sourceVersion: '2.0.0', properties: {}, created_at: $now, updated_at: $now }, idField: 'asset_code', point: { latitude: 'latitude', longitude: 'longitude', target: 'geometry' } }, publish: true, offset, limit: 500 } };"
+      }
+    },
+    {
+      "name": "Import validated asset batch",
+      "type": "httpRequest",
+      "typeVersion": 4,
+      "position": [
+        640,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://synapsedx.sbs/v1/capabilities/files/' + $json.file_id + '/tabular/import' }}",
+        "body": "={{ $json.body }}",
+        "includeInput": true,
+        "timeoutMs": 30000,
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          "X-Workspace-App": "city"
+        },
+        "auth": {
+          "credentialRef": "synapsedx-organization",
+          "header": "X-API-Key",
+          "allowedOrigins": [
+            "https://synapsedx.sbs"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Record processing results",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        860,
+        300
+      ],
+      "parameters": {
+        "code": "const result = $input.body;\nif (!$input.statusCode || typeof result.imported !== 'number' || typeof result.totalRows !== 'number') throw new Error('invalid_import_result');\nconst source = $input.input;\nreturn { result, body: { data: { type: 'IngestJob', source: 'csv', dataset: 'city-assets', file_id: source.file_id, file_name: result.filename, status: result.nextOffset !== undefined ? 'running' : result.invalid ? 'completed_with_errors' : 'completed', rows_total: result.totalRows, rows_processed: result.processedRows, rows_imported: result.imported, rows_skipped: result.skipped, rows_invalid: result.invalid, batch_offset: result.offset, errors: result.errors, checksum: result.checksumSha256, submitted_by: source.input.submittedBy, plugin_id: source.input.pluginId, created_at: $now, updated_at: $now }, publish: false } };"
+      }
+    },
+    {
+      "name": "Persist ingest result",
+      "type": "httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1080,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://synapsedx.sbs/v1/capabilities/datasets/city-ingest-jobs/records",
+        "body": "={{ $json.body }}",
+        "includeInput": true,
+        "timeoutMs": 30000,
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        "auth": {
+          "credentialRef": "synapsedx-organization",
+          "header": "X-API-Key",
+          "allowedOrigins": [
+            "https://synapsedx.sbs"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Return batch result",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        300
+      ],
+      "parameters": {
+        "code": "return $input.input.result;"
+      }
+    }
+  ],
+  "connections": {
+    "DX manual execution": {
+      "main": [
+        [
+          {
+            "node": "Validate City import",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate City import": {
+      "main": [
+        [
+          {
+            "node": "Import validated asset batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Import validated asset batch": {
+      "main": [
+        [
+          {
+            "node": "Record processing results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record processing results": {
+      "main": [
+        [
+          {
+            "node": "Persist ingest result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist ingest result": {
+      "main": [
+        [
+          {
+            "node": "Return batch result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Return batch result": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "settings": {
+    "access": {
+      "mode": "owner-only"
+    }
+  }
+}
