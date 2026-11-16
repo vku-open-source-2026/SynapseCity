@@ -1,0 +1,173 @@
+{
+  "name": "city-generate-report",
+  "nodes": [
+    {
+      "name": "DX manual execution",
+      "type": "manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        200,
+        300
+      ],
+      "parameters": {}
+    },
+    {
+      "name": "Validate report specification",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        300
+      ],
+      "parameters": {
+        "code": "const input = $input || {};\nif (Object.keys(input).some(key => !['pluginId','widgetId','product','resource','action','submittedBy','submittedAt','fields'].includes(key))) throw new Error('unknown_envelope_fields');\nif (input.product !== 'city' || input.resource !== 'reports' || input.action !== 'execute' || !input.submittedBy || !input.pluginId || !input.widgetId) throw new Error('invalid_operation_envelope');\nconst fields = input.fields;\nif (!fields || typeof fields !== 'object' || Array.isArray(fields) || Object.keys(fields).some(key => ![\"type\",\"format\",\"asset_id\",\"severity\",\"date_from\",\"date_to\"].includes(key))) throw new Error('unknown_fields');\n\nconst specs = {\"maintenance_summary\":{\"datasetId\":\"city-maintenance\",\"columns\":[{\"name\":\"work_order_id\",\"value\":{\"field\":\"id\"}},{\"name\":\"asset_id\",\"value\":{\"op\":\"coalesce\",\"args\":[{\"field\":\"asset_id\"},{\"field\":\"assetId\"}]}},{\"name\":\"title\",\"value\":{\"field\":\"title\"}},{\"name\":\"type\",\"value\":{\"field\":\"type\"}},{\"name\":\"status\",\"value\":{\"field\":\"status\"}},{\"name\":\"priority\",\"value\":{\"field\":\"priority\"}},{\"name\":\"assigned_to\",\"value\":{\"op\":\"coalesce\",\"args\":[{\"field\":\"assigned_to\"},{\"field\":\"technician\"}]}},{\"name\":\"scheduled_date\",\"value\":{\"field\":\"scheduled_date\"}},{\"name\":\"completed_at\",\"value\":{\"field\":\"completed_at\"}},{\"name\":\"source_alert_id\",\"value\":{\"field\":\"source_alert_id\"}},{\"name\":\"estimated_cost\",\"value\":{\"field\":\"estimated_cost\"}},{\"name\":\"actual_cost\",\"value\":{\"field\":\"actual_cost\"}}]},\"incident_summary\":{\"datasetId\":\"city-incidents\",\"columns\":[{\"name\":\"incident_id\",\"value\":{\"field\":\"id\"}},{\"name\":\"incident_number\",\"value\":{\"op\":\"coalesce\",\"args\":[{\"field\":\"incident_number\"},{\"field\":\"incident_code\"}]}},{\"name\":\"title\",\"value\":{\"field\":\"title\"}},{\"name\":\"category\",\"value\":{\"field\":\"category\"}},{\"name\":\"severity\",\"value\":{\"field\":\"severity\"}},{\"name\":\"status\",\"value\":{\"field\":\"status\"}},{\"name\":\"asset_id\",\"value\":{\"op\":\"coalesce\",\"args\":[{\"field\":\"asset_id\"},{\"field\":\"assetId\"}]}},{\"name\":\"reported_at\",\"value\":{\"field\":\"reported_at\"}},{\"name\":\"resolved_at\",\"value\":{\"field\":\"resolved_at\"}},{\"name\":\"resolution_type\",\"value\":{\"field\":\"resolution_type\"}}]},\"lifecycle_overview\":{\"datasetId\":\"city-assets\",\"columns\":[{\"name\":\"asset_code\",\"value\":{\"op\":\"coalesce\",\"args\":[{\"field\":\"asset_code\"},{\"field\":\"feature_code\"},{\"field\":\"id\"}]}},{\"name\":\"name\",\"value\":{\"field\":\"name\"}},{\"name\":\"feature_type\",\"value\":{\"field\":\"feature_type\"}},{\"name\":\"status\",\"value\":{\"field\":\"status\"}},{\"name\":\"lifecycle_status\",\"value\":{\"op\":\"coalesce\",\"args\":[{\"field\":\"lifecycle.lifecycle_status\"},{\"field\":\"lifecycle_stage\"}]}},{\"name\":\"condition\",\"value\":{\"field\":\"condition\"}},{\"name\":\"commissioned_date\",\"value\":{\"field\":\"lifecycle.commissioned_date\"}},{\"name\":\"last_maintenance_date\",\"value\":{\"field\":\"lifecycle.last_maintenance_date\"}},{\"name\":\"designed_lifespan_years\",\"value\":{\"op\":\"number\",\"args\":[{\"field\":\"lifecycle.designed_lifespan_years\"}]}}]},\"end_of_life_forecast\":{\"datasetId\":\"city-assets\",\"columns\":[{\"name\":\"asset_code\",\"value\":{\"op\":\"coalesce\",\"args\":[{\"field\":\"asset_code\"},{\"field\":\"feature_code\"},{\"field\":\"id\"}]}},{\"name\":\"name\",\"value\":{\"field\":\"name\"}},{\"name\":\"commissioned_date\",\"value\":{\"field\":\"lifecycle.commissioned_date\"}},{\"name\":\"designed_lifespan_years\",\"value\":{\"op\":\"number\",\"args\":[{\"field\":\"lifecycle.designed_lifespan_years\"}]}},{\"name\":\"age_years\",\"value\":{\"op\":\"round\",\"args\":[{\"op\":\"yearsBetween\",\"args\":[{\"field\":\"lifecycle.commissioned_date\"},{\"op\":\"now\",\"args\":[]}]},{\"literal\":1}]}},{\"name\":\"remaining_years\",\"value\":{\"op\":\"max\",\"args\":[{\"literal\":0},{\"op\":\"round\",\"args\":[{\"op\":\"subtract\",\"args\":[{\"op\":\"number\",\"args\":[{\"field\":\"lifecycle.designed_lifespan_years\"}]},{\"op\":\"round\",\"args\":[{\"op\":\"yearsBetween\",\"args\":[{\"field\":\"lifecycle.commissioned_date\"},{\"op\":\"now\",\"args\":[]}]},{\"literal\":1}]}]},{\"literal\":1}]}]}},{\"name\":\"projected_replacement_year\",\"value\":{\"op\":\"add\",\"args\":[{\"op\":\"year\",\"args\":[{\"op\":\"now\",\"args\":[]}]},{\"op\":\"ceil\",\"args\":[{\"op\":\"max\",\"args\":[{\"literal\":0},{\"op\":\"round\",\"args\":[{\"op\":\"subtract\",\"args\":[{\"op\":\"number\",\"args\":[{\"field\":\"lifecycle.designed_lifespan_years\"}]},{\"op\":\"round\",\"args\":[{\"op\":\"yearsBetween\",\"args\":[{\"field\":\"lifecycle.commissioned_date\"},{\"op\":\"now\",\"args\":[]}]},{\"literal\":1}]}]},{\"literal\":1}]}]}]}]}},{\"name\":\"status\",\"value\":{\"field\":\"status\"}}]},\"custom\":{\"datasetId\":\"city-incidents\",\"columns\":[{\"name\":\"incident_id\",\"value\":{\"field\":\"id\"}},{\"name\":\"incident_number\",\"value\":{\"op\":\"coalesce\",\"args\":[{\"field\":\"incident_number\"},{\"field\":\"incident_code\"}]}},{\"name\":\"title\",\"value\":{\"field\":\"title\"}},{\"name\":\"category\",\"value\":{\"field\":\"category\"}},{\"name\":\"severity\",\"value\":{\"field\":\"severity\"}},{\"name\":\"status\",\"value\":{\"field\":\"status\"}},{\"name\":\"asset_id\",\"value\":{\"op\":\"coalesce\",\"args\":[{\"field\":\"asset_id\"},{\"field\":\"assetId\"}]}},{\"name\":\"reported_at\",\"value\":{\"field\":\"reported_at\"}},{\"name\":\"resolved_at\",\"value\":{\"field\":\"resolved_at\"}},{\"name\":\"resolution_type\",\"value\":{\"field\":\"resolution_type\"}}]}};\nif (!Object.prototype.hasOwnProperty.call(specs, fields.type)) throw new Error('unsupported_report_type');\nif (!['csv','json'].includes(fields.format)) throw new Error('unsupported_report_format');\nfor (const name of ['date_from','date_to']) if (fields[name] && (!/^\\d{4}-\\d{2}-\\d{2}/.test(fields[name]) || !Number.isFinite(Date.parse(fields[name])))) throw new Error('invalid_report_date');\nif (fields.date_from && fields.date_to && fields.date_from > fields.date_to) throw new Error('invalid_date_range');\nconst spec = specs[fields.type], clauses = [];\nif (fields.asset_id) clauses.push(spec.datasetId === 'city-assets' ? { or: [{ id: fields.asset_id }, { asset_code: fields.asset_id }] } : { or: [{ asset_id: fields.asset_id }, { assetId: fields.asset_id }] });\nif (fields.severity) clauses.push({ severity: fields.severity });\n// Date filters are declared on the report's business date. Records without that date remain visible in the legacy report contract.\nconst dateField = fields.type === 'maintenance_summary' ? 'scheduled_date' : 'reported_at';\nif (fields.date_from || fields.date_to) {\n  const range = {};\n  if (fields.date_from) range.gte = fields.date_from;\n  if (fields.date_to) range.lte = fields.date_to + 'T23:59:59.999Z';\n  clauses.push({ or: [{ [dateField]: range }, { [dateField]: { exists: false } }] });\n}\nreturn { input, body: { ...spec, filename: fields.type + '-' + $now.slice(0,10) + '.' + fields.format, format: fields.format, ...(clauses.length ? { where: { and: clauses } } : {}), metadata: { report_type: fields.type, filters: fields, submitted_by: input.submittedBy } } };"
+      }
+    },
+    {
+      "name": "Generate complete report artifact",
+      "type": "httpRequest",
+      "typeVersion": 4,
+      "position": [
+        640,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://synapsedx.sbs/v1/capabilities/files/tabular/export",
+        "body": "={{ $json.body }}",
+        "includeInput": true,
+        "timeoutMs": 30000,
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          "X-Workspace-App": "city"
+        },
+        "auth": {
+          "credentialRef": "synapsedx-organization",
+          "header": "X-API-Key",
+          "allowedOrigins": [
+            "https://synapsedx.sbs"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Prepare completed report record",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        860,
+        300
+      ],
+      "parameters": {
+        "code": "const file = $input.body, input = $input.input.input;\nif (!file.file_id || !file.checksumSha256 || typeof file.rowCount !== 'number') throw new Error('report_artifact_incomplete');\nreturn { result: file, body: { data: { type: 'Report', report_code: input.fields.type + '-' + $now, report_type: input.fields.type, format: input.fields.format, status: 'completed', file_id: file.file_id, filename: file.filename, file_url: file.downloadUrl, row_count: file.rowCount, checksum_sha256: file.checksumSha256, parameters: input.fields, created_by: input.submittedBy, created_at: $now, updated_at: $now }, publish: false } };"
+      }
+    },
+    {
+      "name": "Persist generated report",
+      "type": "httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1080,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://synapsedx.sbs/v1/capabilities/datasets/city-reports/records",
+        "body": "={{ $json.body }}",
+        "includeInput": true,
+        "timeoutMs": 30000,
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        "auth": {
+          "credentialRef": "synapsedx-organization",
+          "header": "X-API-Key",
+          "allowedOrigins": [
+            "https://synapsedx.sbs"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Return generated artifact",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        300
+      ],
+      "parameters": {
+        "code": "return $input.input.result;"
+      }
+    }
+  ],
+  "connections": {
+    "DX manual execution": {
+      "main": [
+        [
+          {
+            "node": "Validate report specification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate report specification": {
+      "main": [
+        [
+          {
+            "node": "Generate complete report artifact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate complete report artifact": {
+      "main": [
+        [
+          {
+            "node": "Prepare completed report record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare completed report record": {
+      "main": [
+        [
+          {
+            "node": "Persist generated report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist generated report": {
+      "main": [
+        [
+          {
+            "node": "Return generated artifact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Return generated artifact": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "settings": {
+    "access": {
+      "mode": "owner-only"
+    }
+  }
+}

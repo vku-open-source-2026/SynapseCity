@@ -109,7 +109,11 @@ test('public assets exclude deleted, decommissioned and non-public records', asy
   assert.equal(list.headers.get('x-total-count'), '1');
   assert.deepEqual((list.body as Array<{ asset_code: string }>).map((asset) => asset.asset_code), ['ACTIVE-1']);
 
-  for (const code of ['OLD-1', 'DEL-1', 'HIDDEN-1']) {
+  // A retired asset is hidden from the default list but remains addressable by
+  // code so a full-inventory map can still open its detail page.
+  assert.equal((await request('/v1/public/assets/OLD-1')).status, 200);
+  assert.equal((await request('/v1/public/assets/OLD-1/qr-code')).status, 200);
+  for (const code of ['DEL-1', 'HIDDEN-1']) {
     const response = await request(`/v1/public/assets/${code}`);
     assert.equal(response.status, 404, `${code} must not be publicly visible`);
     assert.equal((await request(`/v1/public/assets/${code}/qr-code`)).status, 404);
@@ -123,7 +127,18 @@ test('public assets exclude deleted, decommissioned and non-public records', asy
   assert.equal('@context' in active.body, false, 'the documented contract is not NGSI-LD');
 });
 
+test('the public map can request the complete inventory including retired assets', async () => {
+  const list = await request('/v1/public/assets?include_inactive=true');
+  assert.equal(list.status, 200);
+  assert.equal(list.headers.get('x-total-count'), '2');
+  assert.deepEqual(
+    (list.body as Array<{ asset_code: string }>).map((asset) => asset.asset_code).sort(),
+    ['ACTIVE-1', 'OLD-1'],
+  );
+});
+
 test('an operator incident never writes reporter identity or internal comments to the public dataset', async () => {
+
   const created = await request('/v1/incidents', json('POST', {
     title: 'Operator incident', description: 'Lamp damaged', category: 'damage', severity: 'high',
     asset_id: 'asset-active',
@@ -153,7 +168,7 @@ test('an operator incident never writes reporter identity or internal comments t
   assert.equal(serialized.includes('internal-only note'), false, 'internal comments must not reach the public dataset');
   assert.equal(serialized.includes('Public update'), true, 'public comments are part of the projection');
 
-  const sidecar = tier2.records.get('city-incident-internal')?.get(String(incidentId)) as Record<string, unknown>;
+  const sidecar = tier2.records.get('city-incident-internal')?.get(`internal-${String(incidentId)}`) as Record<string, unknown>;
   assert.ok(sidecar, 'reporter identity must be stored in the private sidecar');
   assert.equal(sidecar.reported_by, 'operator-jane');
   assert.equal(JSON.stringify(sidecar).includes('internal-only note'), true);
@@ -191,7 +206,7 @@ test('citizen reports keep contact data in the private sidecar and publish:false
   assert.ok(requestRecord, 'a city-incidents create request must be recorded');
   assert.equal(requestRecord.publish, false, 'anonymous reports must be withheld from publication');
 
-  const sidecar = tier2.records.get('city-incident-internal')?.get(id) as Record<string, unknown>;
+  const sidecar = tier2.records.get('city-incident-internal')?.get(`internal-${id}`) as Record<string, unknown>;
   assert.ok(sidecar);
   assert.equal((sidecar.contact_info as Record<string, unknown>).phone_number, '0900000009');
 });
@@ -215,7 +230,7 @@ test('the public maintenance summary exposes aggregates only', async () => {
   const serialized = JSON.stringify(summary.body);
   assert.equal(serialized.includes('operator-internal'), false, 'assignee identity must not be public');
   assert.equal(serialized.includes('internal-only maintenance note'), false);
-  assert.equal((await request('/v1/public/assets/OLD-1/maintenance-summary')).status, 404);
+  assert.equal((await request('/v1/public/assets/OLD-1/maintenance-summary')).status, 200);
 });
 
 test('data URLs are rejected for asset attachments and public incident photos', async () => {

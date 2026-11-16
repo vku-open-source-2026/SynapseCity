@@ -1,0 +1,228 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { MapContainer, TileLayer, Marker, Polyline, Popup, LayerGroup, CircleMarker } from 'react-leaflet';
+import L from 'leaflet';
+import { INFRASTRUCTURE_TYPES, MAP_STYLE, MAP_CENTER, MAP_ZOOM, ZOOM_THRESHOLD } from '../../constants';
+import { createCustomIcon, clusterFeatures, createClusterIcon } from '../../utils/mapUtils';
+import { MapClickHandler } from './MapClickHandler';
+import { MapFocusHandler } from './MapFocusHandler';
+import { DraggableMarker } from './DraggableMarker';
+import { API_URL } from '../../config';
+
+export const MapView = ({ 
+  dbFeatures, 
+  pendingFeatures, 
+  reviewFeatures = [], 
+  currentLinePoints, 
+  handleMapClick,
+  onDragPoint, 
+  onDragLineVertex,
+  showAllFeatures,
+  currentZoom,
+  onZoomChange,
+  onDeleteFeature,
+  isAdmin = false,
+  flyTo = null
+}) => {
+  
+  const [map, setMap] = useState(null);
+  // With the "show all" switch on, low zoom shows type-aware clusters; with it
+  // off the historical behaviours (hide below the threshold) is preserved.
+  const visibleDbFeatures = useMemo(() => {
+    if (showAllFeatures) return dbFeatures;
+    if (currentZoom >= ZOOM_THRESHOLD) return dbFeatures;
+    return [];
+  }, [dbFeatures, showAllFeatures, currentZoom]);
+
+  const clusterEntries = useMemo(
+    () => (map ? clusterFeatures(visibleDbFeatures, map, currentZoom) : []),
+    [visibleDbFeatures, map, currentZoom]
+  );
+
+  // The backend decides the basemap: VietMap proxy when a key is configured,
+  // OpenStreetMap otherwise. Fall back to OSM if the config call fails.
+  const [tile, setTile] = useState({
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  });
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_URL}/api/map/config`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((cfg) => {
+        if (!cancelled && cfg?.tileUrl) {
+          setTile({ url: cfg.tileUrl, attribution: cfg.attribution || '' });
+        }
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
+
+  return (
+    <MapContainer ref={setMap} center={MAP_CENTER} zoom={MAP_ZOOM} style={MAP_STYLE} scrollWheelZoom={true} preferCanvas={true}>
+      <TileLayer
+        url={tile.url}
+        maxZoom={20}
+        attribution={tile.attribution}
+      />
+      <MapClickHandler onMapClick={handleMapClick} onZoomEnd={onZoomChange} />
+      <MapFocusHandler flyTo={flyTo} />
+
+      {/* Render Database Features: clusters at low zoom, individual points at high zoom */}
+      {Array.isArray(clusterEntries) && clusterEntries.map((entry) => {
+        if (entry.type === 'cluster') {
+          return (
+            <Marker
+              key={entry.key}
+              position={[entry.lat, entry.lng]}
+              icon={createClusterIcon(entry)}
+            >
+              <Popup>
+                <b>{entry.count} tài sản</b>
+                {entry.types.map((type) => (
+                  <div key={type.code} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 12, padding: '2px 0' }}>
+                    <span>
+                      <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: type.color, marginRight: 6 }} />
+                      {type.type}
+                    </span>
+                    <strong>{type.count}</strong>
+                  </div>
+                ))}
+                <div style={{ marginTop: 6, fontSize: 11, color: '#64748b' }}>Phóng to để xem từng tài sản</div>
+              </Popup>
+            </Marker>
+          );
+        }
+
+        const feature = entry.feature;
+        if (!feature || !feature.properties || !feature.geometry || !feature.geometry.coordinates) return null;
+        const [lng, lat] = feature.geometry.coordinates;
+        if (typeof lng !== 'number' || typeof lat !== 'number') return null;
+        const color = INFRASTRUCTURE_TYPES[feature.properties.feature_type]?.color || 'blue';
+        const featureCode = INFRASTRUCTURE_TYPES[feature.properties.feature_type]?.code;
+        const featureId = feature._id || feature.id;
+        return (
+          <Marker
+            key={`db-${featureId || `${lat}:${lng}`}`}
+            position={[lat, lng]}
+            icon={createCustomIcon(color, false, false, featureCode)}
+          >
+            <Popup>
+              <b>{feature.properties.feature_type}</b>
+              <br />
+              <small>Code: {feature.feature_code || 'N/A'}</small>
+              <pre>{JSON.stringify(feature.properties, null, 2)}</pre>
+              {isAdmin && <button onClick={() => onDeleteFeature(featureId, false)} style={{ color: 'red', marginTop: '5px' }}>Delete</button>}
+            </Popup>
+          </Marker>
+        );
+      })}
+
+      {/* LineString assets stay visible at every zoom; there are only a few. */}
+      {Array.isArray(visibleDbFeatures) && visibleDbFeatures
+        .filter((feature) => feature?.geometry?.type === 'LineString' && Array.isArray(feature.geometry.coordinates))
+        .map((feature, idx) => {
+          const color = INFRASTRUCTURE_TYPES[feature.properties?.feature_type]?.color || 'blue';
+          const featureId = feature._id || feature.id;
+          return (
+            <Polyline
+              key={`db-line-${featureId || idx}`}
+              positions={feature.geometry.coordinates.map((coord) => [coord[1], coord[0]])}
+              color={color}
+            >
+              <Popup>
+                <b>{feature.properties?.feature_type || 'Tuyến hạ tầng'}</b>
+                <br />
+                <small>Code: {feature.feature_code || 'N/A'}</small>
+                <pre>{JSON.stringify(feature.properties, null, 2)}</pre>
+                {isAdmin && <button onClick={() => onDeleteFeature(featureId, false)} style={{ color: 'red', marginTop: '5px' }}>Delete</button>}
+              </Popup>
+            </Polyline>
+          );
+        })}
+
+      {/* Render Review Features (Contributions) - Read Only */}
+      {Array.isArray(reviewFeatures) && reviewFeatures.map((feature, idx) => {
+         if (!feature || !feature.properties || !feature.geometry || !feature.geometry.coordinates) return null;
+         const color = INFRASTRUCTURE_TYPES[feature.properties.feature_type]?.color || 'orange';
+         const featureCode = INFRASTRUCTURE_TYPES[feature.properties.feature_type]?.code;
+         
+         // Safety check for coordinates
+         if (feature.geometry.type === "Point" && feature.geometry.coordinates.length < 2) return null;
+         
+         return feature.geometry.type === "Point" ? (
+            <Marker
+                key={`review-${idx}`}
+                position={[feature.geometry.coordinates[1], feature.geometry.coordinates[0]]}
+                icon={createCustomIcon(color, true, true, featureCode)} 
+                opacity={0.7}
+            >
+                <Popup>
+                    <b>PENDING REVIEW: {feature.properties.feature_type}</b>
+                    <p>Contributor: {feature.contributor_name} ({feature.msv})</p>
+                    <pre>{JSON.stringify(feature.properties, null, 2)}</pre>
+                </Popup>
+            </Marker>
+         ) : (
+            <Polyline
+                key={`review-${idx}`}
+                positions={feature.geometry.coordinates.map(c => [c[1], c[0]])}
+                color={color}
+                dashArray="10, 5"
+                opacity={0.85}
+                weight={4}
+            >
+                 <Popup>
+                    <b>PENDING REVIEW: {feature.properties.feature_type}</b>
+                    <p>Contributor: {feature.contributor_name} ({feature.msv})</p>
+                    <pre>{JSON.stringify(feature.properties, null, 2)}</pre>
+                </Popup>
+            </Polyline>
+         )
+      })}
+
+      {/* Render Pending Features (Editable Drafts) */}
+      {Array.isArray(pendingFeatures) && pendingFeatures.map((feature, idx) => {
+         const color = INFRASTRUCTURE_TYPES[feature.properties.feature_type]?.color || 'orange';
+         const featureCode = INFRASTRUCTURE_TYPES[feature.properties.feature_type]?.code;
+         const isPoint = feature.geometry.type === "Point";
+         
+         return isPoint ? (
+            <DraggableMarker 
+                key={`pending-${idx}`} 
+                position={[feature.geometry.coordinates[1], feature.geometry.coordinates[0]]}
+                onDragEnd={(newLatLng) => onDragPoint(idx, newLatLng)}
+                icon={createCustomIcon(color, true, false, featureCode)}
+            />
+         ) : (
+            <LayerGroup key={`pending-${idx}`}>
+                <Polyline
+                    positions={feature.geometry.coordinates.map(c => [c[1], c[0]])}
+                    color={color}
+                    dashArray="8, 5"
+                    opacity={0.8}
+                    weight={3}
+                />
+                {feature.geometry.coordinates.map((coord, vIdx) => (
+                    <DraggableMarker
+                        key={`pending-${idx}-v-${vIdx}`}
+                        position={[coord[1], coord[0]]}
+                        onDragEnd={(newLatLng) => onDragLineVertex(idx, vIdx, newLatLng)}
+                        icon={L.divIcon({className: 'line-vertex-icon', html: '<div style="width: 10px; height: 10px; background: red; border-radius: 50%;"></div>'})}
+                    />
+                ))}
+            </LayerGroup>
+         )
+      })}
+
+      {/* Render Current Line being drawn */}
+      {currentLinePoints.length > 0 && (
+        <>
+            <Polyline positions={currentLinePoints} color="red" dashArray="5, 5" />
+            {currentLinePoints.map((pt, idx) => (
+                <CircleMarker key={`line-pt-${idx}`} center={pt} radius={3} color="red" />
+            ))}
+        </>
+      )}
+    </MapContainer>
+  );
+};

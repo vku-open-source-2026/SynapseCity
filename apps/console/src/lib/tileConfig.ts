@@ -2,8 +2,9 @@
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 /**
  * Shared tile configuration helper.
- * Fetches tile URL from the backend (which hides the API key server-side).
- * Falls back to OpenStreetMap if the backend is unreachable or has no key configured.
+ * Fetches the Tier-2 tile URL from the backend. There is no browser-side
+ * fallback to a third-party map provider: an outage renders neutral tiles and
+ * an explicit attribution instead of leaking a direct vendor request.
  */
 
 const BASE_API: string = import.meta.env.VITE_BASE_API_URL ?? "";
@@ -31,12 +32,12 @@ export async function fetchTileConfig(): Promise<TileConfig> {
     _cachedTileConfig = cfg;
   } catch {
     _cachedTileConfig = {
-      tileUrl: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-      attribution:
-        '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      tileUrl:
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nXQAAAAASUVORK5CYII=",
+      attribution: "Map unavailable",
       maxZoom: 20,
-      maxNativeZoom: 16,
-      provider: "osm",
+      maxNativeZoom: 20,
+      provider: "unavailable",
     };
   }
   return _cachedTileConfig!;

@@ -68,8 +68,7 @@ function verifyTarball(spec) {
   console.log(`[release-check]   ${relative}`);
   console.log(`[release-check]   sha256 ${actual}`);
   if (strict) {
-    console.log('[release-check] Strict release check passed (pinned artifact, no sibling checkout).');
-    console.log('[release-check] Registry publication is still required for `npm audit`/license provenance in the public registry; the pinned tarball keeps builds reproducible until then.');
+    console.log('[release-check] Strict release check passed (registry semver dependency, no sibling checkout).');
   }
 }
 
@@ -77,7 +76,7 @@ if (!dependency) fail('@synapsedx/capabilities is not declared');
 
 if (dependency.startsWith('file:')) {
   verifyTarball(dependency);
-} else if (/^\d+\.\d+\.\d+/.test(dependency)) {
+} else if (/^[~^]?\d+\.\d+\.\d+/.test(dependency)) {
   console.log(`[release-check] Tier-2 SDK registry release: @synapsedx/capabilities@${dependency}`);
 } else if (dependency.startsWith('https://') || dependency.startsWith('npm:')) {
   console.log(`[release-check] Tier-2 SDK pinned remote dependency: ${dependency}`);

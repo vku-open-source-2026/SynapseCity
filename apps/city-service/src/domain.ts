@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 import { Request } from 'express';
 import { CapabilitiesClient, CapabilitiesError, Dataset } from '@synapsedx/capabilities';
+import { sessionFromRequest } from './auth';
 
 /** Published City datasets are dedicated to the public domain under PDDL 1.0. */
 export const DATA_LICENSE = 'PDDL-1.0';
@@ -62,12 +63,13 @@ function assertPublicDependency(raw: string): string {
 export const TIER2_URL = assertPublicDependency(process.env.SYNAPSEDX_BASE_URL || 'https://synapsedx.sbs');
 
 export function capabilitiesFromRequest(req: Request): CapabilitiesClient {
-  const authorization = req.header('authorization');
-  const headerToken = authorization?.replace(/^Bearer\s+/i, '').trim() || undefined;
-  // A City session carries the user-scoped Tier-2 credential minted by the
-  // Tier-2 auth capability. The City HMAC token itself is never sent upstream.
-  const session = (req as Request & { session?: { tier2_token?: string } }).session;
-  const token = session?.tier2_token || (session ? undefined : headerToken) || process.env.SYNAPSEDX_TOKEN;
+  // Public paths (for example /v1/ai/status and /v1/ai/chat) bypass the
+  // operator auth middleware, so req.session may not be attached yet. Decode
+  // the City session here as well: the upstream token must always be the
+  // user-scoped Tier-2 credential (or the deployment service token), never the
+  // City HMAC token from the Authorization header.
+  const session = (req as Request & { session?: { tier2_token?: string } }).session || sessionFromRequest(req);
+  const token = session?.tier2_token || process.env.SYNAPSEDX_TOKEN;
   const apiKey = req.header('x-api-key') || process.env.SYNAPSEDX_API_KEY;
   return new CapabilitiesClient({ baseUrl: TIER2_URL, token: token || undefined, apiKey: apiKey || undefined });
 }
