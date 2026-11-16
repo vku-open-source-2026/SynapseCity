@@ -112,10 +112,12 @@ impl FromRequestParts<SharedState> for ClientIp {
                 .get(&FORWARDED_FOR)
                 .and_then(|value| value.to_str().ok())
             {
-                if let Some(first) = value.split(',').next() {
-                    let first = first.trim();
-                    if !first.is_empty() {
-                        return Ok(ClientIp(first.to_string()));
+                // The trusted edge appends the peer address, so the LAST entry
+                // is the one the client cannot spoof; the first is user input.
+                if let Some(last) = value.rsplit(',').next() {
+                    let last = last.trim();
+                    if !last.is_empty() {
+                        return Ok(ClientIp(last.to_string()));
                     }
                 }
             }

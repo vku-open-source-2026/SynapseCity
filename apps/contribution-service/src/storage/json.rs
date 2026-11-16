@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 //! Development-only JSON persistence, matching `JsonStorage` in Python.
 
-use super::{Storage, StorageResult};
+use super::{ApproveOutcome, Storage, StorageResult};
 use crate::util::now_naive_iso;
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -140,35 +140,69 @@ impl Storage for JsonStorage {
             .collect())
     }
 
-    async fn approve_contribution(&self, contribution_id: &str) -> StorageResult<bool> {
-        let feature =
-            {
-                let mut state = self.state.lock().await;
-                let Some(index) = state.contributions.iter().position(|item| {
-                    item.get("id").and_then(Value::as_str) == Some(contribution_id)
-                }) else {
-                    return Ok(false);
-                };
-                state.contributions[index]["status"] = Value::String("approved".to_string());
-                let mut feature = state.contributions[index].clone();
-                if let Some(object) = feature.as_object_mut() {
-                    for key in [
-                        "id",
-                        "status",
-                        "contributor_name",
-                        "msv",
-                        "unit",
-                        "anonymous",
-                        "timestamp",
-                    ] {
-                        object.remove(key);
-                    }
-                }
-                self.save_contributions(&state).await?;
-                feature
-            };
-        self.add_feature(feature).await?;
-        Ok(true)
+    async fn approve_contribution(&self, contribution_id: &str) -> StorageResult<ApproveOutcome> {
+        let mut state = self.state.lock().await;
+        let Some(index) = state
+            .contributions
+            .iter()
+            .position(|item| item.get("id").and_then(Value::as_str) == Some(contribution_id))
+        else {
+            return Ok(ApproveOutcome::NotFound);
+        };
+        match state.contributions[index]
+            .get("status")
+            .and_then(Value::as_str)
+        {
+            Some("approved") => return Ok(ApproveOutcome::AlreadyApproved),
+            Some("pending") | None => {}
+            Some(_) => return Ok(ApproveOutcome::NotFound),
+        }
+        let feature_id = format!("feature-{contribution_id}");
+        if state.features.iter().any(|feature| {
+            feature.get("source_submission_id").and_then(Value::as_str) == Some(contribution_id)
+                || feature.get("id").and_then(Value::as_str) == Some(feature_id.as_str())
+        }) {
+            state.contributions[index]["status"] = Value::String("approved".to_string());
+            self.save_contributions(&state).await?;
+            return Ok(ApproveOutcome::AlreadyApproved);
+        }
+        let mut feature = state.contributions[index].clone();
+        if let Some(object) = feature.as_object_mut() {
+            for key in [
+                "id",
+                "status",
+                "contributor_name",
+                "msv",
+                "unit",
+                "anonymous",
+                "timestamp",
+            ] {
+                object.remove(key);
+            }
+            object.insert("id".to_string(), Value::String(feature_id));
+            object.insert(
+                "source_submission_id".to_string(),
+                Value::String(contribution_id.to_string()),
+            );
+            object.insert("created_at".to_string(), Value::String(now_naive_iso()));
+            object.insert("city_synced".to_string(), Value::Bool(false));
+        }
+        state.contributions[index]["status"] = Value::String("approved".to_string());
+        state.features.push(feature);
+        // Persist features first; if that fails, roll the in-memory submission
+        // back to pending so a retry remains valid.
+        if let Err(error) = self.save_features(&state).await {
+            state.contributions[index]["status"] = Value::String("pending".to_string());
+            state.features.pop();
+            return Err(error);
+        }
+        if let Err(error) = self.save_contributions(&state).await {
+            state.contributions[index]["status"] = Value::String("pending".to_string());
+            state.features.pop();
+            let _ = self.save_features(&state).await;
+            return Err(error);
+        }
+        Ok(ApproveOutcome::Approved)
     }
 
     async fn reject_contribution(&self, contribution_id: &str) -> StorageResult<bool> {

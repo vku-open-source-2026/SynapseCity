@@ -3,8 +3,8 @@
 //! SynapseBase persistence, matching `base_storage.py`.
 
 use super::{
-    cap_limit, feature_code_from_properties, normalise_item, sort_by_created_desc, Storage,
-    StorageError, StorageResult, FEATURES, SOS_REPORTS, SUBMISSIONS,
+    cap_limit, feature_code_from_properties, normalise_item, sort_by_created_desc, ApproveOutcome,
+    Storage, StorageError, StorageResult, FEATURES, SOS_REPORTS, SUBMISSIONS,
 };
 use crate::util::{new_id, now_utc_iso};
 use async_trait::async_trait;
@@ -191,7 +191,7 @@ impl Storage for BaseStorage {
         Ok(items.iter().map(normalise_item).collect())
     }
 
-    async fn approve_contribution(&self, contribution_id: &str) -> StorageResult<bool> {
+    async fn approve_contribution(&self, contribution_id: &str) -> StorageResult<ApproveOutcome> {
         let doc = match self
             .client
             .base()
@@ -199,7 +199,7 @@ impl Storage for BaseStorage {
             .await
         {
             Ok(doc) => doc,
-            Err(error) if error.is_not_found() => return Ok(false),
+            Err(error) if error.is_not_found() => return Ok(ApproveOutcome::NotFound),
             Err(error) => return Err(error.into()),
         };
         let mut feature = doc
@@ -207,6 +207,41 @@ impl Storage for BaseStorage {
             .and_then(Value::as_object)
             .cloned()
             .unwrap_or_default();
+        match feature.get("status").and_then(Value::as_str) {
+            Some("approved") => return Ok(ApproveOutcome::AlreadyApproved),
+            Some("pending") | None => {}
+            Some(_) => return Ok(ApproveOutcome::NotFound),
+        }
+        // A retry after a partially completed approval must not create a
+        // second feature. The submission id is the idempotency key.
+        let existing = self
+            .query_all(
+                FEATURES,
+                Some(json!({ "source_submission_id": contribution_id })),
+                None,
+            )
+            .await?;
+        if existing.iter().any(|item| {
+            item.get("data")
+                .and_then(|data| data.get("source_submission_id"))
+                .and_then(Value::as_str)
+                == Some(contribution_id)
+        }) {
+            self.client
+                .base()
+                .update_document(
+                    SUBMISSIONS,
+                    contribution_id,
+                    Some(json!({
+                        "status": "approved",
+                        "approved_at": now_utc_iso(),
+                    })),
+                    None,
+                    None,
+                )
+                .await?;
+            return Ok(ApproveOutcome::AlreadyApproved);
+        }
         for key in [
             "_id",
             "id",
@@ -219,16 +254,46 @@ impl Storage for BaseStorage {
         ] {
             feature.remove(key);
         }
-        let feature_id = new_id();
-        feature.insert("id".to_string(), Value::String(feature_id));
+        // Deterministic id plus a unique source_submission_id: a concurrent
+        // double approve hits a conflict instead of duplicating the feature.
+        let feature_id = format!("feature-{contribution_id}");
+        feature.insert("id".to_string(), Value::String(feature_id.clone()));
         feature.insert("type".to_string(), Value::String("Feature".to_string()));
+        feature.insert(
+            "source_submission_id".to_string(),
+            Value::String(contribution_id.to_string()),
+        );
         feature.insert("created_at".to_string(), Value::String(now_utc_iso()));
         feature.insert("city_synced".to_string(), Value::Bool(false));
-        self.client
+        match self
+            .client
             .base()
-            .create_document(FEATURES, Value::Object(feature), None)
-            .await?;
-        self.client
+            .create_document(FEATURES, Value::Object(feature), Some(&feature_id))
+            .await
+        {
+            Ok(_) => {}
+            Err(error) if error.is_conflict() => {
+                self.client
+                    .base()
+                    .update_document(
+                        SUBMISSIONS,
+                        contribution_id,
+                        Some(json!({
+                            "status": "approved",
+                            "approved_at": now_utc_iso(),
+                        })),
+                        None,
+                        None,
+                    )
+                    .await?;
+                return Ok(ApproveOutcome::AlreadyApproved);
+            }
+            Err(error) => return Err(error.into()),
+        }
+        // Compensate the feature if the submission update fails, so a retry
+        // does not see `pending` with a materialised feature.
+        if let Err(error) = self
+            .client
             .base()
             .update_document(
                 SUBMISSIONS,
@@ -240,8 +305,16 @@ impl Storage for BaseStorage {
                 None,
                 None,
             )
-            .await?;
-        Ok(true)
+            .await
+        {
+            let _ = self
+                .client
+                .base()
+                .delete_document(FEATURES, &feature_id, None)
+                .await;
+            return Err(error.into());
+        }
+        Ok(ApproveOutcome::Approved)
     }
 
     async fn reject_contribution(&self, contribution_id: &str) -> StorageResult<bool> {

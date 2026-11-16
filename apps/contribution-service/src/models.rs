@@ -146,6 +146,105 @@ fn validate_properties(properties: Map<String, Value>) -> Result<Value, ApiError
     Ok(sanitize_json_strings(&value))
 }
 
+const MAX_GEOMETRY_CHARS: usize = 16_000;
+const MAX_GEOMETRY_POSITIONS: usize = 2_000;
+
+fn validate_position(value: &Value) -> Result<(), ApiError> {
+    let Some(position) = value.as_array() else {
+        return Err(ApiError::validation(
+            "geometry",
+            "Each coordinate must be a [longitude, latitude] array",
+        ));
+    };
+    if position.len() < 2 || position.len() > 3 {
+        return Err(ApiError::validation(
+            "geometry",
+            "Each coordinate must contain longitude and latitude",
+        ));
+    }
+    let longitude = position[0].as_f64();
+    let latitude = position[1].as_f64();
+    let altitude = position.get(2).map(Value::as_f64);
+    if longitude
+        .filter(|value| value.is_finite() && (-180.0..=180.0).contains(value))
+        .is_none()
+        || latitude
+            .filter(|value| value.is_finite() && (-90.0..=90.0).contains(value))
+            .is_none()
+        || (position.len() == 3
+            && altitude
+                .flatten()
+                .filter(|value| value.is_finite())
+                .is_none())
+    {
+        return Err(ApiError::validation(
+            "geometry",
+            "Coordinates must be finite and inside longitude [-180,180], latitude [-90,90]",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_positions(
+    values: &[Value],
+    minimum: usize,
+    budget: &mut usize,
+) -> Result<(), ApiError> {
+    if values.len() < minimum {
+        return Err(ApiError::validation(
+            "geometry",
+            format!("Geometry must contain at least {minimum} positions"),
+        ));
+    }
+    if values.len() > *budget {
+        return Err(ApiError::validation(
+            "geometry",
+            format!("Geometry exceeds {MAX_GEOMETRY_POSITIONS} positions"),
+        ));
+    }
+    *budget -= values.len();
+    for value in values {
+        validate_position(value)?;
+    }
+    Ok(())
+}
+
+fn validate_geometry_value(geometry_type: &str, coordinates: &Value) -> Result<(), ApiError> {
+    let mut budget = MAX_GEOMETRY_POSITIONS;
+    let Some(values) = coordinates.as_array() else {
+        return Err(ApiError::validation(
+            "geometry",
+            "geometry.coordinates must be an array",
+        ));
+    };
+    match geometry_type {
+        "Point" => validate_positions(std::slice::from_ref(coordinates), 1, &mut budget),
+        "LineString" => validate_positions(values, 2, &mut budget),
+        "Polygon" => {
+            if values.is_empty() {
+                return Err(ApiError::validation(
+                    "geometry",
+                    "Polygon must contain at least one ring",
+                ));
+            }
+            for ring in values {
+                let Some(ring) = ring.as_array() else {
+                    return Err(ApiError::validation(
+                        "geometry",
+                        "Polygon rings must be arrays of positions",
+                    ));
+                };
+                validate_positions(ring, 4, &mut budget)?;
+            }
+            Ok(())
+        }
+        _ => Err(ApiError::validation(
+            "geometry",
+            "geometry.type must be Point, LineString or Polygon",
+        )),
+    }
+}
+
 fn validate_geometry(geometry: Value) -> Result<Value, ApiError> {
     if !is_geometry(&geometry) {
         return Err(ApiError::validation(
@@ -153,6 +252,19 @@ fn validate_geometry(geometry: Value) -> Result<Value, ApiError> {
             "geometry must contain type and coordinates",
         ));
     }
+    if python_repr(&geometry).chars().count() > MAX_GEOMETRY_CHARS {
+        return Err(ApiError::validation(
+            "geometry",
+            format!("Geometry payload too large (max {MAX_GEOMETRY_CHARS} characters)"),
+        ));
+    }
+    let geometry_type = geometry
+        .get("type")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+    let coordinates = geometry.get("coordinates").cloned().unwrap_or(Value::Null);
+    validate_geometry_value(&geometry_type, &coordinates)?;
     Ok(geometry)
 }
 
@@ -342,4 +454,45 @@ pub struct SosQuery {
 pub struct ExportQuery {
     #[serde(default)]
     pub types: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn geometry_accepts_bounded_shapes() {
+        for geometry in [
+            json!({"type": "Point", "coordinates": [106.7, 10.7]}),
+            json!({"type": "LineString", "coordinates": [[106.7, 10.7], [106.8, 10.8]]}),
+            json!({"type": "Polygon", "coordinates": [[[106.7, 10.7], [106.8, 10.7], [106.8, 10.8], [106.7, 10.7]]]}),
+        ] {
+            assert!(validate_geometry(geometry).is_ok());
+        }
+    }
+
+    #[test]
+    fn geometry_rejects_oversized_and_invalid_values() {
+        let too_many: Vec<Value> = (0..2_001)
+            .map(|index| json!([106.0 + (index as f64 / 10_000.0), 10.0]))
+            .collect();
+        let error = validate_geometry_value("LineString", &json!(too_many.clone())).unwrap_err();
+        assert!(error.detail.to_string().contains("2000 positions"));
+        let error =
+            validate_geometry(json!({"type": "LineString", "coordinates": too_many})).unwrap_err();
+        assert!(error.detail.to_string().contains("too large"));
+
+        let error =
+            validate_geometry(json!({"type": "Point", "coordinates": [181.0, 10.0]})).unwrap_err();
+        assert!(error.detail.to_string().contains("longitude"));
+
+        let error =
+            validate_geometry(json!({"type": "MultiPoint", "coordinates": [[106.0, 10.0]]}))
+                .unwrap_err();
+        assert!(error
+            .detail
+            .to_string()
+            .contains("Point, LineString or Polygon"));
+    }
 }
