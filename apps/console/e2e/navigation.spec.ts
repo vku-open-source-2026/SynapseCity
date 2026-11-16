@@ -26,18 +26,6 @@ describe('Navigation Flow', () => {
     }
   });
 
-  test('should navigate from homepage to login', async () => {
-  const loginLink = screen.queryByRole('link', { name: /login|đăng nhập/i }) ||
-                     screen.queryByRole('button', { name: /login|đăng nhập/i });
-
-    if (loginLink) {
-      await userEvent.click(loginLink);
-      await waitFor(() => {
-        expect(window.location.pathname).toMatch(/.*login/);
-      });
-    }
-  });
-
   test('should navigate between public pages', async () => {
     // Test navigation to map
     await navigateTo('/map');
@@ -67,13 +55,4 @@ describe('Navigation Flow', () => {
     expect(hrefs).toContain('/docs');
   });
 
-  test('should handle protected routes', async () => {
-    // Try to access admin route without auth
-    await navigateTo('/admin');
-    await waitFor(() => document.body, { timeout: 5000 });
-
-    // Should redirect to login or show access denied
-    const currentPath = window.location.pathname;
-    expect(currentPath.includes('/login') || currentPath.includes('/admin')).toBeTruthy();
-  });
 });

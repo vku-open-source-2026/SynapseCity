@@ -6,6 +6,9 @@ Keep a Changelog format and version tags use Semantic Versioning.
 ## [Unreleased]
 
 ### Added
+- City nearby/bounds/polygon endpoints call the Tier-2 PostGIS spatial
+  capability first and fall back to the bounded in-process scan only when the
+  capability is unavailable.
 - Full City work-page catalog (14 portable bundles): operations command center,
   asset registry, incident desk, maintenance workshop, alert center, IoT
   network, budget office, report studio, GIS workspace, people directory, data
@@ -64,6 +67,12 @@ Keep a Changelog format and version tags use Semantic Versioning.
 
 ### Fixed
 
+- Every legacy `/v1/auth/*` path now returns `410 workspace_moved`; the
+  previously reachable `/me`/`logout` paths no longer answer 401/404.
+- Gateway health failures return a generic `upstream_unavailable` instead of
+  echoing upstream error text.
+- The public browser gate covers the live map/navigation surface; retired
+  login/admin specs no longer gate CI.
 - Incident sidecars now use `internal-<incidentId>` because Tier-2 record ids
   are unique across datasets; the operator view still merges the sidecar and
   reads the legacy id as a fallback.

@@ -1,6 +1,6 @@
 # SynapseCity — product boundary
 
-Status: repo-local reference for the 2026-11-03 feature split. The authoritative
+Status: repo-local reference updated 2026-11-16. The authoritative
 workspace contract is `FEATURE_BOUNDARY.md` at the workspace root (outside this
 repository).
 
