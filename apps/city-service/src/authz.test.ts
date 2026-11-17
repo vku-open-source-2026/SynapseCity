@@ -4,8 +4,8 @@ import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { startMockTier2, type MockTier2 } from './mock-tier2';
-import type { SessionRole } from './auth';
+import { startMockTier2, type MockTier2 } from './mock-tier2.js';
+import type { SessionRole } from './auth.js';
 
 process.env.ALLOW_LOCAL_DEPENDENCIES = 'true';
 process.env.AUTH_SECRET = 'city-authz-test-secret';
@@ -19,7 +19,7 @@ process.env.LOG_LEVEL = 'silent';
 let tier2: MockTier2;
 let server: Server;
 let baseUrl: string;
-let auth: typeof import('./auth');
+let auth: typeof import('./auth.js');
 
 function tokenFor(role: SessionRole, username = `${role}-user`): string {
   return auth.signToken({
@@ -89,8 +89,8 @@ before(async () => {
     assigned_to: 'other-technician', scheduled_date: new Date(Date.now() + 3_600_000).toISOString(),
   });
 
-  auth = await import('./auth');
-  const service = await import('./server');
+  auth = await import('./auth.js');
+  const service = await import('./server.js');
   server = service.createServer().listen(0);
   await new Promise<void>((resolve, reject) => {
     server.once('listening', resolve);

@@ -4,9 +4,9 @@ import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { startMockTier2, type MockTier2 } from './mock-tier2';
-import { haversineMeters, parsePoint, pointInBoundingBox, pointInPolygon, polygonCoordinates } from './geo';
-import { analyseCoverage } from './analytics';
+import { startMockTier2, type MockTier2 } from './mock-tier2.js';
+import { haversineMeters, parsePoint, pointInBoundingBox, pointInPolygon, polygonCoordinates } from './geo.js';
+import { analyseCoverage } from './analytics.js';
 
 process.env.ALLOW_LOCAL_DEPENDENCIES = 'true';
 process.env.AUTH_SECRET = 'city-geo-test-secret';
@@ -58,12 +58,12 @@ before(async () => {
   });
   tier2.seed('city-iot-sensors', 's1', { id: 's1', sensor_code: 'S1', asset_id: 'a1', feature_type: 'street_light', status: 'active', geometry: { type: 'Point', coordinates: [105.8, 21.0] } });
 
-  const auth = await import('./auth');
+  const auth = await import('./auth.js');
   token = auth.signToken({
     sub: 'user-admin', username: 'admin', email: 'admin@example.com', full_name: 'Admin',
     role: 'admin', permissions: ['*'], typ: 'access',
   });
-  const service = await import('./server');
+  const service = await import('./server.js');
   server = service.createServer().listen(0);
   await new Promise<void>((resolve, reject) => {
     server.once('listening', resolve);

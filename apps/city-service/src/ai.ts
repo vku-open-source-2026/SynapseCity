@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 import { CapabilitiesError, type CapabilitiesClient } from '@synapsedx/capabilities';
-import { CapabilityUnavailableError, FILES_DEPENDENCY } from './files';
+import { CapabilityUnavailableError, FILES_DEPENDENCY } from './files.js';
 
 /**
  * AI capability adapter.

@@ -153,7 +153,7 @@ before(async () => {
     scheduled_date: new Date(Date.now() + 86_400_000).toISOString(),
   });
 
-  const serviceModule = await import('./server');
+  const serviceModule = await import('./server.js');
   city = serviceModule.createServer().listen(0);
   await new Promise<void>((resolve, reject) => {
     city.once('listening', resolve);

@@ -5,8 +5,8 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { startMockTier2, type MockTier2 } from './mock-tier2';
-import type { SessionRole } from './auth';
+import { startMockTier2, type MockTier2 } from './mock-tier2.js';
+import type { SessionRole } from './auth.js';
 
 process.env.ALLOW_LOCAL_DEPENDENCIES = 'true';
 process.env.AUTH_SECRET = 'city-files-test-secret';
@@ -19,7 +19,7 @@ process.env.CITY_PUBLIC_URL = 'https://city.test';
 let tier2: MockTier2;
 let server: Server;
 let baseUrl: string;
-let auth: typeof import('./auth');
+let auth: typeof import('./auth.js');
 let adminToken: string;
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x01, 0x02, 0x03]);
@@ -73,9 +73,9 @@ before(async () => {
     id: 'asset-1', asset_code: 'ASSET-1', name: 'Lamp', feature_type: 'street_light', feature_code: 'den_duong',
     status: 'active', geometry: { type: 'Point', coordinates: [105.8, 21.0] },
   });
-  auth = await import('./auth');
+  auth = await import('./auth.js');
   adminToken = tokenFor('admin', 'admin');
-  const service = await import('./server');
+  const service = await import('./server.js');
   server = service.createServer().listen(0);
   await new Promise<void>((resolve, reject) => {
     server.once('listening', resolve);

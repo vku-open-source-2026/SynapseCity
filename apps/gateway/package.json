@@ -11,5 +11,5 @@
     "test": "npm run build && node --test dist/src/*.test.js"
   },
   "dependencies": { "express": "^4.21.2" },
-  "devDependencies": { "@types/express": "^5.0.0", "@types/node": "^22.10.2", "typescript": "^5.7.2" }
+  "devDependencies": { "@types/express": "^5.0.0", "@types/node": "^22.10.2", "typescript": "^7.0.2" }
 }

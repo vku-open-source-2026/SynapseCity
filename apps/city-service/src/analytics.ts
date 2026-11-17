@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
-import { haversineMeters, pointInBoundingBox, pointInPolygon, type Point } from './geo';
+import { haversineMeters, pointInBoundingBox, pointInPolygon, type Point } from './geo.js';
 
 /**
  * City-owned GIS coverage analysis and population-weighted prioritisation.

@@ -5,7 +5,9 @@ FROM node:22-alpine AS build
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci
+# typescript-eslint 8 does not yet declare TypeScript 7 as a peer; keep the
+# install deterministic until the lint stack widens its range.
+RUN npm ci --legacy-peer-deps
 
 COPY . .
 

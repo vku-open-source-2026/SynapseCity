@@ -3,8 +3,8 @@
 import express, { NextFunction, Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { CapabilitiesError, CapabilitiesClient, type Dataset } from '@synapsedx/capabilities';
-import { DATASETS, TIER2_URL, capabilitiesFromRequest, ensureDataset, objectBody, requiredString } from './domain';
-import { proxyTier2Tile, tier2MapConfigured } from './tier2-map';
+import { DATASETS, TIER2_URL, capabilitiesFromRequest, ensureDataset, objectBody, requiredString } from './domain.js';
+import { proxyTier2Tile, tier2MapConfigured } from './tier2-map.js';
 import {
   AuthedRequest,
   Permission,
@@ -21,9 +21,9 @@ import {
   sessionFromRequest,
   sessionUser,
   verifyToken,
-} from './auth';
-import { missingColumns, parseCsv } from './csv';
-import { workspaceMovedMiddleware } from './workspace-moved';
+} from './auth.js';
+import { missingColumns, parseCsv } from './csv.js';
+import { workspaceMovedMiddleware } from './workspace-moved.js';
 import {
   buildNotification,
   dedupeKey,
@@ -36,8 +36,8 @@ import {
   type DeliveryReceipt,
   type NotificationChannel,
   type NotificationType,
-} from './notifications';
-import { aiChat, aiStatus } from './ai';
+} from './notifications.js';
+import { aiChat, aiStatus } from './ai.js';
 import {
   DOCUMENT_MIME_TYPES,
   IMAGE_MIME_TYPES,
@@ -55,7 +55,7 @@ import {
   looksLikeFileId,
   normalizeChecksum,
   validateUpload,
-} from './files';
+} from './files.js';
 import {
   identityCapabilityStatus,
   demoAuthAllowed,
@@ -65,35 +65,35 @@ import {
   tier2Login,
   tier2Register,
   type Tier2Session,
-} from './identity';
+} from './identity.js';
 import {
   geoCoderStatus,
   tier2Autocomplete,
   tier2Geocode,
   tier2Reverse,
-} from './geo-provider';
+} from './geo-provider.js';
 import {
   analyseCoverage,
   type CoverageAreaInput,
   type CoverageAsset,
   type CoverageIncident,
-} from './analytics';
-import { maintenanceFromAlert, shouldCreateMaintenance, type AlertForAutomation } from './alerts';
-import { derivePreventiveTasks, filterPreventiveTasks, type PreventivePlan } from './preventive';
-import { assertApproved, createApproval, decideApproval, hitlRequired, listPendingApprovals, type HitlError } from './hitl';
-import { rankAssetsByRisk, scoreAssetRisk, type RiskSensorReading } from './risk';
+} from './analytics.js';
+import { maintenanceFromAlert, shouldCreateMaintenance, type AlertForAutomation } from './alerts.js';
+import { derivePreventiveTasks, filterPreventiveTasks, type PreventivePlan } from './preventive.js';
+import { assertApproved, createApproval, decideApproval, hitlRequired, listPendingApprovals, type HitlError } from './hitl.js';
+import { rankAssetsByRisk, scoreAssetRisk, type RiskSensorReading } from './risk.js';
 import {
   generateReport,
   normalizeReportFormat,
   normalizeReportType,
-} from './reports';
+} from './reports.js';
 import {
   incidentIsPubliclyVisible,
   mergeIncidentInternal,
   toInternalIncident,
   toPublicIncidentView,
   toPublishedIncident,
-} from './incidents';
+} from './incidents.js';
 import {
   estimatedDurationSeconds,
   haversineMeters,
@@ -101,8 +101,8 @@ import {
   pointInBoundingBox,
   pointInPolygon,
   polygonCoordinates,
-} from './geo';
-import { metricsMiddleware, rateLimit, renderMetrics, verifyTurnstile } from './security';
+} from './geo.js';
+import { metricsMiddleware, rateLimit, renderMetrics, verifyTurnstile } from './security.js';
 
 
 const app = express();

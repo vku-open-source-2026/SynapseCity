@@ -4,9 +4,9 @@ import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { startMockTier2, type MockTier2 } from './mock-tier2';
-import { roleForIdentity, identityFromSession } from './identity';
-import { geoProviderMode } from './geo-provider';
+import { startMockTier2, type MockTier2 } from './mock-tier2.js';
+import { roleForIdentity, identityFromSession } from './identity.js';
+import { geoProviderMode } from './geo-provider.js';
 
 process.env.ALLOW_LOCAL_DEPENDENCIES = 'true';
 process.env.AUTH_SECRET = 'city-geo-test-secret';
@@ -18,7 +18,7 @@ delete process.env.CITY_GEO_PROVIDER;
 let tier2: MockTier2;
 let server: Server;
 let baseUrl: string;
-let auth: typeof import('./auth');
+let auth: typeof import('./auth.js');
 let token: string;
 
 async function request(path: string, init: RequestInit = {}): Promise<{ status: number; body: any }> {
@@ -43,12 +43,12 @@ before(async () => {
   tier2.geo.results = [
     { id: 'place-1', label: 'Hanoi Opera House', address: '1 Trang Tien, Hanoi', lat: 21.0245, lon: 105.8572, raw: { city: 'Hanoi', country: 'Vietnam' } },
   ];
-  auth = await import('./auth');
+  auth = await import('./auth.js');
   token = auth.signToken({
     sub: 'user-geo', username: 'geo', email: 'geo@example.com', full_name: 'Geo',
     role: 'manager', permissions: auth.permissionsForRole('manager'), typ: 'access',
   });
-  const service = await import('./server');
+  const service = await import('./server.js');
   server = service.createServer().listen(0);
   await new Promise<void>((resolve, reject) => {
     server.once('listening', resolve);

@@ -4,8 +4,8 @@ import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { createServer } from './server';
-import { DATASETS } from './domain';
+import { createServer } from './server.js';
+import { DATASETS } from './domain.js';
 
 type CityMetadata = {
   product: string;

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 import type { NextFunction, Request, Response } from 'express';
-import { verifyTier2Turnstile, tier2MapConfigured } from './tier2-map';
+import { verifyTier2Turnstile, tier2MapConfigured } from './tier2-map.js';
 
 /**
  * Edge-abuse and observability helpers for the City service.
