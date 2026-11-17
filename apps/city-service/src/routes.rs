@@ -5808,19 +5808,48 @@ fn public_asset_view(ctx: &Ctx<'_>, asset: &Map<String, Value>) -> Value {
     })
 }
 
-fn public_filter(query: &HashMap<String, String>, fields: &[&str]) -> Value {
-    let mut filter = Map::new();
-    filter.insert("public_visible".into(), json!(true));
+fn public_filter(
+    query: &HashMap<String, String>,
+    fields: &[&str],
+    exclude_inactive: bool,
+) -> Value {
+    // A top-level `or` plus sibling keys is not combined by the Tier-2 filter
+    // evaluator; use an explicit `and` of conditions so publication, lifecycle
+    // and caller filters are all applied.
+    let mut conditions = vec![json!({
+        "or": [
+            { "public_visible": true },
+            { "public_visible": { "exists": false } }
+        ]
+    })];
+    if exclude_inactive {
+        let hidden = json!([
+            "decommissioned", "deleted", "purged", "retired",
+            "rejected", "canceled", "cancelled", "archived"
+        ]);
+        conditions.push(json!({
+            "or": [
+                { "status": { "exists": false } },
+                { "status": { "nin": hidden } }
+            ]
+        }));
+        conditions.push(json!({
+            "or": [
+                { "lifecycle_stage": { "exists": false } },
+                { "lifecycle_stage": { "nin": ["decommissioned", "deleted", "retired"] } }
+            ]
+        }));
+    }
     for field in fields {
         if let Some(value) = query
             .get(*field)
             .map(|value| value.trim())
             .filter(|value| !value.is_empty())
         {
-            filter.insert((*field).to_string(), json!(value));
+            conditions.push(json!({ (*field): value }));
         }
     }
-    Value::Object(filter)
+    json!({ "and": conditions })
 }
 
 async fn public_assets(ctx: &Ctx<'_>) -> ApiResult<Response> {
@@ -5840,6 +5869,7 @@ async fn public_assets(ctx: &Ctx<'_>) -> ApiResult<Response> {
             "asset_code",
             "category",
         ],
+        !include_inactive,
     );
     let opts = ctx.opts();
     let (rows, total) =
@@ -5934,6 +5964,7 @@ async fn public_incidents(ctx: &Ctx<'_>) -> ApiResult<Response> {
             "asset_id",
             "incident_number",
         ],
+        true,
     );
     let opts = ctx.opts();
     let (rows, total) = tier2::query_records(
