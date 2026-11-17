@@ -38,7 +38,7 @@ save('city-csv-import', [
 if (typeof fields.file_id !== 'string' || !/^[A-Za-z0-9._-]{1,80}$/.test(fields.file_id)) throw new Error('file_id_required');
 const offset = fields.batch_offset === undefined ? 0 : fields.batch_offset;
 if (!Number.isInteger(offset) || offset < 0 || offset > 50000) throw new Error('invalid_batch_offset');
-return { input, file_id: fields.file_id, body: { datasetId: 'city-assets', schema: { columns: ${JSON.stringify(columns)}, defaults: { type: 'Asset', status: 'active', source: 'synapsecity-ingest', sourceVersion: '2.0.0', properties: {}, created_at: $now, updated_at: $now }, idField: 'asset_code', point: { latitude: 'latitude', longitude: 'longitude', target: 'geometry' } }, publish: true, offset, limit: 500 } };` }),
+return { input, file_id: fields.file_id, body: { datasetId: 'city-assets', schema: { columns: ${JSON.stringify(columns)}, defaults: { type: 'Asset', status: 'active', public_visible: true, source: 'synapsecity-ingest', sourceVersion: '2.0.0', properties: {}, created_at: $now, updated_at: $now }, idField: 'asset_code', point: { latitude: 'latitude', longitude: 'longitude', target: 'geometry' } }, publish: true, offset, limit: 500 } };` }),
   http('Import validated asset batch', `={{ '${DX}/v1/capabilities/files/' + $json.file_id + '/tabular/import' }}`, '={{ $json.body }}', true),
   node('Record processing results', 'code', { code: `const result = $input.body;
 if (!$input.statusCode || typeof result.imported !== 'number' || typeof result.totalRows !== 'number') throw new Error('invalid_import_result');

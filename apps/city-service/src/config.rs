@@ -37,6 +37,7 @@ pub struct Config {
     pub eop_approver_roles: Vec<String>,
     pub dispatch_approver_roles: Vec<String>,
     pub public_rate_limit: u32,
+    pub public_read_rate_limit: u32,
     pub public_ai_rate_limit: u32,
     pub auth_rate_limit: u32,
     pub require_turnstile: bool,
@@ -44,7 +45,9 @@ pub struct Config {
 }
 
 fn env(name: &str) -> Option<String> {
-    std::env::var(name).ok().map(|value| value.trim().to_string())
+    std::env::var(name)
+        .ok()
+        .map(|value| value.trim().to_string())
 }
 
 fn env_bool(name: &str) -> bool {
@@ -117,7 +120,10 @@ fn is_loopback_host(host: &str) -> bool {
                 std::net::IpAddr::V4(v4) => v4.is_loopback(),
                 std::net::IpAddr::V6(v6) => {
                     v6.is_loopback()
-                        || v6.to_ipv4_mapped().map(|mapped| mapped.is_loopback()).unwrap_or(false)
+                        || v6
+                            .to_ipv4_mapped()
+                            .map(|mapped| mapped.is_loopback())
+                            .unwrap_or(false)
                 }
             })
             .unwrap_or(false)
@@ -142,9 +148,7 @@ fn is_private_hostname(host: &str) -> bool {
 /// only when `ALLOW_LOCAL_DEPENDENCIES=true` outside production.
 fn public_dependency(raw: &str, allow_local: bool, is_production: bool) -> Result<String, String> {
     if is_production && allow_local {
-        return Err(
-            "ALLOW_LOCAL_DEPENDENCIES=true is refused in production".into(),
-        );
+        return Err("ALLOW_LOCAL_DEPENDENCIES=true is refused in production".into());
     }
     let url = Url::parse(raw)
         .map_err(|error| format!("SYNAPSEDX_BASE_URL is not an absolute URL: {raw} ({error})"))?;
@@ -233,7 +237,8 @@ impl Config {
             .collect();
 
         let access_ttl = env_u64("AUTH_ACCESS_TTL_SECONDS", 3600).max(60) as i64;
-        let refresh_ttl = env_u64("AUTH_REFRESH_TTL_SECONDS", 604_800).max(access_ttl as u64) as i64;
+        let refresh_ttl =
+            env_u64("AUTH_REFRESH_TTL_SECONDS", 604_800).max(access_ttl as u64) as i64;
         let files_max = env_u64("CITY_FILES_MAX_BYTES", 10 * 1024 * 1024).max(1024) as usize;
 
         Ok(Self {
@@ -243,7 +248,9 @@ impl Config {
             tier2_url,
             tier2_api_key: env("SYNAPSEDX_API_KEY").filter(|value| !value.is_empty()),
             tier2_token: env("SYNAPSEDX_TOKEN").filter(|value| !value.is_empty()),
-            tier2_timeout: Duration::from_millis(env_u64("SYNAPSEDX_TIMEOUT_MS", 20_000).clamp(1_000, 120_000)),
+            tier2_timeout: Duration::from_millis(
+                env_u64("SYNAPSEDX_TIMEOUT_MS", 20_000).clamp(1_000, 120_000),
+            ),
             allow_local_dependencies: allow_local,
             auth_secret,
             auth_secret_ephemeral,
@@ -263,8 +270,10 @@ impl Config {
                 .to_string(),
             files_max_bytes: files_max,
             photo_max_bytes: env_u64("CITY_PHOTO_MAX_BYTES", files_max as u64).max(1024) as usize,
-            document_max_bytes: env_u64("CITY_DOCUMENT_MAX_BYTES", files_max as u64).max(1024) as usize,
-            notification_external: env_bool("CITY_NOTIFY_EXTERNAL") || env_bool("SYNAPSEDX_NOTIFY_EXTERNAL"),
+            document_max_bytes: env_u64("CITY_DOCUMENT_MAX_BYTES", files_max as u64).max(1024)
+                as usize,
+            notification_external: env_bool("CITY_NOTIFY_EXTERNAL")
+                || env_bool("SYNAPSEDX_NOTIFY_EXTERNAL"),
             hitl_required: env_bool("CITY_HITL_REQUIRED"),
             approval_sla_minutes: env_u64("CITY_APPROVAL_SLA_MINUTES", 15).clamp(1, 7 * 24 * 60),
             required_approvals: env_u32("CITY_REQUIRED_APPROVALS", 1).clamp(1, 5),
@@ -272,12 +281,16 @@ impl Config {
                 "CITY_MAINTENANCE_APPROVER_ROLES",
                 "operations-manager,asset-manager",
             ),
-            eop_approver_roles: env_list("CITY_EOP_APPROVER_ROLES", "operations-manager,duty-manager"),
+            eop_approver_roles: env_list(
+                "CITY_EOP_APPROVER_ROLES",
+                "operations-manager,duty-manager",
+            ),
             dispatch_approver_roles: env_list(
                 "CITY_DISPATCH_APPROVER_ROLES",
                 "operations-manager,duty-manager",
             ),
             public_rate_limit: env_u32("PUBLIC_RATE_LIMIT", 40),
+            public_read_rate_limit: env_u32("PUBLIC_READ_RATE_LIMIT", 300),
             public_ai_rate_limit: env_u32("PUBLIC_AI_RATE_LIMIT", 20),
             auth_rate_limit: env_u32("AUTH_RATE_LIMIT", 30),
             require_turnstile: env_bool("REQUIRE_TURNSTILE"),
@@ -305,7 +318,6 @@ impl Config {
             .map_err(|error| error.to_string())
     }
 }
-
 
 #[cfg(test)]
 impl Config {
@@ -339,6 +351,7 @@ impl Config {
             eop_approver_roles: vec!["duty-manager".into()],
             dispatch_approver_roles: vec!["duty-manager".into()],
             public_rate_limit: 1_000,
+            public_read_rate_limit: 1_000,
             public_ai_rate_limit: 1_000,
             auth_rate_limit: 1_000,
             require_turnstile: false,
@@ -346,7 +359,6 @@ impl Config {
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {

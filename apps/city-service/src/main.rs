@@ -94,7 +94,11 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", config.port)).await?;
     tracing::info!("[synapsecity] Tier-3 API listening on :{}", config.port);
-    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
     Ok(())
 }
 
@@ -118,14 +122,10 @@ async fn headers_middleware(
         return response;
     }
 
-    let is_stream = req.uri().path().contains("/download")
-        || req.uri().path().contains("/content");
+    let is_stream = req.uri().path().contains("/download") || req.uri().path().contains("/content");
     let mut response = next.run(req).await;
     if !is_stream {
-        response.headers_mut().insert(
-            CONTENT_TYPE,
-            HeaderValue::from_static("application/json; charset=utf-8"),
-        );
+        ensure_json_content_type(response.headers_mut());
     }
     add_security_headers(response.headers_mut(), &state, &correlation);
     let duration = started.elapsed().as_secs_f64() * 1000.0;
@@ -135,25 +135,53 @@ async fn headers_middleware(
     response
 }
 
-fn add_security_headers(
-    headers: &mut axum::http::HeaderMap,
-    state: &AppState,
-    correlation: &str,
-) {
+fn ensure_json_content_type(headers: &mut axum::http::HeaderMap) {
+    if !headers.contains_key(CONTENT_TYPE) {
+        headers.insert(
+            CONTENT_TYPE,
+            HeaderValue::from_static("application/json; charset=utf-8"),
+        );
+    }
+}
+
+fn add_security_headers(headers: &mut axum::http::HeaderMap, state: &AppState, correlation: &str) {
     if let Ok(value) = HeaderValue::from_str(&state.config.cors_origin) {
         headers.insert("access-control-allow-origin", value);
     }
     headers.insert(
         "access-control-allow-headers",
-        HeaderValue::from_static("authorization,content-type,x-api-key,x-correlation-id,x-file-name,x-filename,x-checksum-sha256,x-file-visibility,x-entity-type,x-entity-id"),
+        HeaderValue::from_static("authorization,content-type,x-api-key,x-correlation-id,x-file-name,x-filename,x-checksum-sha256,x-file-visibility,x-entity-type,x-entity-id,cf-turnstile-response,x-report-id,x-report-edit-token"),
     );
     headers.insert(
         "access-control-allow-methods",
         HeaderValue::from_static("GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS"),
     );
-    headers.insert("x-content-type-options", HeaderValue::from_static("nosniff"));
+    headers.insert(
+        "x-content-type-options",
+        HeaderValue::from_static("nosniff"),
+    );
     headers.insert("x-frame-options", HeaderValue::from_static("DENY"));
     if let Ok(value) = HeaderValue::from_str(correlation) {
         headers.insert("x-correlation-id", value);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn json_fallback_does_not_overwrite_tile_content_types() {
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert(CONTENT_TYPE, HeaderValue::from_static("image/png"));
+        ensure_json_content_type(&mut headers);
+        assert_eq!(headers.get(CONTENT_TYPE).unwrap(), "image/png");
+
+        let mut empty = axum::http::HeaderMap::new();
+        ensure_json_content_type(&mut empty);
+        assert_eq!(
+            empty.get(CONTENT_TYPE).unwrap(),
+            "application/json; charset=utf-8"
+        );
     }
 }

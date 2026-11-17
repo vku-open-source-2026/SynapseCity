@@ -153,7 +153,9 @@ export const useIoT = (initialAssets: Asset[] | undefined) => {
     const assetsWithStatus = useMemo<AssetWithIoTStatus[]>(
         () => (Array.isArray(initialAssets) ? initialAssets : []).map((asset) => ({
             ...asset,
-            status: String((asset as Asset & { status?: string }).status || 'active'),
+            // Do not invent "active" for an asset whose projection omitted its
+            // status; the map renders unknown distinctly.
+            status: String((asset as Asset & { status?: string }).status || 'unknown'),
             lastPing: String((asset as Asset & { updated_at?: string }).updated_at || ''),
         })),
         [initialAssets]

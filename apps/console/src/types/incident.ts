@@ -83,6 +83,9 @@ export interface Incident {
   ai_confidence_score?: number;
   ai_verification_reason?: string;
   ai_verified_at?: string;
+  /** Returned once to the anonymous creator, never by public reads. */
+  edit_token?: string;
+  edit_token_expires_at?: number;
 }
 
 export type IncidentResolutionType =
@@ -91,6 +94,12 @@ export type IncidentResolutionType =
     | "not_an_issue"
     | "transferred";
 
+export interface IncidentContactInfo {
+    name?: string;
+    phone_number?: string;
+    id_card_number?: string;
+}
+
 export interface IncidentCreateRequest {
     title: string;
     description: string;
@@ -98,6 +107,7 @@ export interface IncidentCreateRequest {
     severity: IncidentSeverity;
     asset_id?: string;
     location?: IncidentLocation;
+    contact_info?: IncidentContactInfo;
 }
 
 export interface IncidentUpdateRequest {

@@ -67,6 +67,35 @@ Keep a Changelog format and version tags use Semantic Versioning.
 
 ### Fixed
 
+- Incident/asset publication is now per record: `public_visible:false` and
+  anonymous citizen reports are written with `publish:false`, and the asset
+  report form sends reporter name/phone through the private `contact_info`
+  sidecar instead of the public description.
+- HITL approvals require explicit `approvals:*` permissions and an approver-role
+  match; technician work-order scoping covers generic list/get/update/action
+  routes.
+- Preventive `cycle_days` is validated (1–3650) and report codes are built with
+  char-safe slicing, so malformed authenticated input returns 400 instead of
+  aborting the process.
+- Public file overwrite/delete requires ownership (or admin/manager), overwrites
+  run the upload MIME/size validator, presign rejects unprivileged PUT/DELETE,
+  and file responses carry a sandbox CSP.
+- Turnstile is verified through the Tier-2 security capability, forwarded by the
+  gateway, enforced on photo append, and exercised with fake/valid token tests.
+- Public asset/incident lists query Tier-2 with server-side pagination and
+  filters, expose the real total and `x-scan-truncated`, and have a separate
+  public-read rate limit/cache policy. Risk ranking loads each dataset once and
+  scores every asset instead of up to 500.
+- Public photo append requires a signed report edit token and report-bound public
+  file ids; external URLs and overflow past ten photos are rejected.
+- Contribution intake is rate-limited and geometry is bounded by type, count and
+  coordinate range; approve is idempotent with a `source_submission_id` and
+  compensating rollback. The rate limiter trusts the last forwarded address.
+- City edge server blocks set `client_max_body_size 26m`, and the gateway
+  forwards checksum/CSP/Turnstile headers.
+- Mobile removed calls to the retired `/v1/auth/*` routes, paginates the full
+  public asset inventory, and the public map preserves asset name/status and
+  renders missing coordinates safely.
 - Every legacy `/v1/auth/*` path now returns `410 workspace_moved`; the
   previously reachable `/me`/`logout` paths no longer answer 401/404.
 - Gateway health failures return a generic `upstream_unavailable` instead of

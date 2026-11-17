@@ -7,7 +7,9 @@ use std::sync::Arc;
 use axum::http::HeaderMap;
 use chrono::Utc;
 use serde_json::{json, Map, Value};
-use synapsedx::{Client, Dataset, DatasetInput, RecordItem, RecordListQuery, RecordQuery, RequestOptions};
+use synapsedx::{
+    Client, Dataset, DatasetInput, RecordItem, RecordListQuery, RecordQuery, RequestOptions,
+};
 
 use crate::auth::SessionPrincipal;
 use crate::config::Config;
@@ -215,7 +217,10 @@ pub fn request_options_from(
     session_token: Option<&str>,
 ) -> RequestOptions {
     let mut opts = RequestOptions::new();
-    if let Some(token) = session_token.filter(|value| !value.is_empty()).or(config_token.filter(|value| !value.is_empty())) {
+    if let Some(token) = session_token
+        .filter(|value| !value.is_empty())
+        .or(config_token.filter(|value| !value.is_empty()))
+    {
         opts = opts.token(token);
     }
     if let Some(key) = header_key
@@ -301,7 +306,11 @@ pub async fn ensure_dataset(
                 }
                 Err(create_error) => {
                     if matches!(create_error.status(), Some(400 | 409)) {
-                        client.datasets().get(spec.id, opts).await.map_err(ApiError::from)
+                        client
+                            .datasets()
+                            .get(spec.id, opts)
+                            .await
+                            .map_err(ApiError::from)
                     } else {
                         Err(ApiError::from(create_error))
                     }
@@ -471,6 +480,20 @@ pub async fn create(
     input: Map<String, Value>,
     id: Option<&str>,
 ) -> Result<Map<String, Value>, ApiError> {
+    create_with_visibility(client, opts, spec, input, id, spec.public).await
+}
+
+/// Create a record with an explicit per-record publication decision. A public
+/// dataset does not imply that every record in it may be exported: incidents
+/// marked `public_visible:false` and anonymous citizen reports stay private.
+pub async fn create_with_visibility(
+    client: &Client,
+    opts: &RequestOptions,
+    spec: DatasetSpec,
+    input: Map<String, Value>,
+    id: Option<&str>,
+    publish: bool,
+) -> Result<Map<String, Value>, ApiError> {
     let dataset = ensure_dataset(client, opts, spec).await?;
     let record_id = id
         .map(str::to_string)
@@ -487,7 +510,7 @@ pub async fn create(
             dataset.id.as_str(),
             Value::Object(data),
             Some(record_id.as_str()),
-            Some(spec.public),
+            Some(publish),
             opts,
         )
         .await
@@ -502,6 +525,19 @@ pub async fn update(
     id: &str,
     patch: Map<String, Value>,
     if_version: Option<i64>,
+) -> Result<Map<String, Value>, ApiError> {
+    update_with_visibility(client, opts, spec, id, patch, if_version, spec.public).await
+}
+
+/// Update a record with an explicit per-record publication decision.
+pub async fn update_with_visibility(
+    client: &Client,
+    opts: &RequestOptions,
+    spec: DatasetSpec,
+    id: &str,
+    patch: Map<String, Value>,
+    if_version: Option<i64>,
+    publish: bool,
 ) -> Result<Map<String, Value>, ApiError> {
     let current = get(client, opts, spec, id).await?;
     let current_version = current
@@ -536,7 +572,7 @@ pub async fn update(
             dataset.id.as_str(),
             id,
             Value::Object(merged),
-            Some(spec.public),
+            Some(publish),
             &update_opts,
         )
         .await
@@ -587,7 +623,10 @@ pub fn requested_version(
     headers: &HeaderMap,
     body: Option<&Map<String, Value>>,
 ) -> Result<Option<i64>, ApiError> {
-    let from_header = match headers.get("if-match").and_then(|value| value.to_str().ok()) {
+    let from_header = match headers
+        .get("if-match")
+        .and_then(|value| value.to_str().ok())
+    {
         Some(raw) => {
             let raw = raw.trim();
             if raw == "*" {
@@ -637,7 +676,6 @@ pub fn actor_of(session: Option<&SessionPrincipal>) -> String {
         .unwrap_or_else(|| "city-user".into())
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::{request_options, request_options_from};
@@ -657,12 +695,7 @@ mod tests {
         assert_eq!(opts.token.as_deref(), Some("session-token"));
         assert_eq!(opts.api_key.as_deref(), Some("header-key"));
 
-        let opts = request_options_from(
-            Some("config-key"),
-            Some("config-token"),
-            None,
-            None,
-        );
+        let opts = request_options_from(Some("config-key"), Some("config-token"), None, None);
         assert_eq!(opts.token.as_deref(), Some("config-token"));
         assert_eq!(opts.api_key.as_deref(), Some("config-key"));
 

@@ -10,7 +10,7 @@ use contribution_backend::auth::JwtKeys;
 use contribution_backend::config::{Config, StorageBackend};
 use contribution_backend::ratelimit::RateLimiter;
 use contribution_backend::state::{AppState, SharedState};
-use contribution_backend::storage::{Storage, StorageResult};
+use contribution_backend::storage::{ApproveOutcome, Storage, StorageResult};
 use http_body_util::BodyExt;
 use serde_json::{json, Value};
 use std::path::PathBuf;
@@ -70,14 +70,19 @@ impl Storage for MockStorage {
             .collect())
     }
 
-    async fn approve_contribution(&self, contribution_id: &str) -> StorageResult<bool> {
+    async fn approve_contribution(&self, contribution_id: &str) -> StorageResult<ApproveOutcome> {
         let mut contributions = self.contributions.lock().await;
         let Some(item) = contributions
             .iter_mut()
             .find(|item| item.get("id").and_then(Value::as_str) == Some(contribution_id))
         else {
-            return Ok(false);
+            return Ok(ApproveOutcome::NotFound);
         };
+        match item.get("status").and_then(Value::as_str) {
+            Some("approved") => return Ok(ApproveOutcome::AlreadyApproved),
+            Some("pending") | None => {}
+            Some(_) => return Ok(ApproveOutcome::NotFound),
+        }
         item["status"] = json!("approved");
         let mut feature = item.clone();
         if let Some(object) = feature.as_object_mut() {
@@ -93,9 +98,10 @@ impl Storage for MockStorage {
                 object.remove(key);
             }
             object.insert("id".to_string(), json!(format!("f-{contribution_id}")));
+            object.insert("source_submission_id".to_string(), json!(contribution_id));
         }
         self.features.lock().await.push(feature);
-        Ok(true)
+        Ok(ApproveOutcome::Approved)
     }
 
     async fn reject_contribution(&self, contribution_id: &str) -> StorageResult<bool> {
@@ -525,6 +531,134 @@ async fn approve_then_leaderboard() {
     assert_eq!(leaderboard[0]["msv"], "23AI034");
     assert_eq!(leaderboard[0]["count"], 1);
     assert_eq!(leaderboard[0]["contributor_name"], "Nguyen Van A");
+}
+
+#[tokio::test]
+async fn approve_is_idempotent_and_does_not_duplicate_features() {
+    let (state, token) = test_state(test_config());
+    let app = contribution_backend::routes::router(state.clone());
+    let (status, _) = call(
+        &app,
+        request(
+            Method::POST,
+            "/api/contributions",
+            Some(json!({
+                "contributor_name": "Nguyen Van B",
+                "msv": "23AI035",
+                "unit": "VKU",
+                "properties": { "feature_type": "Trạm điện" },
+                "geometry": { "type": "Point", "coordinates": [106.7, 10.7] },
+            })),
+            None,
+            "10.0.0.60",
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let (_, list) = call(
+        &app,
+        request(
+            Method::GET,
+            "/api/contributions",
+            None,
+            Some(&token),
+            "10.0.0.60",
+        ),
+    )
+    .await;
+    let id = list[0]["id"].as_str().unwrap().to_string();
+    for attempt in 0..2 {
+        let (status, body) = call(
+            &app,
+            request(
+                Method::POST,
+                &format!("/api/contributions/{id}/approve"),
+                Some(json!({})),
+                Some(&token),
+                "10.0.0.60",
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "attempt {attempt}: {body}");
+        if attempt == 1 {
+            assert_eq!(body["idempotent"], true);
+        }
+    }
+    let features = state.storage.get_features().await.unwrap();
+    assert_eq!(features.len(), 1);
+    let (_, leaderboard) = call(
+        &app,
+        request(Method::GET, "/api/leaderboard", None, None, "10.0.0.60"),
+    )
+    .await;
+    assert_eq!(leaderboard[0]["count"], 1);
+}
+
+#[tokio::test]
+async fn contribution_intake_is_rate_limited_per_ip() {
+    let (state, _) = test_state(test_config());
+    let app = contribution_backend::routes::router(state);
+    for attempt in 0..10 {
+        let (status, body) = call(
+            &app,
+            request(
+                Method::POST,
+                "/api/contributions",
+                Some(json!({
+                    "properties": { "feature_type": "Đèn đường" },
+                    "geometry": { "type": "Point", "coordinates": [106.7, 10.7] },
+                })),
+                None,
+                "10.0.0.61",
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "attempt {attempt}: {body}");
+    }
+    let (status, body) = call(
+        &app,
+        request(
+            Method::POST,
+            "/api/contributions",
+            Some(json!({
+                "properties": { "feature_type": "Đèn đường" },
+                "geometry": { "type": "Point", "coordinates": [106.7, 10.7] },
+            })),
+            None,
+            "10.0.0.61",
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::TOO_MANY_REQUESTS, "{body}");
+}
+
+#[tokio::test]
+async fn contribution_rejects_unbounded_geometry() {
+    let (state, _) = test_state(test_config());
+    let app = contribution_backend::routes::router(state);
+    let coordinates: Vec<Value> = (0..2_001)
+        .map(|index| json!([106.0 + (index as f64 / 10_000.0), 10.0]))
+        .collect();
+    let (status, body) = call(
+        &app,
+        request(
+            Method::POST,
+            "/api/contributions",
+            Some(json!({
+                "properties": { "feature_type": "Đường" },
+                "geometry": { "type": "LineString", "coordinates": coordinates },
+            })),
+            None,
+            "10.0.0.62",
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    let message = body["detail"][0]["msg"].as_str().unwrap();
+    assert!(
+        message.contains("too large") || message.contains("2000"),
+        "{message}"
+    );
 }
 
 #[tokio::test]

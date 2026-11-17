@@ -23,10 +23,19 @@ every operation is migrated.
   `{pluginId,widgetId,product,resource,submittedBy,submittedAt,fields}`; unknown
   envelope/field keys and wrong product/resource are rejected.
 - Domain validation mirrors the City service (title/category/asset/priority
-  rules). The dataset and `publish` flag are derived server-side
-  (`incidents → city-incidents`, publish `true`; `maintenance →
-  city-maintenance`, publish `false`). A submitted datasource/dataset/id is
-  never accepted.
+  rules). The dataset and `publish` flag are derived server-side. Incident
+  creates/updates are written with `publish:false`; the City service is the
+  only publisher and allocates the incident number/redacted projection.
+  `maintenance → city-maintenance`, publish `false`. A submitted
+  datasource/dataset/id is never accepted.
+- The public incident-create and generic incident schemas do not contain
+  internal fields (`assigned_to`, `reporter_type`, `resolution_notes`).
+  Status-transition artifacts keep their existing fields but every incident
+  PATCH is sent with `publish:false`, so those records never enter the public
+  projection until the City service publishes a redacted copy.
+- The generic `users` schema cannot set `role` or `permissions_json`; workflow
+  registrations create citizen profiles only. Role elevation remains in City
+  `/v1/users` administration.
 - Body is `{ data: <domain record>, publish: <boolean> }` (Tier-2 records
   create contract). No Base SDK, no LDS projection, no Tier-3 API.
 - Auth is `parameters.auth = {credentialRef: "synapsedx-organization", header:

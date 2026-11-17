@@ -32,7 +32,7 @@ export function useProductInfo() {
 export function usePublicAssets() {
   return useQuery({
     queryKey: queryKeys.assets,
-    queryFn: () => cityApi.listPublicAssets({ limit: 200 }),
+    queryFn: () => cityApi.listAllPublicAssets(),
     staleTime: 60_000,
     retry: 1,
   });

@@ -14,7 +14,8 @@ export interface PublicAssetInfo {
   status: 'active' | 'inactive' | 'maintenance' | 'decommissioned';
   location: {
     address: string;
-    coordinates: {
+    /** Omitted when the asset has no usable location; never `null`. */
+    coordinates?: {
       longitude: number;
       latitude: number;
     };
@@ -59,10 +60,14 @@ export const publicApi = {
         },
       });
       const items = Array.isArray(response.data) ? response.data : [];
+      if (items.length === 0) break;
       all.push(...items);
       const total = Number(response.headers['x-total-count']);
-      if (!Number.isFinite(total) || items.length < pageSize || all.length >= total) break;
-      offset += items.length;
+      // Offset advances by the requested page size because the server may
+      // filter retired rows out of a page after querying Tier-2.
+      offset += pageSize;
+      if (Number.isFinite(total) && offset >= total) break;
+      if (items.length < pageSize) break;
     }
     return all;
   },
@@ -148,12 +153,28 @@ export const publicApi = {
    * Upload photos for a public incident
    * POST /public/incidents/{incident_id}/photos
    */
-  uploadPhotos: async (incidentId: string, files: File[]): Promise<Incident> => {
+  uploadPhotos: async (
+    incidentId: string,
+    files: File[],
+    editToken?: string,
+    turnstileToken?: string,
+  ): Promise<Incident> => {
     if (!files.length) throw new Error('At least one photo is required');
-    const uploaded = await Promise.all(files.map((file) => uploadPublicFile(file)));
+    if (!editToken) {
+      throw new Error('The report edit token is required to append photos.');
+    }
+    const turnstile = turnstileToken
+      ? { 'CF-Turnstile-Response': turnstileToken }
+      : {};
+    const uploaded = await Promise.all(
+      files.map((file) =>
+        uploadPublicFile(file, { reportId: incidentId, editToken, turnstileToken }),
+      ),
+    );
     const response = await httpClient.post<Incident>(
       `/public/incidents/${encodeURIComponent(incidentId)}/photos`,
-      { file_ids: uploaded.map((file) => file.file_id) }
+      { file_ids: uploaded.map((file) => file.file_id) },
+      { headers: { 'X-Report-Edit-Token': editToken, ...turnstile } },
     );
     return response.data;
   },

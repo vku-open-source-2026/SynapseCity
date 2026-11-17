@@ -33,6 +33,16 @@ pub enum StorageError {
 
 pub type StorageResult<T> = std::result::Result<T, StorageError>;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ApproveOutcome {
+    /// A new feature was materialised and the submission is now approved.
+    Approved,
+    /// The submission was already approved; no second feature was created.
+    AlreadyApproved,
+    /// The submission does not exist or is not pending.
+    NotFound,
+}
+
 #[async_trait]
 pub trait Storage: Send + Sync {
     async fn get_features(&self) -> StorageResult<Vec<Value>>;
@@ -40,7 +50,7 @@ pub trait Storage: Send + Sync {
     async fn delete_feature(&self, feature_id: &str) -> StorageResult<bool>;
     async fn add_contribution(&self, contribution: Value) -> StorageResult<()>;
     async fn get_pending_contributions(&self) -> StorageResult<Vec<Value>>;
-    async fn approve_contribution(&self, contribution_id: &str) -> StorageResult<bool>;
+    async fn approve_contribution(&self, contribution_id: &str) -> StorageResult<ApproveOutcome>;
     async fn reject_contribution(&self, contribution_id: &str) -> StorageResult<bool>;
     async fn get_leaderboard(&self) -> StorageResult<Value>;
     async fn add_sos_report(&self, report: Value) -> StorageResult<()>;

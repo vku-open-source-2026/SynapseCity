@@ -8,6 +8,7 @@ use crate::models::ContributionInput;
 use crate::ratelimit::{enforce, ClientIp};
 use crate::routes::ApiJson;
 use crate::state::SharedState;
+use crate::storage::ApproveOutcome;
 use crate::util::now_naive_iso;
 use axum::extract::{Path, State};
 use axum::Json;
@@ -15,8 +16,10 @@ use serde_json::{json, Map, Value};
 
 pub async fn create(
     State(state): State<SharedState>,
+    ip: ClientIp,
     ApiJson(payload): ApiJson<ContributionInput>,
 ) -> Result<Json<Value>, ApiError> {
+    enforce(&state, "contribution_create", &ip.0, 10)?;
     let contribution = payload.validate()?;
     let mut object = Map::new();
     object.insert(
@@ -72,10 +75,15 @@ pub async fn approve(
     Path(contribution_id): Path<String>,
 ) -> Result<Json<Value>, ApiError> {
     enforce(&state, "contribution_approve", &ip.0, 30)?;
-    if !state.storage.approve_contribution(&contribution_id).await? {
-        return Err(ApiError::not_found("Contribution not found"));
+    match state.storage.approve_contribution(&contribution_id).await? {
+        ApproveOutcome::Approved => Ok(Json(json!({ "status": "success" }))),
+        // Retrying a completed approval is a no-op, not a duplicate feature.
+        ApproveOutcome::AlreadyApproved => Ok(Json(json!({
+            "status": "success",
+            "idempotent": true
+        }))),
+        ApproveOutcome::NotFound => Err(ApiError::not_found("Contribution not found")),
     }
-    Ok(Json(json!({ "status": "success" })))
 }
 
 pub async fn reject(

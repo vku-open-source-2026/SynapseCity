@@ -81,8 +81,13 @@ test('create flows validate the DX envelope and POST to their fixed dataset', ()
         assert.ok(!/datasource/i.test(code));
         assert.ok(code.includes('body: { data: record, publish:'));
         if (entry.operation === 'incidents.create') {
-            assert.ok(code.includes('publish: true'));
+            // Incidents are never written straight to the public projection;
+            // City allocates the number and owns publication.
+            assert.ok(code.includes('publish: false'));
             assert.match(code, /title_required_max_200/);
+            assert.match(code, /incident_number/);
+            assert.match(code, /created_at/);
+            assert.match(code, /public_visible/);
         } else {
             assert.ok(code.includes('publish: false'));
             assert.match(code, /asset_id_required_max_128/);
@@ -146,6 +151,66 @@ test('no artifact writes via a projection, Base SDK or Tier-3 API', () => {
             assert.ok(url === 'https://synapsedx.sbs' || url.startsWith('https://synapsedx.sbs/v1/capabilities/datasets/'), `unexpected URL ${url}`);
         }
     }
+});
+
+test('incident workflows keep internal fields out of public writes', () => {
+    const internal = ['assigned_to', 'reporter_type', 'resolution_notes'];
+    const incidentFiles = manifest.workflows
+        .concat(manifest.lifecycleWorkflows || [])
+        .filter((entry) => entry.resource === 'incidents');
+    for (const entry of incidentFiles) {
+        const workflow = readWorkflow(entry.file);
+        const writes = workflow.nodes.filter((node) =>
+            node.type === 'httpRequest' && ['POST', 'PATCH'].includes(node.parameters.method));
+        assert.ok(writes.length > 0, `${entry.workflow} has no write node`);
+        for (const write of writes) {
+            if (write.parameters.method === 'PATCH') {
+                const merge = workflow.nodes.find((node) => node.type === 'code' && node.parameters.code.includes('publish: false'));
+                assert.ok(merge, `${entry.workflow} PATCH must stay unpublished`);
+            } else {
+                const body = write.parameters.body;
+                const code = workflow.nodes
+                    .filter((node) => node.type === 'code')
+                    .map((node) => node.parameters.code)
+                    .join('\n');
+                assert.ok(
+                    body.includes('publish: false') || code.includes('publish: false'),
+                    `${entry.workflow} POST must stay private`,
+                );
+            }
+        }
+    }
+
+    // The public incident create artifact and the generic incident schema carry
+    // no internal operator field at all.
+    const create = readWorkflow('plugins/workflows/city-incident-create.workflow.json');
+    const createText = JSON.stringify(create);
+    for (const field of internal) {
+        assert.ok(!createText.includes(`"${field}"`), `incident create exposes ${field}`);
+    }
+    const generic = readWorkflow('plugins/workflows/city-workspace-actions.workflow.json');
+    const code = generic.nodes.find((node) => node.name === 'Validate envelope and select operation').parameters.code;
+    const incidentStart = code.indexOf('"incidents":{');
+    const incidentEnd = code.indexOf(',"maintenance":', incidentStart);
+    assert.ok(incidentStart !== -1 && incidentEnd > incidentStart, 'incident schema is missing');
+    const incidentSchema = code.slice(incidentStart, incidentEnd);
+    assert.match(incidentSchema, /"publish":false/);
+    for (const field of internal) {
+        assert.ok(!incidentSchema.includes(`"${field}"`), `generic incident schema exposes ${field}`);
+    }
+    const allCode = generic.nodes
+        .filter((node) => node.type === 'code')
+        .map((node) => node.parameters.code)
+        .join('\n');
+    assert.match(allCode, /action\.resource === 'incidents' \? \{ publish: false \}/);
+    // Role/permission elevation stays behind City user administration.
+    const usersStart = code.indexOf('"users":{');
+    const usersEnd = code.indexOf(',"geofences":', usersStart);
+    assert.ok(usersStart !== -1 && usersEnd > usersStart, 'users schema is missing');
+    const usersSchema = code.slice(usersStart, usersEnd);
+    assert.ok(!usersSchema.includes('"role":{"kind"'), 'users schema exposes role');
+    assert.ok(!usersSchema.includes('"permissions_json"'), 'users schema exposes permissions');
+    assert.match(usersSchema, /"defaults":\{"status":"active","role":"citizen"\}/);
 });
 
 test('transition action design is implemented and keeps invariants', () => {

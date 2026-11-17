@@ -2,7 +2,6 @@
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 import { asList, request } from './client';
 import type {
-  AuthResponse,
   CityAlert,
   CityNotification,
   CreateIncidentInput,
@@ -25,6 +24,21 @@ export const cityApi = {
     return asList<PublicAsset>(await request(`/public/assets?${query.toString()}`));
   },
 
+  /**
+   * Read every public asset page. The public projection pages at 500 rows, so
+   * the map/nearby views must not stop at the first 200 rows.
+   */
+  listAllPublicAssets: async (): Promise<PublicAsset[]> => {
+    const pageSize = 500;
+    const all: PublicAsset[] = [];
+    for (let offset = 0; ; offset += pageSize) {
+      const page = await cityApi.listPublicAssets({ limit: pageSize, offset });
+      if (page.length === 0) break;
+      all.push(...page);
+    }
+    return all;
+  },
+
   getPublicAsset: (code: string) =>
     request<PublicAsset>(`/public/assets/${encodeURIComponent(code.trim())}`),
 
@@ -43,27 +57,6 @@ export const cityApi = {
 
   createPublicIncident: (input: CreateIncidentInput) =>
     request<PublicIncident>('/public/incidents', { method: 'POST', body: input }),
-
-  login: (username: string, password: string) =>
-    request<AuthResponse>('/auth/login', {
-      method: 'POST',
-      body: { username: username.trim(), password },
-    }),
-
-  register: (input: {
-    username: string;
-    email: string;
-    password: string;
-    full_name: string;
-    phone?: string;
-  }) => request<AuthResponse>('/auth/register', { method: 'POST', body: input }),
-
-  logout: (token: string, refreshToken?: string | null) =>
-    request<unknown>('/auth/logout', {
-      method: 'POST',
-      token,
-      body: refreshToken ? { refresh_token: refreshToken } : {},
-    }),
 
   listAlerts: async (token: string): Promise<CityAlert[]> =>
     asList<CityAlert>(await request('/alerts?limit=50', { token })),

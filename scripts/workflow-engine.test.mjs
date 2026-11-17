@@ -65,7 +65,9 @@ test('real Tier-1 engine executes a valid create and audits the mutation', { ski
         assert.equal(typeof body.data, 'object');
         assert.equal(body.data.type, entry.dataset === 'city-incidents' ? 'Incident' : 'Maintenance');
         assert.ok(body.data.title);
-        assert.equal(body.publish, entry.dataset === 'city-incidents');
+        // Incident publication is owned by the City service; every workflow
+        // create stays private.
+        assert.equal(body.publish, false);
 
         const audit = result.validationOutput?.audit;
         assert.equal(audit.operation, entry.operation);

@@ -30,6 +30,12 @@ jobs:
       - name: Verify registry Tier-2 SDK
         run: npm run check:release
 
+      - name: Verify Tier boundary and workflow artifacts
+        run: |
+          npm run test:tier-boundary
+          npm run test:workflow-artifacts
+          npm run test:workflow-engine
+
       - name: Build and test
         run: |
           npm run build

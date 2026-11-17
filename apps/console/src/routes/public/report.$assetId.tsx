@@ -75,25 +75,52 @@ function ReportIncidentPage() {
         
         setSubmitting(true);
         try {
-            // 1. Create Incident
+            // 1. Create Incident. Reporter identity is sent only through the
+            // private contact_info sidecar, never concatenated into the public
+            // description.
+            const coordinates = asset?.location?.coordinates;
             const incident = await publicApi.createAnonymousIncident({
                 title: incidentData.title,
-                description: `${incidentData.description}\n\nReporter: ${incidentData.reporter_name} (${incidentData.reporter_contact})`,
+                description: incidentData.description,
                 severity: incidentData.severity,
                 category: incidentData.category,
                 asset_id: assetId,
+                ...(incidentData.reporter_name || incidentData.reporter_contact
+                    ? {
+                          contact_info: {
+                              ...(incidentData.reporter_name
+                                  ? { name: incidentData.reporter_name }
+                                  : {}),
+                              ...(incidentData.reporter_contact
+                                  ? { phone_number: incidentData.reporter_contact }
+                                  : {}),
+                          },
+                      }
+                    : {}),
                 location: asset?.location ? {
                     address: asset.location.address,
-                    geometry: {
-                        type: 'Point',
-                        coordinates: [asset.location.coordinates.longitude, asset.location.coordinates.latitude]
-                    }
+                    ...(coordinates
+                        ? {
+                              geometry: {
+                                  type: 'Point',
+                                  coordinates: [
+                                      coordinates.longitude,
+                                      coordinates.latitude,
+                                  ],
+                              },
+                          }
+                        : {}),
                 } : undefined
             }, turnstileToken);
 
-            // 2. Upload Photos
+            // 2. Upload Photos with the report edit capability.
             if (photos.length > 0 && incident.id) {
-                await publicApi.uploadPhotos(incident.id, photos);
+                await publicApi.uploadPhotos(
+                    incident.id,
+                    photos,
+                    incident.edit_token,
+                    turnstileToken,
+                );
             }
 
             navigate({
