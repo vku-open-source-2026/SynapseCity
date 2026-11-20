@@ -9,6 +9,7 @@ import apiClient from '../services/apiClient';
 import { groupContributionsByBatch } from '../utils/mapUtils';
 import { INFRASTRUCTURE_TYPES } from '../constants';
 import { SiteHeader } from '../components/UI/SiteHeader';
+import { API_URL } from '../config';
 
 export function AdminView() {
     const logic = useMapLogic();
@@ -228,40 +229,41 @@ export function AdminView() {
     };
 
     const handleExportCsv = async () => {
-        const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+        // Same-origin base from config.js (VITE_API_URL defaults to ''), the
+        // same base every other call uses via services/apiClient.js.
         const types = selectedExportTypes.join(',');
-        const url = `${API_BASE_URL}/api/export_csv${types ? `?types=${types}` : ''}`;
-        
+        const url = `${API_URL}/api/export_csv${types ? `?types=${types}` : ''}`;
+
         try {
             // Fetch the CSV file as blob
             const response = await fetch(url);
-            
+
             if (!response.ok) {
-                throw new Error('Export failed');
+                throw new Error(`Export failed (HTTP ${response.status})`);
             }
-            
+
             // Get the blob data
             const blob = await response.blob();
-            
+
             // Create a temporary URL for the blob
             const blobUrl = window.URL.createObjectURL(blob);
-            
+
             // Create a temporary link and trigger download
             const link = document.createElement('a');
             link.href = blobUrl;
             link.download = 'infrastructure_export.csv';
             document.body.appendChild(link);
             link.click();
-            
+
             // Cleanup
             document.body.removeChild(link);
             window.URL.revokeObjectURL(blobUrl);
-            
+
             setShowExportModal(false);
             alert('File exported successfully!');
         } catch (err) {
             console.error('Export error:', err);
-            alert('Failed to export data');
+            alert(`Failed to export data: ${err.message}`);
         }
     };
 
