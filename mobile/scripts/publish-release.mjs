@@ -46,8 +46,13 @@ if (!/^[a-z0-9_-]{1,30}$/.test(arch)) throw new Error('arch must be lowercase ke
 const bytes = await readFile(file);
 const info = await stat(file);
 const checksumSha256 = createHash('sha256').update(bytes).digest('hex');
-const id = explicitId || `${product}-android-${version}-${arch}`.slice(0, 80);
-if (!/^[A-Za-z0-9._-]{1,80}$/.test(id)) throw new Error('release id is invalid');
+const versionedId = explicitId || `${product}-android-${version}-${arch}`.slice(0, 80);
+// Stable alias refreshed on every release so the console download link
+// (`<product>-android-latest-<arch>`) never needs a source edit per version.
+const latestId = `${product}-android-latest-${arch}`.slice(0, 80);
+for (const id of new Set([versionedId, latestId])) {
+  if (!/^[A-Za-z0-9._-]{1,80}$/.test(id)) throw new Error(`release id is invalid: ${id}`);
+}
 
 async function request(path, options = {}) {
   const response = await fetch(`${baseUrl}${path}`, {
@@ -65,38 +70,8 @@ async function request(path, options = {}) {
   return { response, body };
 }
 
-async function removeExisting() {
-  const existing = await request(`/v1/capabilities/files/${encodeURIComponent(id)}`);
-  if (existing.response.status === 404) return;
-  if (!existing.response.ok) throw new Error(`metadata lookup failed: HTTP ${existing.response.status}`);
-  if (existing.body?.checksumSha256 === checksumSha256 && Number(existing.body?.size) === info.size && existing.body?.public === true && existing.body?.publicUrl) {
-    const head = await fetch(`${baseUrl}${existing.body.publicUrl || ''}`, { method: 'HEAD' });
-    if (head.ok && Number(head.headers.get('content-length') || 0) === info.size) {
-      const publicUrl = `${baseUrl}${existing.body.publicUrl}`;
-      console.log(JSON.stringify({ id, product, version, channel, arch, file: basename(file), size: info.size, sha256: checksumSha256, publicUrl, reused: true }, null, 2));
-      process.exit(0);
-    }
-  }
-  const deleted = await request(`/v1/capabilities/files/${encodeURIComponent(id)}`, { method: 'DELETE' });
-  if (!deleted.response.ok && deleted.response.status !== 404) {
-    throw new Error(`could not replace existing release: HTTP ${deleted.response.status}`);
-  }
-}
-
-let created = await request('/v1/capabilities/files', {
-  method: 'POST',
-  body: JSON.stringify({
-    id,
-    filename: basename(file),
-    contentType,
-    size: info.size,
-    checksumSha256,
-    public: true,
-  }),
-});
-if (created.response.status === 409) {
-  await removeExisting();
-  created = await request('/v1/capabilities/files', {
+async function publishArtifact(id) {
+  let created = await request('/v1/capabilities/files', {
     method: 'POST',
     body: JSON.stringify({
       id,
@@ -107,55 +82,89 @@ if (created.response.status === 409) {
       public: true,
     }),
   });
-}
-if (!created.response.ok) {
-  throw new Error(`create failed: HTTP ${created.response.status} ${JSON.stringify(created.body)}`);
+  if (created.response.status === 409) {
+    // The same bytes under the same id are a no-op; anything else is replaced.
+    const existing = await request(`/v1/capabilities/files/${encodeURIComponent(id)}`);
+    if (existing.response.ok
+      && existing.body?.checksumSha256 === checksumSha256
+      && Number(existing.body?.size) === info.size
+      && existing.body?.public === true
+      && existing.body?.publicUrl) {
+      const head = await fetch(`${baseUrl}${existing.body.publicUrl}`, { method: 'HEAD' });
+      if (head.ok && Number(head.headers.get('content-length') || 0) === info.size) {
+        return { id, publicUrl: `${baseUrl}${existing.body.publicUrl}`, reused: true };
+      }
+    }
+    const deleted = await request(`/v1/capabilities/files/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (!deleted.response.ok && deleted.response.status !== 404) {
+      throw new Error(`could not replace existing release ${id}: HTTP ${deleted.response.status}`);
+    }
+    created = await request('/v1/capabilities/files', {
+      method: 'POST',
+      body: JSON.stringify({
+        id,
+        filename: basename(file),
+        contentType,
+        size: info.size,
+        checksumSha256,
+        public: true,
+      }),
+    });
+  }
+  if (!created.response.ok) {
+    throw new Error(`create failed for ${id}: HTTP ${created.response.status} ${JSON.stringify(created.body)}`);
+  }
+
+  const presign = await request(`/v1/capabilities/files/${encodeURIComponent(id)}/presign`, {
+    method: 'POST',
+    body: JSON.stringify({ method: 'PUT', expiresIn: 900 }),
+  });
+  if (!presign.response.ok) {
+    throw new Error(`presign failed for ${id}: HTTP ${presign.response.status} ${JSON.stringify(presign.body)}`);
+  }
+
+  const upload = await fetch(presign.body.url, {
+    method: 'PUT',
+    headers: {
+      'content-type': contentType,
+      'x-object-checksum-sha256': checksumSha256,
+    },
+    body: bytes,
+  });
+  if (!upload.ok) {
+    throw new Error(`Tier-1 signed upload failed for ${id}: HTTP ${upload.status} ${(await upload.text()).slice(0, 500)}`);
+  }
+
+  const completed = await request(`/v1/capabilities/files/${encodeURIComponent(id)}/complete`, {
+    method: 'POST',
+    body: JSON.stringify({ size: info.size }),
+  });
+  if (!completed.response.ok) {
+    throw new Error(`complete failed for ${id}: HTTP ${completed.response.status} ${JSON.stringify(completed.body)}`);
+  }
+  if (completed.body?.checksumSha256 !== checksumSha256 || Number(completed.body?.size) !== info.size) {
+    throw new Error(`Tier-2 completion did not confirm the uploaded checksum/size for ${id}`);
+  }
+
+  const publicMeta = await request(`/v1/capabilities/public/files/${encodeURIComponent(id)}`);
+  if (!publicMeta.response.ok) {
+    throw new Error(`public metadata failed for ${id}: HTTP ${publicMeta.response.status}`);
+  }
+  const publicUrl = `${baseUrl}${publicMeta.body.publicUrl}`;
+  const download = await fetch(publicUrl, { method: 'GET' });
+  if (!download.ok) throw new Error(`public download failed for ${id}: HTTP ${download.status}`);
+  const downloaded = Buffer.from(await download.arrayBuffer());
+  const downloadedSha = createHash('sha256').update(downloaded).digest('hex');
+  if (downloadedSha !== checksumSha256) throw new Error(`public download checksum does not match for ${id}`);
+  return { id, publicUrl, reused: false };
 }
 
-const presign = await request(`/v1/capabilities/files/${encodeURIComponent(id)}/presign`, {
-  method: 'POST',
-  body: JSON.stringify({ method: 'PUT', expiresIn: 900 }),
-});
-if (!presign.response.ok) {
-  throw new Error(`presign failed: HTTP ${presign.response.status} ${JSON.stringify(presign.body)}`);
-}
-
-const upload = await fetch(presign.body.url, {
-  method: 'PUT',
-  headers: {
-    'content-type': contentType,
-    'x-object-checksum-sha256': checksumSha256,
-  },
-  body: bytes,
-});
-if (!upload.ok) {
-  throw new Error(`Tier-1 signed upload failed: HTTP ${upload.status} ${(await upload.text()).slice(0, 500)}`);
-}
-
-const completed = await request(`/v1/capabilities/files/${encodeURIComponent(id)}/complete`, {
-  method: 'POST',
-  body: JSON.stringify({ size: info.size }),
-});
-if (!completed.response.ok) {
-  throw new Error(`complete failed: HTTP ${completed.response.status} ${JSON.stringify(completed.body)}`);
-}
-if (completed.body?.checksumSha256 !== checksumSha256 || Number(completed.body?.size) !== info.size) {
-  throw new Error('Tier-2 completion did not confirm the uploaded checksum/size');
-}
-
-const publicMeta = await request(`/v1/capabilities/public/files/${encodeURIComponent(id)}`);
-if (!publicMeta.response.ok) {
-  throw new Error(`public metadata failed: HTTP ${publicMeta.response.status}`);
-}
-const publicUrl = `${baseUrl}${publicMeta.body.publicUrl}`;
-const download = await fetch(publicUrl, { method: 'GET' });
-if (!download.ok) throw new Error(`public download failed: HTTP ${download.status}`);
-const downloaded = Buffer.from(await download.arrayBuffer());
-const downloadedSha = createHash('sha256').update(downloaded).digest('hex');
-if (downloadedSha !== checksumSha256) throw new Error('public download checksum does not match');
+const primary = await publishArtifact(versionedId);
+const latest = latestId === versionedId ? null : await publishArtifact(latestId);
 
 console.log(JSON.stringify({
-  id,
+  id: versionedId,
+  latestId,
   product,
   version,
   channel,
@@ -163,6 +172,9 @@ console.log(JSON.stringify({
   file: basename(file),
   size: info.size,
   sha256: checksumSha256,
-  publicUrl,
+  publicUrl: primary.publicUrl,
+  latestUrl: latest ? latest.publicUrl : null,
+  reused: primary.reused,
+  latestReused: latest ? latest.reused : null,
   verifiedDownload: true,
 }, null, 2));

@@ -20,7 +20,10 @@ export const LINKS = {
     basemap: "https://vietmap.vn/",
     dataContribution: "https://contribution.synapsecity.sbs/",
     sos: "https://sos.synapsecity.sbs/",
-    androidApk: "https://synapsedx.sbs/v1/capabilities/public/files/synapsecity-android-0.1.0-arm64-x86_64/content",
+    // Stable release alias: `publish-release.mjs` refreshes
+    // `<product>-android-latest-<arch>` on every release, so publishing a new
+    // version updates this link without a console source edit.
+    androidApk: "https://synapsedx.sbs/v1/capabilities/public/files/synapsecity-android-latest-arm64-x86_64/content",
     synapseDX: "https://synapsedx.sbs/",
     synapseOne: "https://synapseone.space/",
     vku: "https://vku.udn.vn",
