@@ -160,7 +160,7 @@
         "resource": "incidents",
         "workflowRef": {
           "name": "city-incident-create",
-          "checksum": "9950bd892b99cba6ae904d01d474cba11932f9a4dcd33df59d9b4914f9a75d6e"
+          "checksum": "fb09d3dbb17caee462140d974b5493ff72058fb66da0a41308f97797b471d744"
         },
         "onSubmit": "act-incident-report-submit"
       },
@@ -495,5 +495,5 @@
     "path": "plugins/city-volunteer-desk.plugin.json",
     "revision": "2026-11-15.business"
   },
-  "checksum": "sha256:01e6812a1cdd1d7c339b5676880e726fd907a802663717be9a570478d59d7d72"
+  "checksum": "sha256:a98c549d1418493da0c1c6560b423984503805327cb18f1b5f8cf059b085f115"
 }

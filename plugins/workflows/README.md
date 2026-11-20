@@ -184,6 +184,17 @@ The DX action vocabulary declares `create|update|delete|execute`; the status
 transitions above are bound with `action=update` and `workflowRef` in the
 plugin bundles (see `actions.design.json`).
 
+## Workflow pins
+
+Every bundle form pins its workflow with `workflowRef.checksum` equal to the
+**DX portable checksum** DX will store on the imported artifact: sha256 over the
+canonical `{nodes, connections, settings}` *including the mandatory
+`settings.access.mode=owner-only` policy DX injects on a managed import*. A
+stale pin fails the live import with `409 workflow_artifact_not_found`, so the
+sources declare the policy themselves and
+`npm run plugins:pins` (or `node scripts/workflow-pins.mjs --fix`) verifies and
+repairs the pins offline. The artifact test suite enforces the invariant.
+
 ## Validation
 
 ```bash

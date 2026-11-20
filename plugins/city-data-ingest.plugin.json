@@ -135,7 +135,7 @@
         "resource": "ingest",
         "workflowRef": {
           "name": "city-workspace-actions",
-          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+          "checksum": "5992167880202afcd581a2acffd0e87986f656775562da222b728b18d36aa928"
         },
         "onSubmit": "act-ingest-delete-submit"
       },
@@ -149,7 +149,7 @@
         "action": "execute",
         "workflowRef": {
           "name": "city-csv-import",
-          "checksum": "58fd213ec51248db166e8e3a4aabd4d570c9584d560a97a814637285e9508566"
+          "checksum": "32dc966208523c4f99b13c34c5cd8e4f3ec8d5889325f1be3ae99e2ed065bfc4"
         },
         "onSubmit": "import-all-csv-batches",
         "fields": [
@@ -508,5 +508,5 @@
     "path": "plugins/city-data-ingest.plugin.json",
     "revision": "2026-11-15.business"
   },
-  "checksum": "sha256:c24765a33d0024bd2231bf78a5ce4993cdf39581a155610b3e71f349eb97aeed"
+  "checksum": "sha256:faa2c9fec9f368737a42ec3d56edf3b21c14805fb6d182dfd2adcb9efeaa2f54"
 }

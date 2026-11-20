@@ -38,6 +38,7 @@ not install, publish or execute anything.
 npm run plugins:check
 npm run plugins:test
 npm run plugins:reseal -- --dry-run
+npm run plugins:pins
 npm run plugins:sync -- --id <dxPluginId> --dry-run
 npm run plugins:import -- --file plugins/city-technician-work.plugin.json --dry-run
 ```
@@ -46,6 +47,7 @@ npm run plugins:import -- --file plugins/city-technician-work.plugin.json --dry-
 | --- | --- | --- |
 | `check` | no | Validates every `plugins/*.plugin.json` (strict schema, provenance, roles, resources, checksum) |
 | `reseal` | no | Recomputes the `plugin` checksum after a reviewed edit; optional `--dry-run` |
+| `pins` | no | Verifies every `workflowRef.checksum` equals the DX portable checksum of the committed workflow source (owner-only access included); `--fix` repairs drift and reseals |
 | `export` | yes (GET) | Writes a DX export snapshot to the tracked `plugins/` path |
 | `sync` | yes (GET) | Pulls the published snapshot, writes it only when the checksum changed |
 | `import` | yes (POST) | Creates a DRAFT in DX from a validated local bundle |

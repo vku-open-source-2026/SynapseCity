@@ -15,7 +15,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { validateBundle } from './lib/plugin-bundle.mjs';
+import { validateBundle, canonicalJson } from './lib/plugin-bundle.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIR = path.join(ROOT, 'plugins', 'workflows');
@@ -327,4 +327,45 @@ test('product forms bind executable workflows; Common forms retain app-scoped ca
     assert.ok(forms.length >= 5, 'expected bound City forms');
     assert.ok(forms.some((widget) => widget.action === 'create'));
     assert.ok(forms.some((widget) => widget.action === 'update'));
+});
+
+test('bundle workflow pins equal the DX portable checksum of the committed source', () => {
+    // DX injects settings.access.mode=owner-only on every managed import and
+    // resolves bundle refs against that portable checksum; a stale pin makes a
+    // live import fail with workflow_artifact_not_found. scripts/workflow-pins.mjs
+    // --fix repairs this class of drift.
+    const withOwnerOnly = (settings) => {
+        const base = settings && typeof settings === 'object' && !Array.isArray(settings) ? { ...settings } : {};
+        const access = base.access && typeof base.access === 'object' && !Array.isArray(base.access) ? { ...base.access } : {};
+        access.mode = 'owner-only';
+        base.access = access;
+        return base;
+    };
+    const portable = new Map();
+    for (const file of fs.readdirSync(DIR).filter((name) => name.endsWith('.workflow.json'))) {
+        const definition = JSON.parse(fs.readFileSync(path.join(DIR, file), 'utf8'));
+        assert.equal(
+            definition.settings?.access?.mode,
+            'owner-only',
+            `${file} must declare settings.access.mode=owner-only like a DX-managed import`,
+        );
+        portable.set(definition.name || file.replace(/\.workflow\.json$/, ''), createHash('sha256').update(canonicalJson({
+            nodes: definition.nodes,
+            connections: definition.connections,
+            settings: withOwnerOnly(definition.settings),
+        }), 'utf8').digest('hex'));
+    }
+    for (const file of fs.readdirSync(path.join(ROOT, 'plugins')).filter((name) => name.endsWith('.plugin.json'))) {
+        const bundle = JSON.parse(fs.readFileSync(path.join(ROOT, 'plugins', file), 'utf8'));
+        for (const widget of bundle.plugin.widgets) {
+            const ref = widget.workflowRef;
+            if (!ref) continue;
+            assert.ok(portable.has(ref.name), `${file}/${widget.id} references unknown workflow ${ref.name}`);
+            assert.equal(
+                ref.checksum,
+                portable.get(ref.name),
+                `${file}/${widget.id} -> ${ref.name}: pin must equal the DX portable checksum (run node scripts/workflow-pins.mjs --fix)`,
+            );
+        }
+    }
 });

@@ -166,7 +166,7 @@
         "resource": "budgets",
         "workflowRef": {
           "name": "city-workspace-actions",
-          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+          "checksum": "5992167880202afcd581a2acffd0e87986f656775562da222b728b18d36aa928"
         },
         "onSubmit": "act-budget-create-submit"
       },
@@ -213,7 +213,7 @@
         "resource": "budgets",
         "workflowRef": {
           "name": "city-workspace-actions",
-          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+          "checksum": "5992167880202afcd581a2acffd0e87986f656775562da222b728b18d36aa928"
         },
         "onSubmit": "act-budget-update-submit"
       },
@@ -245,7 +245,7 @@
         "resource": "budgets",
         "workflowRef": {
           "name": "city-workspace-actions",
-          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+          "checksum": "5992167880202afcd581a2acffd0e87986f656775562da222b728b18d36aa928"
         },
         "onSubmit": "act-budget-approve-submit"
       },
@@ -289,7 +289,7 @@
         "resource": "budgetTransactions",
         "workflowRef": {
           "name": "city-workspace-actions",
-          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+          "checksum": "5992167880202afcd581a2acffd0e87986f656775562da222b728b18d36aa928"
         },
         "onSubmit": "act-transaction-create-submit"
       },
@@ -321,7 +321,7 @@
         "resource": "budgetTransactions",
         "workflowRef": {
           "name": "city-workspace-actions",
-          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+          "checksum": "5992167880202afcd581a2acffd0e87986f656775562da222b728b18d36aa928"
         },
         "onSubmit": "act-transaction-approve-submit"
       },
@@ -866,5 +866,5 @@
     "path": "plugins/city-budget-office.plugin.json",
     "revision": "2026-11-15.business"
   },
-  "checksum": "sha256:7fbe1097c465bea59d9feb6ee14e7b5a3c8c69fc571fa8e1861fdaec33d3a1ad"
+  "checksum": "sha256:191bbfd7ddbe53e21d229605d94d478a740aa19481b098440e1f8abf0c2bd455"
 }

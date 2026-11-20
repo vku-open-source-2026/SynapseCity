@@ -19,6 +19,7 @@
     "demo:seed": "node scripts/demo-seed.mjs",
     "demo:reset": "node scripts/demo-reset.mjs",
     "plugins:check": "node scripts/plugin-bundle.mjs check",
+    "plugins:pins": "node scripts/workflow-pins.mjs",
     "plugins:reseal": "node scripts/plugin-bundle.mjs reseal",
     "plugins:export": "node scripts/plugin-bundle.mjs export",
     "plugins:import": "node scripts/plugin-bundle.mjs import",

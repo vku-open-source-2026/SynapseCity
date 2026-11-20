@@ -245,7 +245,7 @@
         "resource": "assets",
         "workflowRef": {
           "name": "city-workspace-actions",
-          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+          "checksum": "5992167880202afcd581a2acffd0e87986f656775562da222b728b18d36aa928"
         },
         "onSubmit": "act-asset-create-submit"
       },
@@ -306,7 +306,7 @@
         "resource": "assets",
         "workflowRef": {
           "name": "city-workspace-actions",
-          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+          "checksum": "5992167880202afcd581a2acffd0e87986f656775562da222b728b18d36aa928"
         },
         "onSubmit": "act-asset-update-submit"
       },
@@ -327,7 +327,7 @@
         "resource": "assets",
         "workflowRef": {
           "name": "city-workspace-actions",
-          "checksum": "4490b325eb2b06e4c699ea2bafb51a74347aca7a76b4ee43c5cf77a144efbe63"
+          "checksum": "5992167880202afcd581a2acffd0e87986f656775562da222b728b18d36aa928"
         },
         "onSubmit": "act-asset-delete-submit"
       },
@@ -1003,5 +1003,5 @@
     "path": "plugins/city-asset-registry.plugin.json",
     "revision": "2026-11-15.business"
   },
-  "checksum": "sha256:69959fd71534eeb56533c86980e30814cdc0dcb8f3aea8d61a14c17a17d388a1"
+  "checksum": "sha256:c10870a32ddc73d859d9cf53d29666b860e40191e343a2554b9d1a841cfcc58b"
 }

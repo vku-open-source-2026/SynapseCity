@@ -261,7 +261,7 @@
         "resource": "incidents",
         "workflowRef": {
           "name": "city-incident-create",
-          "checksum": "9950bd892b99cba6ae904d01d474cba11932f9a4dcd33df59d9b4914f9a75d6e"
+          "checksum": "fb09d3dbb17caee462140d974b5493ff72058fb66da0a41308f97797b471d744"
         },
         "onSubmit": "act-incident-create-submit"
       },
@@ -303,7 +303,7 @@
         "resource": "maintenance",
         "workflowRef": {
           "name": "city-maintenance-create",
-          "checksum": "ad8bf0ddc4557049b7a5485e1494cac7486a00e5fc0e2d3330f85035353d5528"
+          "checksum": "a87d46f33ca889168b60ee7c75f9ec08972a88ccf35e1f7280f8cb50a5ddbf81"
         },
         "onSubmit": "act-maintenance-create-submit"
       },
@@ -1007,5 +1007,5 @@
     "path": "plugins/city-operations-overview.plugin.json",
     "revision": "2026-11-15.business"
   },
-  "checksum": "sha256:3eea7984f5f5a3129f522d874e40966ee236669b8b012907098147965a3efa4f"
+  "checksum": "sha256:8b3b78725c6890ff95e5088b8b241418dde94a5be3707f66dff3f8eaadc0c261"
 }

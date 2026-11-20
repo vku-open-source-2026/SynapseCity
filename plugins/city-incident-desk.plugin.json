@@ -199,7 +199,7 @@
         "resource": "incidents",
         "workflowRef": {
           "name": "city-incident-create",
-          "checksum": "9950bd892b99cba6ae904d01d474cba11932f9a4dcd33df59d9b4914f9a75d6e"
+          "checksum": "fb09d3dbb17caee462140d974b5493ff72058fb66da0a41308f97797b471d744"
         },
         "onSubmit": "act-incident-create-submit"
       },
@@ -226,7 +226,7 @@
         "resource": "incidents",
         "workflowRef": {
           "name": "city-incident-assign",
-          "checksum": "fdba856b14fc29e9e069a766c1f80bfdc29d6d1909939bd287498c7bf9484365"
+          "checksum": "b637a8e61879749d8f45d08b70d8ff75daba2dd6db5fc0cc94506dfba679321d"
         },
         "onSubmit": "act-incident-assign-submit"
       },
@@ -252,7 +252,7 @@
         "resource": "incidents",
         "workflowRef": {
           "name": "city-incident-acknowledge",
-          "checksum": "a34af488f4212b9af90cdab7ceae1a88587f6679cfb5721aeec944399a4376d6"
+          "checksum": "ca3071421078d24522b6e42822fab9f779afadffbdd8ba4cee582037157dfebb"
         },
         "onSubmit": "act-incident-acknowledge-submit"
       },
@@ -283,7 +283,7 @@
         "resource": "incidents",
         "workflowRef": {
           "name": "city-incident-resolve",
-          "checksum": "7fd679806d1f340b1e6a39f6b70d1bebb1e01aeafe9b3777d97c3a51e242686a"
+          "checksum": "aa2475af25ca37f95e489a66798c7bfe42f893d131bda40780bc97e6c7ea2a22"
         },
         "onSubmit": "act-incident-resolve-submit"
       },
@@ -309,7 +309,7 @@
         "resource": "incidents",
         "workflowRef": {
           "name": "city-incident-verify",
-          "checksum": "bd47fa64a2ec0feb99683a998f0724f15a8817639788edefcb8caa63fd69c9a1"
+          "checksum": "8b0c9886c918ab4b102467782d9c5eafb1332c3baaba8bdb71311864b56fccc1"
         },
         "onSubmit": "act-incident-verify-submit"
       },
@@ -335,7 +335,7 @@
         "resource": "incidents",
         "workflowRef": {
           "name": "city-incident-reject",
-          "checksum": "019bcd502c5c91e800cf46e18d35de28f64e81510d0ec5e4c13e3fd0185d0814"
+          "checksum": "5ba20dfb8ebc960bbd1ac176c97f218cbd3a8d03b962e30b89bf5c73e2f8d879"
         },
         "onSubmit": "act-incident-reject-submit"
       },
@@ -361,7 +361,7 @@
         "resource": "incidents",
         "workflowRef": {
           "name": "city-incident-close",
-          "checksum": "3be6563b203d91d88a855a39553ade26561bebb57a5d073332be194e5f86af0d"
+          "checksum": "0b0e56197d63a472118970c4f98f65f408f3332282c25f7ef50ecb0a5cc61083"
         },
         "onSubmit": "act-incident-close-submit"
       },
@@ -1282,5 +1282,5 @@
     "path": "plugins/city-incident-desk.plugin.json",
     "revision": "2026-11-15.business"
   },
-  "checksum": "sha256:3906c168ab62112d8f155ef8892634f9b450a73a066122b00f2bbdd4e854861f"
+  "checksum": "sha256:3bc3d6988dfa301ed96a5d0e2b24d490084f4f426a678fcabd11c77bbf000899"
 }
