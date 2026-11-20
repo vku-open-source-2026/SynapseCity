@@ -18,7 +18,6 @@
     "check:release": "node scripts/check-release.cjs",
     "demo:seed": "node scripts/demo-seed.mjs",
     "demo:reset": "node scripts/demo-reset.mjs",
-    "import:openinfra": "node scripts/import-openinfra.mjs",
     "plugins:check": "node scripts/plugin-bundle.mjs check",
     "plugins:reseal": "node scripts/plugin-bundle.mjs reseal",
     "plugins:export": "node scripts/plugin-bundle.mjs export",

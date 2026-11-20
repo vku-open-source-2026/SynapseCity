@@ -121,11 +121,26 @@ terminal states refused, `ifVersion` CAS, full-record merge, no invalid fields.
 
 ## Remaining action gap
 
-Everything except the two creates has no executable workflow: incident
-merge/verify, maintenance approve/reject/cancel/photos, asset lifecycle/
-documents/delete, IoT, alerts, budgets, reports, users, geofences, CSV ingest,
-notifications and geospatial actions. The widget vocabulary also only declares
-`action:'create'`; non-create actions need a DX action design.
+Regenerated from the artifact files in this directory (15 workflows):
+incident create/acknowledge/assign/close/reject/resolve/verify, maintenance
+create/assign/start/complete/cancel, CSV ingest (`city-csv-import`), report
+generation (`city-generate-report`) and the generic
+create/update/delete/execute dispatcher (`city-workspace-actions`, which also
+covers assets, IoT sensors/readings, alerts, budgets, transactions, reports,
+users, geofences, ingest jobs, files and notifications) all have executable
+sources. Still without a dedicated workflow:
+
+- `incidents.merge` — the orchestration that closes each duplicate and
+  annotates the primary; the generic update can close a single record but not
+  the multi-record merge.
+- maintenance **photos** and asset **photos/attachments/documents** —
+  file references through the Tier-2 files capability are not plain record
+  writes.
+- geospatial operations (coverage, validation, reverse geocode).
+
+The DX action vocabulary declares `create|update|delete|execute`; the status
+transitions above are bound with `action=update` and `workflowRef` in the
+plugin bundles (see `actions.design.json`).
 
 ## Validation
 

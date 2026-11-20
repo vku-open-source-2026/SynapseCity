@@ -195,36 +195,14 @@ docker compose up -d --no-build
 `docker compose up -d --build` combines the last two steps. Local builds use
 the same GHCR image names, so `pull` and `build` are interchangeable.
 
-### Legacy OpenInfra data migration
+### Legacy OpenInfra data migration (removed)
 
-`npm run import:openinfra` loads the legacy JSON export into the City datasets
-through the Tier-2 capabilities API. It never opens a database connection and
-never calls SynapseOne directly.
-
-```bash
-# Validate the mapping and count the selected rows without writing.
-npm run import:openinfra -- --dry-run
-
-# Full master data plus a compact seven-day time-series sample.
-npm run import:openinfra
-
-# Re-run safely: existing record ids are skipped.
-npm run import:openinfra
-
-# Optional: import every reading/alert instead of the compact sample.
-npm run import:openinfra -- --readings=all --alerts=all
-```
-
-The default data pack is `../nhan_tmp_data/openinfra_data_2026-11-09`; override
-it with `--data-dir`. Assets, sensors, incidents, work orders, budgets, users,
-reports and notifications are imported in full. `sensor_readings` and `alerts`
-are compacted (one reading per sensor per two hours inside the densest history
-window, plus the latest reading per sensor; meaningful alerts plus the latest
-offline alert per sensor). Use `--readings-interval-hours` and
-`--readings-window-hours` to change that sample. The run stores a resumable
-checkpoint in `.notes/import-openinfra.state.json`. Emergency, hazard, EOP,
-dispatch, SITREP, AAR and resource-unit collections are owned by
-SynapseCitySOS and are deliberately skipped.
+The `import:openinfra` script and its `../nhan_tmp_data` export source have
+been removed: the `openinfra/` checkout is not a deployment source and must
+not be recreated, and the default data directory no longer exists outside the
+repository. Records imported before the removal live on in the `city-*`
+Tier-2 datasets; new demo data comes from `npm run demo:seed`, which writes
+through the public City API only.
 
 ## API
 

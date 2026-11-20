@@ -31,7 +31,11 @@ test('manifest is City-owned, source-ready and inactive', () => {
     assert.equal(manifest.format, 'synapsedx-workflow-source');
     assert.equal(manifest.formatVersion, 3);
     assert.equal(manifest.product, 'city');
-    assert.equal(manifest.status, 'source_ready_pending_credential_binding');
+    // Artifacts exist and are engine-tested: the bundle is source-ready. The
+    // credential binding is an operator action tracked separately in
+    // persistence.credentialBinding (pending_dx_binding) and the deployment
+    // gate; it is not part of the source status.
+    assert.equal(manifest.status, 'source_ready');
     assert.equal(manifest.active, false);
     assert.equal(manifest.trigger, 'manualTrigger');
     assert.equal(manifest.repository, 'https://github.com/vku-open-source-2026/SynapseCity');
@@ -56,7 +60,7 @@ test('manifest is City-owned, source-ready and inactive', () => {
         'maintenance.start',
     ]);
     for (const entry of manifest.workflows) {
-        assert.equal(entry.status, 'source_ready_pending_credential_binding');
+        assert.equal(entry.status, 'source_ready');
         assert.ok(fs.existsSync(path.join(ROOT, entry.file)), entry.file);
         assert.equal(entry.dataset, manifest.persistence.datasetByResource[entry.resource]);
     }

@@ -4,7 +4,7 @@
   "product": "city",
   "repository": "https://github.com/vku-open-source-2026/SynapseCity",
   "revision": "2026-11-14",
-  "status": "source_ready_pending_credential_binding",
+  "status": "source_ready",
   "active": false,
   "trigger": "manualTrigger",
   "description": "Tier-1 workflow definition source for a DX-bound workspace form. Source-ready; DX must bind the credentialRef and artifact pins before execution.",
@@ -62,7 +62,7 @@
       "file": "plugins/workflows/city-incident-create.workflow.json",
       "dataset": "city-incidents",
       "method": "POST",
-      "status": "source_ready_pending_credential_binding",
+      "status": "source_ready",
       "resource": "incidents"
     },
     {
@@ -71,7 +71,7 @@
       "file": "plugins/workflows/city-maintenance-create.workflow.json",
       "dataset": "city-maintenance",
       "method": "POST",
-      "status": "source_ready_pending_credential_binding",
+      "status": "source_ready",
       "resource": "maintenance"
     },
     {
@@ -81,7 +81,7 @@
       "dataset": "city-incidents",
       "method": "PATCH",
       "resource": "incidents",
-      "status": "source_ready_pending_credential_binding"
+      "status": "source_ready"
     },
     {
       "operation": "incidents.resolve",
@@ -90,7 +90,7 @@
       "dataset": "city-incidents",
       "method": "PATCH",
       "resource": "incidents",
-      "status": "source_ready_pending_credential_binding"
+      "status": "source_ready"
     },
     {
       "operation": "maintenance.assign",
@@ -99,7 +99,7 @@
       "dataset": "city-maintenance",
       "method": "PATCH",
       "resource": "maintenance",
-      "status": "source_ready_pending_credential_binding"
+      "status": "source_ready"
     },
     {
       "operation": "maintenance.start",
@@ -108,7 +108,7 @@
       "dataset": "city-maintenance",
       "method": "PATCH",
       "resource": "maintenance",
-      "status": "source_ready_pending_credential_binding"
+      "status": "source_ready"
     },
     {
       "operation": "maintenance.complete",
@@ -117,7 +117,7 @@
       "dataset": "city-maintenance",
       "method": "PATCH",
       "resource": "maintenance",
-      "status": "source_ready_pending_credential_binding"
+      "status": "source_ready"
     }
   ],
   "lifecycleWorkflows": [
@@ -195,7 +195,7 @@
       "files": "city-files",
       "notifications": "city-notifications"
     },
-    "status": "source_ready_pending_credential_binding",
+    "status": "source_ready",
     "generator": "plugins/workflows/generate-workspace-actions.mjs"
   },
   "fileActionWorkflows": [

@@ -42,11 +42,9 @@ still reads/writes `contribution_*` through the published SynapseOne Rust SDK
 from crates.io until those collections move to Tier 2. The `openinfra/` checkout
 has been removed and is not a deployment source.
 
-## Loading the legacy export
+## Loading the legacy export (removed)
 
-`npm run import:openinfra` reads the JSON export and writes the `city-*`
-datasets through the Tier-2 capabilities API. It preserves the public/private
-incident split, never imports password hashes, keeps assets and sensors
-complete, and samples the unbounded telemetry collections. The run is
-resumable (`--dry-run` counts first; reruns skip existing ids). SOS-owned
-collections are skipped because they belong to the sibling product.
+The `import:openinfra` loader was removed together with its data source: the
+`openinfra/` checkout must not be recreated and the default export directory no
+longer exists. Previously imported records remain in the `city-*` Tier-2
+datasets; there is no supported path for re-importing the legacy export.

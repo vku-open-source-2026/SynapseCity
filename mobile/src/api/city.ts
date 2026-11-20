@@ -2,8 +2,6 @@
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 import { asList, request } from './client';
 import type {
-  CityAlert,
-  CityNotification,
   CreateIncidentInput,
   MaintenanceSummary,
   MapConfig,
@@ -57,16 +55,4 @@ export const cityApi = {
 
   createPublicIncident: (input: CreateIncidentInput) =>
     request<PublicIncident>('/public/incidents', { method: 'POST', body: input }),
-
-  listAlerts: async (token: string): Promise<CityAlert[]> =>
-    asList<CityAlert>(await request('/alerts?limit=50', { token })),
-
-  listNotifications: async (token: string): Promise<CityNotification[]> =>
-    asList<CityNotification>(await request('/notifications?limit=50', { token })),
-
-  markNotificationRead: (token: string, id: string) =>
-    request<CityNotification>(`/notifications/${encodeURIComponent(id)}/read`, {
-      method: 'POST',
-      token,
-    }),
 };

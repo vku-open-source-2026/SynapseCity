@@ -2895,7 +2895,7 @@ async fn incidents_action(ctx: &Ctx<'_>, id: &str, action: &str) -> ApiResult<Re
             patch.insert("status".into(), json!("assigned"));
             patch.insert("assigned_at".into(), json!(now));
             let updated = update_incident(ctx, id, patch).await?;
-            let _ = push_notification(ctx, json!({
+            if let Err(error) = push_notification(ctx, json!({
                 "user_id": assigned,
                 "type": "incident_assigned",
                 "title": format!("Incident {} assigned to you", updated.get("incident_number").and_then(Value::as_str).unwrap_or(id)),
@@ -2904,7 +2904,14 @@ async fn incidents_action(ctx: &Ctx<'_>, id: &str, action: &str) -> ApiResult<Re
                 "entity_type": "incident",
                 "entity_id": updated.get("id"),
                 "dedupe_key": format!("incident_assigned:{}:{}", id, assigned),
-            })).await;
+            })).await {
+                tracing::warn!(
+                    incident_id = %id,
+                    recipient = %assigned,
+                    error = %error,
+                    "incident_assigned notification delivery failed"
+                );
+            }
             Ok(web::json_response(Value::Object(updated)))
         }
         "resolve" => {
@@ -2921,7 +2928,7 @@ async fn incidents_action(ctx: &Ctx<'_>, id: &str, action: &str) -> ApiResult<Re
             patch.insert("resolved_at".into(), json!(now));
             let updated = update_incident(ctx, id, patch).await?;
             if let Some(assignee) = updated.get("assigned_to").and_then(Value::as_str) {
-                let _ = push_notification(ctx, json!({
+                if let Err(error) = push_notification(ctx, json!({
                     "user_id": assignee,
                     "type": "incident_resolved",
                     "title": format!("Incident {} resolved", updated.get("incident_number").and_then(Value::as_str).unwrap_or(id)),
@@ -2930,7 +2937,14 @@ async fn incidents_action(ctx: &Ctx<'_>, id: &str, action: &str) -> ApiResult<Re
                     "entity_type": "incident",
                     "entity_id": updated.get("id"),
                     "dedupe_key": format!("incident_resolved:{}:{}", id, assignee),
-                })).await;
+                })).await {
+                    tracing::warn!(
+                        incident_id = %id,
+                        recipient = %assignee,
+                        error = %error,
+                        "incident_resolved notification delivery failed"
+                    );
+                }
             }
             Ok(web::json_response(Value::Object(updated)))
         }
@@ -3900,7 +3914,7 @@ async fn alerts_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
         .unwrap_or("")
         .to_ascii_lowercase();
     if ["critical", "high"].contains(&severity.as_str()) {
-        let _ = notify_operators(
+        if let Err(error) = notify_operators(
             ctx,
             "alert_raised",
             format!(
@@ -3920,7 +3934,17 @@ async fn alerts_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
             "alert",
             created.get("id").and_then(Value::as_str).unwrap_or(""),
         )
-        .await;
+        .await {
+            let alert_id = created
+                .get("id")
+                .and_then(|value| value.as_str())
+                .unwrap_or("");
+            tracing::warn!(
+                alert_id = %alert_id,
+                error = %error,
+                "alert_raised operator notification delivery failed"
+            );
+        }
     }
     Ok(web::created(Value::Object(created)))
 }
@@ -4234,7 +4258,7 @@ async fn create_report(
         Err(error) => return Err(error),
     };
     if let Some(principal) = ctx.principal() {
-        let _ = push_notification(ctx, json!({
+        if let Err(error) = push_notification(ctx, json!({
             "user_id": principal.sub,
             "type": "report_ready",
             "title": format!("Report {} is ready", created.get("report_code").and_then(Value::as_str).unwrap_or("")),
@@ -4244,7 +4268,14 @@ async fn create_report(
             "entity_type": "report",
             "entity_id": id,
             "dedupe_key": format!("report_ready:{}:{}", id, principal.sub),
-        })).await;
+        })).await {
+            tracing::warn!(
+                report_id = %id,
+                recipient = %principal.sub,
+                error = %error,
+                "report_ready notification delivery failed"
+            );
+        }
     }
     Ok(created)
 }
@@ -4469,7 +4500,7 @@ async fn notify_operators(
         if user_id.is_empty() {
             continue;
         }
-        let _ = push_notification(
+        if let Err(error) = push_notification(
             ctx,
             json!({
                 "user_id": user_id,
@@ -4483,7 +4514,14 @@ async fn notify_operators(
                 "dedupe_key": format!("{notification_type_value}:{entity_id}:{user_id}"),
             }),
         )
-        .await;
+        .await {
+            tracing::warn!(
+                kind = %notification_type_value,
+                recipient = %user_id,
+                error = %error,
+                "operator notification fan-out write failed"
+            );
+        }
     }
     Ok(())
 }
@@ -4711,8 +4749,14 @@ async fn notifications_mark_all(ctx: &Ctx<'_>) -> ApiResult<Response> {
         let mut patch = Map::new();
         patch.insert("read".into(), json!(true));
         patch.insert("read_at".into(), json!(crate::now_iso()));
-        let _ = tier2::update(ctx.client(), &opts, NOTIFICATIONS, &id, patch, None).await;
-        updated += 1;
+        match tier2::update(ctx.client(), &opts, NOTIFICATIONS, &id, patch, None).await {
+            Ok(_) => updated += 1,
+            Err(error) => tracing::warn!(
+                notification_id = %id,
+                error = %error,
+                "mark-all-read: notification update failed"
+            ),
+        }
     }
     Ok(web::json_response(
         json!({ "message": "all_notifications_marked_read", "updated": updated }),
@@ -6040,7 +6084,7 @@ async fn public_incident_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
         .await;
         return Err(error);
     }
-    let _ = notify_operators(
+    if let Err(error) = notify_operators(
         ctx,
         "incident_reported",
         format!(
@@ -6063,7 +6107,13 @@ async fn public_incident_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
         "incident",
         &incident_id,
     )
-    .await;
+    .await {
+        tracing::warn!(
+            incident_id = %incident_id,
+            error = %error,
+            "incident_reported operator notification delivery failed"
+        );
+    }
     let mut view = incident.clone();
     view.insert("id".into(), json!(incident_id.clone()));
     let mut response = domain::incidents::to_public_incident_view(&view);
