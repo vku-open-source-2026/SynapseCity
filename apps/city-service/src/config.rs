@@ -35,6 +35,12 @@ pub struct Config {
     pub public_read_rate_limit: u32,
     pub public_ai_rate_limit: u32,
     pub auth_rate_limit: u32,
+    /// Fixed-window length for the retired-auth-namespace limiter, in
+    /// milliseconds (AUTH_RATE_WINDOW_MS; default 300_000).
+    pub auth_rate_window_ms: u64,
+    /// Fixed-window length for the anonymous public-report limiter, in
+    /// milliseconds (PUBLIC_RATE_WINDOW_MS; default 600_000).
+    pub public_rate_window_ms: u64,
     pub require_turnstile: bool,
     pub metrics_token: Option<String>,
 }
@@ -266,6 +272,12 @@ impl Config {
             public_read_rate_limit: env_u32("PUBLIC_READ_RATE_LIMIT", 300),
             public_ai_rate_limit: env_u32("PUBLIC_AI_RATE_LIMIT", 20),
             auth_rate_limit: env_u32("AUTH_RATE_LIMIT", 30),
+            // The window knobs are honored by the production build (they used
+            // to be documented but silently ignored): 1s..24h sanity bounds.
+            auth_rate_window_ms: env_u64("AUTH_RATE_WINDOW_MS", 300_000)
+                .clamp(1_000, 86_400_000),
+            public_rate_window_ms: env_u64("PUBLIC_RATE_WINDOW_MS", 600_000)
+                .clamp(1_000, 86_400_000),
             require_turnstile: env_bool("REQUIRE_TURNSTILE"),
             metrics_token: env("METRICS_TOKEN").filter(|value| !value.is_empty()),
         })
@@ -319,6 +331,8 @@ impl Config {
             public_read_rate_limit: 1_000,
             public_ai_rate_limit: 1_000,
             auth_rate_limit: 1_000,
+            auth_rate_window_ms: 300_000,
+            public_rate_window_ms: 600_000,
             require_turnstile: false,
             metrics_token: None,
         }
@@ -328,6 +342,37 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::public_dependency;
+
+    #[test]
+    fn rate_limit_windows_default_and_honor_env_overrides() {
+        // Neutralize ambient values so the parse is deterministic; no other
+        // test in this crate reads the process environment.
+        for name in [
+            "NODE_ENV",
+            "SYNAPSEDX_BASE_URL",
+            "AUTH_RATE_WINDOW_MS",
+            "PUBLIC_RATE_WINDOW_MS",
+        ] {
+            std::env::remove_var(name);
+        }
+        let base = super::Config::from_env().expect("from_env with default windows");
+        assert_eq!(base.auth_rate_window_ms, 300_000);
+        assert_eq!(base.public_rate_window_ms, 600_000);
+
+        std::env::set_var("AUTH_RATE_WINDOW_MS", "45000");
+        std::env::set_var("PUBLIC_RATE_WINDOW_MS", "900000");
+        let tuned = super::Config::from_env().expect("from_env with tuned windows");
+        assert_eq!(tuned.auth_rate_window_ms, 45_000);
+        assert_eq!(tuned.public_rate_window_ms, 900_000);
+
+        // Out-of-range values clamp instead of disabling the limiter.
+        std::env::set_var("AUTH_RATE_WINDOW_MS", "1");
+        let clamped = super::Config::from_env().expect("from_env with clamped window");
+        assert_eq!(clamped.auth_rate_window_ms, 1_000);
+
+        std::env::remove_var("AUTH_RATE_WINDOW_MS");
+        std::env::remove_var("PUBLIC_RATE_WINDOW_MS");
+    }
 
     #[test]
     fn accepts_public_https_endpoint() {

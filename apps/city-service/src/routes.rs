@@ -222,7 +222,7 @@ pub async fn dispatch(State(state): State<AppState>, req: Request) -> ApiResult<
             "auth",
             &headers,
             state.config.auth_rate_limit,
-            Duration::from_secs(300),
+            Duration::from_millis(state.config.auth_rate_window_ms),
         )?;
     }
     if path.starts_with("/v1/public") {
@@ -241,7 +241,7 @@ pub async fn dispatch(State(state): State<AppState>, req: Request) -> ApiResult<
                 "public-report",
                 &headers,
                 state.config.public_rate_limit,
-                Duration::from_secs(600),
+                Duration::from_millis(state.config.public_rate_window_ms),
             )?;
         }
     }
@@ -6737,6 +6737,39 @@ mod route_tests {
             assert_eq!(status, StatusCode::GONE, "{uri}");
             assert_eq!(body["error"], "workspace_moved", "{uri}");
         }
+    }
+
+    #[tokio::test]
+    async fn auth_namespace_rate_limit_honors_the_configured_limit_and_window() {
+        let mut config = Config::for_test("http://127.0.0.1:1");
+        config.auth_rate_limit = 1;
+        config.auth_rate_window_ms = 60_000;
+        let app = app(AppState::new(
+            config,
+            Client::new("http://127.0.0.1:1", Credentials::none()).unwrap(),
+        ));
+        // First request passes the limiter and reaches the retired-surface 410.
+        let (status, _, _) = call(
+            app.clone(),
+            Method::POST,
+            "/v1/auth/login",
+            None,
+            Some(json!({})),
+        )
+        .await;
+        assert_eq!(status, StatusCode::GONE);
+        // The second request is rejected by the limiter before the route.
+        let (status, _, body) = call(
+            app,
+            Method::POST,
+            "/v1/auth/login",
+            None,
+            Some(json!({})),
+        )
+        .await;
+        assert_eq!(status, StatusCode::TOO_MANY_REQUESTS, "{body}");
+        assert_eq!(body["code"], "rate_limited");
+        assert!(body["details"]["retry_after_seconds"].as_u64().unwrap_or(0) >= 1);
     }
 
     #[tokio::test]
