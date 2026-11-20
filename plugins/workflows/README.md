@@ -119,24 +119,66 @@ repo-sync handoff (repo-sync owns `scripts/**` and exact-list tests), so these
 sources do not silently change the existing manifest contract. Invariants:
 terminal states refused, `ifVersion` CAS, full-record merge, no invalid fields.
 
+## Third source batch (City parity)
+
+The operations the archived coded console offered that the generic dispatcher
+cannot express are now dedicated workflow sources:
+
+| Operation | Artifact | Dataset |
+| --- | --- | --- |
+| `incidents.comment` (structured, internal visibility) | `city-incident-comment.workflow.json` | `city-incidents` |
+| `incidents.visibility` | `city-incident-visibility.workflow.json` | `city-incidents` |
+| `incidents.upvote` (idempotent per reporter) | `city-incident-upvote.workflow.json` | `city-incidents` |
+| `incidents.merge` (multi-record close + primary annotation) | `city-incident-merge.workflow.json` | `city-incidents` |
+| `maintenance.schedule` (recurring preventive schedule) | `city-maintenance-schedule.workflow.json` | `city-maintenance` |
+| `maintenance.scheduleCheck` (idempotent due scan → work orders) | `city-maintenance-schedule-check.workflow.json` | `city-maintenance` |
+| `iotReadings.batch` (CSV → validated reading rows + job record) | `city-iot-batch.workflow.json` | `city-iot-readings` |
+| `assets.document` (file metadata → asset attachment entry) | `city-asset-document.workflow.json` | `city-assets` |
+
+`city-incident-merge` closes each duplicate with
+`resolution_type:duplicate`/`merged_into` and only extends
+`merged_reporter_ids` with duplicates that actually closed; a missing
+duplicate is reported as failed and never blocks the merge. `upvote` refuses a
+second entry per reporter. `schedule-check` is idempotent by a schedule-run
+marker so re-running does not duplicate work orders.
+
+File and approval reads inside these workflows send `X-Workspace-App: city`.
+Files uploaded through the workspace form are stored under the app-scoped
+common tenant (`<org>:common:city`); a workflow that omits the header reads
+the org tenant and gets `404 file_not_found`. This applies to every workflow
+node that calls a common capability (`files`, `forms`, `approvals`,
+`comments`, …), not to dataset reads.
+
 ## Remaining action gap
 
-Regenerated from the artifact files in this directory (15 workflows):
-incident create/acknowledge/assign/close/reject/resolve/verify, maintenance
-create/assign/start/complete/cancel, CSV ingest (`city-csv-import`), report
-generation (`city-generate-report`) and the generic
+Regenerated from the artifact files in this directory (23 workflows):
+incident create/acknowledge/assign/close/reject/resolve/verify plus the third
+batch above, maintenance create/assign/start/complete/cancel/schedule/
+schedule-check, CSV ingest (`city-csv-import`), report generation
+(`city-generate-report`), IoT batch (`city-iot-batch`) and the generic
 create/update/delete/execute dispatcher (`city-workspace-actions`, which also
 covers assets, IoT sensors/readings, alerts, budgets, transactions, reports,
-users, geofences, ingest jobs, files and notifications) all have executable
-sources. Still without a dedicated workflow:
+users, geofences, ingest jobs, files and notifications). Still without a
+dedicated workflow:
 
-- `incidents.merge` — the orchestration that closes each duplicate and
-  annotates the primary; the generic update can close a single record but not
-  the multi-record merge.
-- maintenance **photos** and asset **photos/attachments/documents** —
-  file references through the Tier-2 files capability are not plain record
-  writes.
+- maintenance **photos** — attaching a file to a maintenance record is not yet
+  bound (asset documents use the same files pattern and can be copied once the
+  maintenance record shape is agreed).
 - geospatial operations (coverage, validation, reverse geocode).
+
+Large-file ingest: workspace file fields declare an explicit `maxBytes`
+(10 MiB for CSV/documents today). The DX edge allows 25 MiB
+(`client_max_body_size 25m`) and the files capability defaults to 25 MiB, so
+raising a form's `maxBytes` up to 25 MiB needs no infrastructure change; larger
+files would require a chunked upload contract (not implemented).
+
+## Deferred
+
+- **People → IAM provisioning.** Provisioning login identities is a Tier-2/DX
+  capability (IAM SDK), not a City dataset write. `city-people-admin` stays
+  dataset-backed until the DX member-identity wave adds the SDK operation and
+  the form; this is an explicit deferral tracked with the DX workspace
+  program, not a silent gap.
 
 The DX action vocabulary declares `create|update|delete|execute`; the status
 transitions above are bound with `action=update` and `workflowRef` in the

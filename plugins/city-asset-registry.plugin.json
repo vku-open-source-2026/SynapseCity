@@ -332,6 +332,46 @@
         "onSubmit": "act-asset-delete-submit"
       },
       {
+        "id": "asset-document",
+        "type": "form",
+        "title": "Attach a document or photo",
+        "width": "half",
+        "action": "execute",
+        "fields": [
+          {
+            "name": "asset_id",
+            "type": "text",
+            "label": "Asset id",
+            "required": true
+          },
+          {
+            "name": "file_id",
+            "label": "Document or photo",
+            "type": "file",
+            "accept": "image/png,image/jpeg,image/webp,image/gif,application/pdf,text/csv,text/plain,application/json,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "maxBytes": 10485760,
+            "required": true,
+            "uploadAction": "act-asset-document-upload-file-id"
+          },
+          {
+            "name": "title",
+            "type": "text",
+            "label": "Title"
+          },
+          {
+            "name": "description",
+            "type": "textarea",
+            "label": "Description"
+          }
+        ],
+        "resource": "assets",
+        "workflowRef": {
+          "name": "city-asset-document",
+          "checksum": "47c96d83c28eec7100b679f0ab0593c27965fdec0567dae54ff0a84087192156"
+        },
+        "onSubmit": "act-asset-document-submit"
+      },
+      {
         "id": "act-workspace-navigation-link1",
         "type": "action",
         "title": "Navigate Overview",
@@ -890,6 +930,71 @@
           "inputs": [],
           "actions": []
         }
+      },
+      {
+        "id": "act-asset-document-submit",
+        "type": "action",
+        "title": "Submit Attach a document or photo",
+        "operation": {
+          "kind": "execute",
+          "target": "asset-document",
+          "mappings": [
+            {
+              "field": "asset_id",
+              "source": "event",
+              "value": "values.asset_id",
+              "required": true
+            },
+            {
+              "field": "file_id",
+              "source": "event",
+              "value": "values.file_id",
+              "required": true
+            },
+            {
+              "field": "title",
+              "source": "event",
+              "value": "values.title",
+              "required": false
+            },
+            {
+              "field": "description",
+              "source": "event",
+              "value": "values.description",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-asset-document-upload-file-id",
+        "type": "action",
+        "title": "Upload Attach a document or photo · file_id",
+        "operation": {
+          "kind": "upload",
+          "target": "asset-document",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "file_id"
+        }
+      },
+      {
+        "id": "act-asset-document-open",
+        "type": "action",
+        "title": "Open Attach a document or photo",
+        "operation": {
+          "kind": "openForm",
+          "target": "asset-document",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
       }
     ]
   },
@@ -898,5 +1003,5 @@
     "path": "plugins/city-asset-registry.plugin.json",
     "revision": "2026-11-15.business"
   },
-  "checksum": "sha256:f31010398d9b7c9555ebe804bb9ebbc2d26ef8439b23266f10847b42072b7421"
+  "checksum": "sha256:69959fd71534eeb56533c86980e30814cdc0dcb8f3aea8d61a14c17a17d388a1"
 }

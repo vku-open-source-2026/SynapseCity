@@ -252,9 +252,18 @@
       "method": "POST",
       "resource": "maintenance",
       "status": "source_ready"
+    },
+    {
+      "operation": "assets.document",
+      "workflow": "city-asset-document",
+      "file": "plugins/workflows/city-asset-document.workflow.json",
+      "dataset": "city-assets",
+      "method": "PATCH",
+      "resource": "assets",
+      "status": "source_ready"
     }
   ],
-  "domainNote": "Third City batch (incident comment/visibility/upvote/merge). Same validation/CAS pattern as the lifecycle batch; merge is the multi-record orchestration the generic dispatcher cannot express (fixed 5 duplicate slots, or-filter query reads, CAS close per slot, re-read before the primary annotation). Bundle workflowRef checksums for this batch pin the portable workflow graph checksum (sha256 over the canonical {nodes, connections, settings}); the pre-existing pins are import-time DX snapshots.",
+  "domainNote": "Third City batch (incident comment/visibility/upvote/merge, preventive maintenance schedule/schedule-check, asset document attach). Same validation/CAS pattern as the lifecycle batch; merge is the multi-record orchestration the generic dispatcher cannot express (fixed 5 duplicate slots, or-filter query reads, CAS close per slot, re-read before the primary annotation), and assets.document joins file metadata from the files capability to the asset record. Workflow nodes that call a common capability send X-Workspace-App: city because those records live in the app-scoped common tenant. Bundle workflowRef checksums for this batch pin the portable workflow graph checksum (sha256 over the canonical {nodes, connections, settings}); the pre-existing pins are import-time DX snapshots.",
   "fileActionWorkflows": [
     {
       "workflow": "city-csv-import",

@@ -1,0 +1,210 @@
+{
+  "name": "city-asset-document",
+  "nodes": [
+    {
+      "id": "dx-manual-trigger",
+      "name": "DX manual execution",
+      "type": "manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        200,
+        300
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "validate-envelope",
+      "name": "Validate DX envelope and action fields",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        300
+      ],
+      "parameters": {
+        "code": "const envelope = $input || {};\nconst text = (value) => (typeof value === 'string' ? value.trim() : '');\nconst envelopeKeys = new Set(['pluginId', 'widgetId', 'product', 'resource', 'submittedBy', 'submittedAt', 'action', 'fields']);\nconst unknownEnvelope = Object.keys(envelope).filter((key) => !envelopeKeys.has(key));\nif (unknownEnvelope.length) throw new Error('unknown_envelope_fields:' + unknownEnvelope.join(','));\nconst product = text(envelope.product);\nconst resource = text(envelope.resource);\nconst submittedBy = text(envelope.submittedBy);\nif (!submittedBy) throw new Error('submitted_by_required');\nconst fields = envelope.fields && typeof envelope.fields === 'object' && !Array.isArray(envelope.fields) ? envelope.fields : null;\nif (!fields) throw new Error('fields_required');\nif (product !== 'city') throw new Error('unsupported_product');\nif (resource !== 'assets') throw new Error('unsupported_resource');\nconst recordId = text(fields.asset_id);\nif (!/^[A-Za-z0-9_@.:+-]{1,256}$/.test(recordId)) throw new Error('record_id_invalid');\nconst encodedAssetId = encodeURIComponent(recordId);\nconst allowed = new Set([\"asset_id\",\"file_id\",\"title\",\"description\"]);\nconst unknown = Object.keys(fields).filter((key) => !allowed.has(key));\nif (unknown.length) throw new Error('unknown_fields:' + unknown.join(','));\nconst fileId = text(fields.file_id);\nif (!/^[A-Za-z0-9._-]{1,80}$/.test(fileId)) throw new Error('file_id_required');\nconst title = text(fields.title);\nif (title.length > 200) throw new Error('title_max_200');\nconst description = text(fields.description);\nif (description.length > 4000) throw new Error('description_max_4000');\nconst audit = {\n  product, resource, operation: 'assets.document', recordId,\n  pluginId: text(envelope.pluginId), widgetId: text(envelope.widgetId),\n  submittedBy, submittedAt: text(envelope.submittedAt) || $now,\n};\n\nreturn { recordId, encodedAssetId, fileId, title, description, submitter: submittedBy, audit, operation: 'assets.document' };"
+      }
+    },
+    {
+      "id": "http-get-file",
+      "name": "Read uploaded file metadata",
+      "type": "httpRequest",
+      "typeVersion": 4,
+      "position": [
+        640,
+        300
+      ],
+      "parameters": {
+        "url": "={{ 'https://synapsedx.sbs/v1/capabilities/files/' + $json.fileId }}",
+        "method": "GET",
+        "headers": {
+          "Accept": "application/json",
+          "X-Workspace-App": "city"
+        },
+        "auth": {
+          "credentialRef": "synapsedx-organization",
+          "header": "X-API-Key",
+          "allowedOrigins": [
+            "https://synapsedx.sbs"
+          ]
+        },
+        "includeInput": true,
+        "timeoutMs": 15000
+      }
+    },
+    {
+      "id": "http-get-asset",
+      "name": "Read current asset",
+      "type": "httpRequest",
+      "typeVersion": 4,
+      "position": [
+        860,
+        300
+      ],
+      "parameters": {
+        "url": "={{ 'https://synapsedx.sbs/v1/capabilities/datasets/city-assets/records/' + $json.input.encodedAssetId }}",
+        "method": "GET",
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        "auth": {
+          "credentialRef": "synapsedx-organization",
+          "header": "X-API-Key",
+          "allowedOrigins": [
+            "https://synapsedx.sbs"
+          ]
+        },
+        "includeInput": true,
+        "timeoutMs": 15000
+      }
+    },
+    {
+      "id": "append-attachment",
+      "name": "Append document and enforce invariants",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        1080,
+        300
+      ],
+      "parameters": {
+        "code": "const response = $input || {};\nconst current = response.body;\nconst action = response.input.input;\nconst file = response.input.body;\nif (response.statusCode !== 200 || !current || typeof current.data !== 'object' || !current.data) throw new Error('asset_not_found');\nif (!file || typeof file !== 'object' || !file.id) throw new Error('file_not_found');\nconst data = current.data;\nif (!Number.isInteger(current.version)) throw new Error('record_version_unavailable');\nconst contentType = String(file.contentType || '').toLowerCase();\nconst allowedTypes = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'application/pdf', 'text/csv', 'text/plain', 'application/json', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];\nif (!allowedTypes.includes(contentType)) throw new Error('unsupported_file_type');\nconst attachments = Array.isArray(data.attachments) ? data.attachments.filter((entry) => entry && typeof entry === 'object') : [];\nconst entry = {\n  file_id: String(file.id),\n  file_name: String(file.filename || action.title || 'document'),\n  file_type: contentType,\n  kind: contentType.startsWith('image/') ? 'photo' : 'document',\n  ...(typeof file.size === 'number' ? { size: file.size } : {}),\n  ...(file.checksumSha256 ? { checksum_sha256: String(file.checksumSha256) } : {}),\n  ...(action.title ? { title: action.title } : {}),\n  ...(action.description ? { description: action.description } : {}),\n  uploaded_by: action.submitter,\n  uploaded_at: $now,\n};\nconst next = { ...data, attachments: [...attachments, entry] };\nreturn { body: { data: next, ifVersion: current.version, publish: false }, encodedAssetId: action.encodedAssetId, audit: action.audit, document: entry, attachments: attachments.length + 1 };"
+      }
+    },
+    {
+      "id": "http-patch-asset",
+      "name": "Patch full asset",
+      "type": "httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1300,
+        300
+      ],
+      "parameters": {
+        "url": "={{ 'https://synapsedx.sbs/v1/capabilities/datasets/city-assets/records/' + $json.encodedAssetId }}",
+        "method": "PATCH",
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        "auth": {
+          "credentialRef": "synapsedx-organization",
+          "header": "X-API-Key",
+          "allowedOrigins": [
+            "https://synapsedx.sbs"
+          ]
+        },
+        "body": "={{ $json.body }}",
+        "includeInput": true,
+        "timeoutMs": 15000
+      }
+    },
+    {
+      "id": "summarize",
+      "name": "Summarize attached document",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        300
+      ],
+      "parameters": {
+        "code": "const response = $input || {};\nconst state = response.input;\nif (response.statusCode !== 200 && response.statusCode !== 201) throw new Error('asset_write_failed');\nreturn {\n  operation: 'assets.document',\n  asset_id: state.audit.recordId,\n  document: state.document,\n  attachments: state.attachments,\n};"
+      }
+    }
+  ],
+  "connections": {
+    "DX manual execution": {
+      "main": [
+        [
+          {
+            "node": "Validate DX envelope and action fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate DX envelope and action fields": {
+      "main": [
+        [
+          {
+            "node": "Read uploaded file metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read uploaded file metadata": {
+      "main": [
+        [
+          {
+            "node": "Read current asset",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read current asset": {
+      "main": [
+        [
+          {
+            "node": "Append document and enforce invariants",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append document and enforce invariants": {
+      "main": [
+        [
+          {
+            "node": "Patch full asset",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Patch full asset": {
+      "main": [
+        [
+          {
+            "node": "Summarize attached document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "access": {
+      "mode": "owner-only"
+    }
+  }
+}

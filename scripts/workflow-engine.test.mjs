@@ -129,7 +129,11 @@ test('real Tier-1 engine rejects a malformed transition before any HTTP call', {
 });
 
 test('real Tier-1 engine executes the single-record domain transitions with CAS', { skip: available ? false : skipReason }, () => {
-    const domain = (manifest.domainWorkflows || []).filter((entry) => entry.method === 'PATCH' && entry.workflow !== 'city-incident-merge');
+    // Multi-record/multi-step orchestrations (merge, document attach) are
+    // covered by the domain-workflows harness; this test asserts the single
+    // record GET → CAS PATCH shape.
+    const multiStep = new Set(['city-incident-merge', 'city-asset-document']);
+    const domain = (manifest.domainWorkflows || []).filter((entry) => entry.method === 'PATCH' && !multiStep.has(entry.workflow));
     assert.ok(domain.length >= 4, 'single-record domain transitions are registered');
     for (const entry of domain) {
         const result = runHarness(entry.file, entry.dataset, manifest.persistence.credentialRef, 'good');

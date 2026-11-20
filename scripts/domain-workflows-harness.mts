@@ -31,7 +31,7 @@ const h = await startHarness();
 h.config.publicUrl = h.base;
 const originalFetch = globalThis.fetch;
 try {
-  for (const slug of ['city-incidents', 'city-maintenance', 'city-iot-sensors', 'city-iot-readings', 'city-ingest-jobs']) {
+  for (const slug of ['city-incidents', 'city-maintenance', 'city-iot-sensors', 'city-iot-readings', 'city-ingest-jobs', 'city-assets']) {
     const dataset = await createDataset(h, { slug, name: slug, public: false }, { token: 'admin-token' });
     assert.equal(dataset.status, 201, JSON.stringify(dataset.body));
   }
@@ -257,6 +257,50 @@ try {
   const badBatch = await run('city-iot-batch', 'iotReadings', { file_id: 'no-such-file' }, 'execute');
   assert.equal(badBatch.status, 'error');
 
+  // --- assets.document: upload through the files capability, attach to the asset ---
+  const asset = await api(h, '/v1/capabilities/datasets/city-assets/records', {
+    token: 'admin-token', method: 'POST',
+    body: { data: { type: 'Asset', name: 'Dragon River Bridge', asset_code: 'AST_DRAGON_1', status: 'active', public_visible: true }, publish: false },
+  });
+  assert.equal(asset.status, 201, JSON.stringify(asset.body));
+  const assetId = String(asset.body.id);
+  const uploadFile = async (filename: string, contentType: string, bytes: Buffer) => {
+    const metadata = await api(h, '/v1/capabilities/files', { token: 'admin-token', method: 'POST', headers: appHeaders, body: { filename, contentType } });
+    assert.equal(metadata.status, 201, JSON.stringify(metadata.body));
+    const stored = await api(h, `/v1/capabilities/files/${metadata.body.id}/content`, {
+      token: 'admin-token', method: 'PUT', headers: { ...appHeaders, 'content-type': contentType }, buffer: bytes,
+    });
+    assert.equal(stored.status, 200, JSON.stringify(stored.body));
+    return String(metadata.body.id);
+  };
+  const reportFileId = await uploadFile('inspection-report.pdf', 'application/pdf', Buffer.from('%PDF-1.4 city inspection report'));
+  const attachReport = await run('city-asset-document', 'assets', {
+    asset_id: assetId, file_id: reportFileId, title: 'Inspection report 2026', description: 'Annual structural inspection',
+  }, 'execute');
+  assert.equal(attachReport.status, 'success', attachReport.error);
+  assert.equal(attachReport.output.attachments, 1);
+  const photoFileId = await uploadFile('site-photo.png', 'image/png', Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  const attachPhoto = await run('city-asset-document', 'assets', { asset_id: assetId, file_id: photoFileId }, 'execute');
+  assert.equal(attachPhoto.status, 'success', attachPhoto.error);
+  assert.equal(attachPhoto.output.attachments, 2);
+  let assetRecord = (await api(h, `/v1/capabilities/datasets/city-assets/records/${assetId}`, { token: 'admin-token' })).body;
+  assert.equal(assetRecord.data.name, 'Dragon River Bridge', 'attaching a document erased asset fields');
+  assert.equal(assetRecord.data.attachments.length, 2);
+  const attached = assetRecord.data.attachments;
+  assert.equal(attached[0].file_id, reportFileId);
+  assert.equal(attached[0].file_name, 'inspection-report.pdf');
+  assert.equal(attached[0].file_type, 'application/pdf');
+  assert.equal(attached[0].kind, 'document');
+  assert.equal(attached[0].title, 'Inspection report 2026');
+  assert.equal(attached[0].uploaded_by, 'member-test');
+  assert.equal(attached[1].file_id, photoFileId);
+  assert.equal(attached[1].kind, 'photo');
+  assert.ok(typeof attached[0].size === 'number', 'the attachment entry lost the file size');
+  const attachMissing = await run('city-asset-document', 'assets', { asset_id: assetId, file_id: 'no-such-file' }, 'execute');
+  assert.equal(attachMissing.status, 'error');
+  const attachUnknownAsset = await run('city-asset-document', 'assets', { asset_id: 'ghost-asset', file_id: reportFileId }, 'execute');
+  assert.equal(attachUnknownAsset.status, 'error');
+
   console.log(JSON.stringify({
     passed: true,
     engine: 'real Tier-1',
@@ -270,6 +314,7 @@ try {
     scheduleRecheckCreated: secondCheck.output.created,
     iotRowsImported: iotBatch.output.imported,
     iotRowsInvalid: iotBatch.output.invalid,
+    assetAttachments: attachPhoto.output.attachments,
     productAPICalls: 0,
   }));
 } finally {

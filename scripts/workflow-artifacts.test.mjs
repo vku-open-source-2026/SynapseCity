@@ -153,7 +153,14 @@ test('no artifact writes via a projection, Base SDK or Tier-3 API', () => {
         assert.ok(!/import\s*\(|eval\s*\(|require\s*\(/.test(text), 'validation code must not load remote code');
         const urls = [...text.matchAll(/https?:\/\/[^"']+/g)].map((match) => match[0]);
         for (const url of urls) {
-            assert.ok(url === 'https://synapsedx.sbs' || url.startsWith('https://synapsedx.sbs/v1/capabilities/datasets/'), `unexpected URL ${url}`);
+            // Public Tier-2 only: dataset records plus the files capability the
+            // tracked file-action workflows (city-csv-import) already use.
+            assert.ok(
+                url === 'https://synapsedx.sbs'
+                    || url.startsWith('https://synapsedx.sbs/v1/capabilities/datasets/')
+                    || url.startsWith('https://synapsedx.sbs/v1/capabilities/files/'),
+                `unexpected URL ${url}`,
+            );
         }
     }
 });

@@ -54,4 +54,5 @@ test('real engine + real DX routes: merge, upvote and the schedule check behave'
     assert.equal(verdict.scheduleRecheckCreated, 0, 're-running the schedule check duplicated an order');
     assert.equal(verdict.iotRowsImported, 2, 'the IoT batch did not import the valid rows');
     assert.equal(verdict.iotRowsInvalid, 1, 'the IoT batch did not reject the invalid row');
+    assert.equal(verdict.assetAttachments, 2, 'the asset document flow did not attach both files');
 });

@@ -555,6 +555,46 @@
         "orders are created through the Tier-2 records bulk API (1..50 per run) with per-entry error reporting",
         "the check writes only work orders; it never edits the schedule source records"
       ]
+    },
+    {
+      "operation": "assets.document",
+      "method": "PATCH",
+      "dataset": "city-assets",
+      "recordIdField": "asset_id",
+      "fields": [
+        {
+          "name": "asset_id",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "file_id",
+          "type": "file",
+          "required": true
+        },
+        {
+          "name": "title",
+          "type": "text"
+        },
+        {
+          "name": "description",
+          "type": "textarea"
+        }
+      ],
+      "allowedFrom": [
+        "active",
+        "inactive",
+        "maintenance"
+      ],
+      "patch": {
+        "attachments": "{append entry {file_id, file_name, file_type, kind, size, checksum_sha256, title, description, uploaded_by, uploaded_at}}"
+      },
+      "invariants": [
+        "the file must already be stored through the common files capability (DX upload action); the workflow reads its metadata and refuses an unknown file id",
+        "only the archived upload MIME allowlist is accepted (4 image + 6 document types); anything else is rejected as unsupported_file_type",
+        "the attachment entry is appended to the asset record's attachments array (the archived POST /v1/assets/:id/documents semantics); existing entries are preserved",
+        "the write stays private (publish:false); the City service remains the only publisher of asset projections"
+      ]
     }
   ]
 }
