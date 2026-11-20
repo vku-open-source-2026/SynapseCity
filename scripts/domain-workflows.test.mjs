@@ -52,4 +52,6 @@ test('real engine + real DX routes: merge, upvote and the schedule check behave'
     assert.equal(verdict.mergeFailures, 1, 'the missing duplicate was not tolerated');
     assert.equal(verdict.scheduleOrdersCreated, 2, 'the schedule check did not create one order per due schedule');
     assert.equal(verdict.scheduleRecheckCreated, 0, 're-running the schedule check duplicated an order');
+    assert.equal(verdict.iotRowsImported, 2, 'the IoT batch did not import the valid rows');
+    assert.equal(verdict.iotRowsInvalid, 1, 'the IoT batch did not reject the invalid row');
 });

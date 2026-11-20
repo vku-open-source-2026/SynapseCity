@@ -264,6 +264,13 @@
       "credentialRef": "synapsedx-organization"
     },
     {
+      "workflow": "city-iot-batch",
+      "file": "plugins/workflows/city-iot-batch.workflow.json",
+      "product": "city",
+      "status": "source_ready",
+      "credentialRef": "synapsedx-organization"
+    },
+    {
       "workflow": "city-generate-report",
       "file": "plugins/workflows/city-generate-report.workflow.json",
       "product": "city",

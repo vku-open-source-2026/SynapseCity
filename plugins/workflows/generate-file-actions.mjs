@@ -47,6 +47,27 @@ return { result, body: { data: { type: 'IngestJob', source: 'csv', dataset: 'cit
   http('Persist ingest result', `${DX}/v1/capabilities/datasets/city-ingest-jobs/records`, '={{ $json.body }}'),
   node('Return batch result', 'code', { code: 'return $input.input.result;' }),
 ]);
+const readingColumns = [
+  { column: 'sensor_id', field: 'sensor_id', required: true, maxLength: 128 },
+  { column: 'value', field: 'value', type: 'number', required: true },
+  { column: 'timestamp', field: 'timestamp', type: 'date' },
+  { column: 'metadata', field: 'metadata', type: 'json' },
+];
+save('city-iot-batch', [
+  node('DX manual execution', 'manualTrigger'),
+  node('Validate City iot batch', 'code', { code: envelope('iotReadings', ['file_id', 'batch_offset']) + `
+if (typeof fields.file_id !== 'string' || !/^[A-Za-z0-9._-]{1,80}$/.test(fields.file_id)) throw new Error('file_id_required');
+const offset = fields.batch_offset === undefined ? 0 : fields.batch_offset;
+if (!Number.isInteger(offset) || offset < 0 || offset > 50000) throw new Error('invalid_batch_offset');
+return { input, file_id: fields.file_id, body: { datasetId: 'city-iot-readings', schema: { columns: ${JSON.stringify(readingColumns)}, defaults: { type: 'SensorReading', source: 'synapsecity-iot-batch', created_at: $now, updated_at: $now } }, publish: false, offset, limit: 500 } };` }),
+  http('Import validated sensor readings', `={{ '${DX}/v1/capabilities/files/' + $json.file_id + '/tabular/import' }}`, '={{ $json.body }}', true),
+  node('Record iot batch results', 'code', { code: `const result = $input.body;
+if (!$input.statusCode || typeof result.imported !== 'number' || typeof result.totalRows !== 'number') throw new Error('invalid_import_result');
+const source = $input.input;
+return { result, body: { data: { type: 'IngestJob', source: 'iot-readings-csv', dataset: 'city-iot-readings', file_id: source.file_id, file_name: result.filename, status: result.nextOffset !== undefined ? 'running' : result.invalid ? 'completed_with_errors' : 'completed', rows_total: result.totalRows, rows_processed: result.processedRows, rows_imported: result.imported, rows_skipped: result.skipped, rows_invalid: result.invalid, batch_offset: result.offset, errors: result.errors, checksum: result.checksumSha256, submitted_by: source.input.submittedBy, plugin_id: source.input.pluginId, created_at: $now, updated_at: $now }, publish: false } };` }),
+  http('Persist iot ingest result', `${DX}/v1/capabilities/datasets/city-ingest-jobs/records`, '={{ $json.body }}'),
+  node('Return iot batch result', 'code', { code: 'return $input.input.result;' }),
+]);
 const field = name => ({ field: name }), literal = value => ({ literal: value }), calc = (op, ...args) => ({ op, args }), coalesce = (...names) => calc('coalesce', ...names.map(field)), column = (name, value = field(name)) => ({ name, value });
 const numeric = name => calc('number', field(name));
 const age = calc('round', calc('yearsBetween', field('lifecycle.commissioned_date'), calc('now')), literal(1));

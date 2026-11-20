@@ -68,6 +68,20 @@
         "onLoad": "act-readings-metric-load"
       },
       {
+        "id": "readings-chart",
+        "type": "chart",
+        "title": "Readings average by sensor",
+        "width": "full",
+        "resource": "iotReadings",
+        "columns": [
+          "sensor_id",
+          "value"
+        ],
+        "chartType": "bar",
+        "aggregation": "average",
+        "onLoad": "act-readings-chart-load"
+      },
+      {
         "id": "alerts-metric",
         "type": "metric",
         "title": "Alerts",
@@ -320,6 +334,71 @@
         "onSubmit": "act-reading-create-submit"
       },
       {
+        "id": "iot-batch",
+        "type": "form",
+        "presentation": "inline",
+        "title": "Batch-ingest sensor readings (CSV)",
+        "width": "full",
+        "resource": "iotReadings",
+        "action": "execute",
+        "workflowRef": {
+          "name": "city-iot-batch",
+          "checksum": "65da1426b306fd031c71d09eac8c2601f2e3c1a295f1ace47882504053d64d7c"
+        },
+        "onSubmit": "import-all-iot-batches",
+        "fields": [
+          {
+            "name": "file_id",
+            "label": "Readings CSV",
+            "type": "file",
+            "accept": "text/csv,application/vnd.ms-excel,application/octet-stream",
+            "maxBytes": 10485760,
+            "required": true,
+            "uploadAction": "act-iot-batch-upload-file-id"
+          },
+          {
+            "name": "batch_offset",
+            "label": "Resume at row offset",
+            "type": "number",
+            "defaultValue": "0"
+          }
+        ]
+      },
+      {
+        "id": "import-all-iot-batches",
+        "type": "action",
+        "title": "Import all readings batches",
+        "operation": {
+          "kind": "batch",
+          "target": "iot-batch",
+          "source": "batch_offset",
+          "mappings": [
+            {
+              "field": "file_id",
+              "source": "event",
+              "value": "values.file_id",
+              "required": true
+            },
+            {
+              "field": "batch_offset",
+              "source": "event",
+              "value": "values.batch_offset",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "iot-batch-help",
+        "type": "markdown",
+        "title": "Readings CSV format",
+        "width": "full",
+        "text": "Required columns: sensor_id, value (number). Optional: timestamp (ISO date), metadata (JSON). Rows are validated per row and created as private SensorReading records; the job summary reports imported, skipped and invalid rows with row numbers."
+      },
+      {
         "id": "act-workspace-navigation-link1",
         "type": "action",
         "title": "Navigate Overview",
@@ -421,6 +500,36 @@
         "operation": {
           "kind": "query",
           "target": "readings-metric",
+          "mappings": [
+            {
+              "field": "limit",
+              "source": "event",
+              "value": "limit"
+            },
+            {
+              "field": "offset",
+              "source": "event",
+              "value": "offset"
+            },
+            {
+              "field": "search",
+              "source": "event",
+              "value": "search"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "iotReadings"
+        }
+      },
+      {
+        "id": "act-readings-chart-load",
+        "type": "action",
+        "title": "Read Readings average by sensor",
+        "operation": {
+          "kind": "query",
+          "target": "readings-chart",
           "mappings": [
             {
               "field": "limit",
@@ -869,6 +978,33 @@
           "inputs": [],
           "actions": []
         }
+      },
+      {
+        "id": "act-iot-batch-upload-file-id",
+        "type": "action",
+        "title": "Upload Batch-ingest sensor readings (CSV) · file_id",
+        "operation": {
+          "kind": "upload",
+          "target": "iot-batch",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": [],
+          "source": "file_id"
+        }
+      },
+      {
+        "id": "act-iot-batch-open",
+        "type": "action",
+        "title": "Open Batch-ingest sensor readings (CSV)",
+        "operation": {
+          "kind": "openForm",
+          "target": "iot-batch",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
       }
     ]
   },
@@ -877,5 +1013,5 @@
     "path": "plugins/city-iot-network.plugin.json",
     "revision": "2026-11-15.business"
   },
-  "checksum": "sha256:b2ef5e610fc8e6f5f726f8f8ce59935c5196d6cedb0a94785194e7b19d993d34"
+  "checksum": "sha256:78584058d00dc300e0b03fc9187b852a1f127844b9ae98710c1cf82d43ef7681"
 }

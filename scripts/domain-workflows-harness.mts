@@ -31,7 +31,7 @@ const h = await startHarness();
 h.config.publicUrl = h.base;
 const originalFetch = globalThis.fetch;
 try {
-  for (const slug of ['city-incidents', 'city-maintenance']) {
+  for (const slug of ['city-incidents', 'city-maintenance', 'city-iot-sensors', 'city-iot-readings', 'city-ingest-jobs']) {
     const dataset = await createDataset(h, { slug, name: slug, public: false }, { token: 'admin-token' });
     assert.equal(dataset.status, 201, JSON.stringify(dataset.body));
   }
@@ -212,6 +212,51 @@ try {
   assert.equal(lookaheadCheck.status, 'success', lookaheadCheck.error);
   assert.equal(lookaheadCheck.output.created, 1, 'the lookahead window did not pick up the fresh schedule');
 
+  // --- iotReadings batch: CSV in, per-row validation, summary job record ---
+  const sensor = await api(h, '/v1/capabilities/datasets/city-iot-sensors/records', {
+    token: 'admin-token', method: 'POST',
+    body: { data: { type: 'IoTSensor', sensor_code: 'SN-POTHOLE-1', asset_id: 'AST_BRIDGE_1', sensor_type: 'water_level', measurement_unit: 'cm', status: 'active' }, publish: false },
+  });
+  assert.equal(sensor.status, 201, JSON.stringify(sensor.body));
+  const appHeaders = { 'x-workspace-app': 'city' };
+  const readingsCsv = 'sensor_id,value,timestamp,metadata\nSN-POTHOLE-1,12.5,2026-11-20T10:00:00Z,\nSN-POTHOLE-1,bad,,\nSN-POTHOLE-1,13.5,2026-11-20T11:00:00Z,"{""source"":""manual""}"\n';
+  const readingsFile = await api(h, '/v1/capabilities/files', { token: 'admin-token', method: 'POST', headers: appHeaders, body: { filename: 'readings.csv', contentType: 'text/csv' } });
+  assert.equal(readingsFile.status, 201, JSON.stringify(readingsFile.body));
+  const readingsFileId = readingsFile.body.id;
+  const uploaded = await api(h, `/v1/capabilities/files/${readingsFileId}/content`, {
+    token: 'admin-token', method: 'PUT', headers: { ...appHeaders, 'content-type': 'text/csv' }, buffer: Buffer.from(readingsCsv),
+  });
+  assert.equal(uploaded.status, 200, JSON.stringify(uploaded.body));
+  const iotBatch = await run('city-iot-batch', 'iotReadings', { file_id: readingsFileId, batch_offset: 0 }, 'execute');
+  assert.equal(iotBatch.status, 'success', iotBatch.error);
+  assert.equal(iotBatch.output.imported, 2, 'the valid rows were not imported');
+  assert.equal(iotBatch.output.invalid, 1, 'the invalid value row was accepted');
+  assert.equal(iotBatch.output.errors[0].row, 3, 'the invalid row number was not reported');
+  const readings = await api(h, '/v1/capabilities/datasets/city-iot-readings/records/query', {
+    token: 'admin-token', method: 'POST', body: { limit: 100 },
+  });
+  assert.equal(readings.body.items.length, 2, 'the batch did not persist exactly the valid readings');
+  const readingValues = readings.body.items.map((item: any) => item.data.value).sort((left: number, right: number) => left - right);
+  assert.deepEqual(readingValues, [12.5, 13.5]);
+  for (const item of readings.body.items) {
+    assert.equal(item.data.sensor_id, 'SN-POTHOLE-1');
+    assert.equal(item.data.type, 'SensorReading');
+  }
+  const laterReading = readings.body.items.find((item: any) => item.data.value === 13.5);
+  assert.match(String(laterReading.data.timestamp), /^2026-11-20T11:00:00/, 'the timestamp was not normalized to ISO');
+  assert.deepEqual(laterReading.data.metadata, { source: 'manual' }, 'the metadata JSON column was not parsed');
+  const iotJobs = await api(h, '/v1/capabilities/datasets/city-ingest-jobs/records/query', {
+    token: 'admin-token', method: 'POST', body: { where: { source: 'iot-readings-csv' }, limit: 10 },
+  });
+  assert.equal(iotJobs.body.items.length, 1, 'the batch did not persist its job record');
+  const iotJob = iotJobs.body.items[0].data;
+  assert.equal(iotJob.dataset, 'city-iot-readings');
+  assert.equal(iotJob.rows_imported, 2);
+  assert.equal(iotJob.rows_invalid, 1);
+  assert.equal(iotJob.status, 'completed_with_errors');
+  const badBatch = await run('city-iot-batch', 'iotReadings', { file_id: 'no-such-file' }, 'execute');
+  assert.equal(badBatch.status, 'error');
+
   console.log(JSON.stringify({
     passed: true,
     engine: 'real Tier-1',
@@ -223,6 +268,8 @@ try {
     mergeFailures: merge.output.failed.length,
     scheduleOrdersCreated: firstCheck.output.created + lookaheadCheck.output.created,
     scheduleRecheckCreated: secondCheck.output.created,
+    iotRowsImported: iotBatch.output.imported,
+    iotRowsInvalid: iotBatch.output.invalid,
     productAPICalls: 0,
   }));
 } finally {
