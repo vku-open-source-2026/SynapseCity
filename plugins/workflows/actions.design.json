@@ -486,6 +486,75 @@
         "a CAS conflict on any duplicate close fails the run for an explicit re-run instead of a silent partial merge",
         "every write stays private (publish:false)"
       ]
+    },
+    {
+      "operation": "maintenance.schedule",
+      "method": "PATCH",
+      "dataset": "city-maintenance",
+      "recordIdField": "work_order_id",
+      "fields": [
+        {
+          "name": "work_order_id",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "cycle_days",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "warning_days",
+          "type": "number"
+        },
+        {
+          "name": "responsible_team",
+          "type": "text"
+        },
+        {
+          "name": "cycle_description",
+          "type": "text"
+        }
+      ],
+      "allowedFrom": [
+        "scheduled",
+        "assigned",
+        "in_progress",
+        "on_hold",
+        "completed"
+      ],
+      "patch": {
+        "preventive_schedule": "{cycle_days, cycle_description, warning_days, responsible_team, last_maintenance_date, next_maintenance_date, active}"
+      },
+      "invariants": [
+        "cycle_days is an integer between 1 and 3650 (the archived preventive-maintenance range)",
+        "next_maintenance_date = last_maintenance_date + cycle_days; last_maintenance_date defaults to the record's completion or scheduled date",
+        "the write stays private (publish:false)"
+      ]
+    },
+    {
+      "operation": "maintenance.schedule-check",
+      "method": "POST",
+      "dataset": "city-maintenance",
+      "fields": [
+        {
+          "name": "lookahead_days",
+          "type": "number"
+        },
+        {
+          "name": "max_orders",
+          "type": "number"
+        }
+      ],
+      "patch": {
+        "records": "bulk create one preventive work order per due schedule"
+      },
+      "invariants": [
+        "idempotent by a schedule-run marker: a schedule that already produced a preventive order today is skipped",
+        "the created order carries schedule_source_id, schedule_run_date and the advanced schedule_next_due so a re-run is a no-op",
+        "orders are created through the Tier-2 records bulk API (1..50 per run) with per-entry error reporting",
+        "the check writes only work orders; it never edits the schedule source records"
+      ]
     }
   ]
 }

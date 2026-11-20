@@ -1,0 +1,148 @@
+{
+  "name": "city-maintenance-schedule",
+  "nodes": [
+    {
+      "id": "dx-manual-trigger",
+      "name": "DX manual execution",
+      "type": "manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        200,
+        300
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "validate-envelope",
+      "name": "Validate DX envelope and action fields",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        300
+      ],
+      "parameters": {
+        "code": "const envelope = $input || {};\nconst text = (value) => (typeof value === 'string' ? value.trim() : '');\nconst integer = (value) => {\n  const parsed = typeof value === 'number' ? value : typeof value === 'string' && value.trim() ? Number(value) : NaN;\n  return Number.isFinite(parsed) && Number.isInteger(parsed) ? parsed : null;\n};\nconst envelopeKeys = new Set(['pluginId', 'widgetId', 'product', 'resource', 'submittedBy', 'submittedAt', 'action', 'fields']);\nconst unknownEnvelope = Object.keys(envelope).filter((key) => !envelopeKeys.has(key));\nif (unknownEnvelope.length) throw new Error('unknown_envelope_fields:' + unknownEnvelope.join(','));\nconst product = text(envelope.product);\nconst resource = text(envelope.resource);\nconst submittedBy = text(envelope.submittedBy);\nif (!submittedBy) throw new Error('submitted_by_required');\nconst fields = envelope.fields && typeof envelope.fields === 'object' && !Array.isArray(envelope.fields) ? envelope.fields : null;\nif (!fields) throw new Error('fields_required');\nif (product !== 'city') throw new Error('unsupported_product');\nif (resource !== 'maintenance') throw new Error('unsupported_resource');\nconst recordId = text(fields.work_order_id);\nif (!/^[A-Za-z0-9_@.:+-]{1,256}$/.test(recordId)) throw new Error('record_id_invalid');\nconst encodedId = encodeURIComponent(recordId);\nconst allowed = new Set([\"work_order_id\",\"cycle_days\",\"warning_days\",\"responsible_team\",\"cycle_description\"]);\nconst unknown = Object.keys(fields).filter((key) => !allowed.has(key));\nif (unknown.length) throw new Error('unknown_fields:' + unknown.join(','));\nconst cycleDays = integer(fields.cycle_days);\nif (cycleDays === null || cycleDays < 1 || cycleDays > 3650) throw new Error('cycle_days_out_of_range');\nconst warningDaysRaw = fields.warning_days === undefined || fields.warning_days === null || fields.warning_days === '' ? 7 : integer(fields.warning_days);\nif (warningDaysRaw === null || warningDaysRaw < 0 || warningDaysRaw > 365) throw new Error('warning_days_out_of_range');\nconst responsibleTeam = text(fields.responsible_team);\nif (responsibleTeam.length > 160) throw new Error('responsible_team_max_160');\nconst cycleDescription = text(fields.cycle_description) || 'Every ' + cycleDays + ' days';\nif (cycleDescription.length > 200) throw new Error('cycle_description_max_200');\nconst audit = {\n  product, resource, operation: 'maintenance.schedule', recordId,\n  pluginId: text(envelope.pluginId), widgetId: text(envelope.widgetId),\n  submittedBy, submittedAt: text(envelope.submittedAt) || $now,\n};\n\nreturn { recordId, encodedId, cycleDays, warningDays: warningDaysRaw, responsibleTeam, cycleDescription, audit, operation: 'maintenance.schedule' };"
+      }
+    },
+    {
+      "id": "http-get",
+      "name": "Read current record",
+      "type": "httpRequest",
+      "typeVersion": 4,
+      "position": [
+        640,
+        300
+      ],
+      "parameters": {
+        "url": "={{ 'https://synapsedx.sbs/v1/capabilities/datasets/city-maintenance/records/' + $json.encodedId }}",
+        "method": "GET",
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        "auth": {
+          "credentialRef": "synapsedx-organization",
+          "header": "X-API-Key",
+          "allowedOrigins": [
+            "https://synapsedx.sbs"
+          ]
+        },
+        "includeInput": true,
+        "timeoutMs": 15000
+      }
+    },
+    {
+      "id": "merge-record",
+      "name": "Merge and enforce invariants",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        860,
+        300
+      ],
+      "parameters": {
+        "code": "const response = $input || {};\nconst current = response.body;\nconst action = response.input;\nif (response.statusCode !== 200 || !current || typeof current.data !== 'object' || !current.data) throw new Error('record_not_found');\nconst data = current.data;\nif (!Number.isInteger(current.version)) throw new Error('record_version_unavailable');\nconst existing = data.preventive_schedule && typeof data.preventive_schedule === 'object' && !Array.isArray(data.preventive_schedule) ? data.preventive_schedule : null;\nconst lastMaintenance = existing && existing.last_maintenance_date ? existing.last_maintenance_date\n  : data.completed_at ? data.completed_at\n  : data.actual_end_time ? data.actual_end_time\n  : data.scheduled_date ? data.scheduled_date\n  : $now;\nconst lastMs = Date.parse(lastMaintenance);\nif (!Number.isFinite(lastMs)) throw new Error('last_maintenance_date_invalid');\nconst schedule = {\n  cycle_days: action.cycleDays,\n  cycle_description: action.cycleDescription,\n  warning_days: action.warningDays,\n  ...(action.responsibleTeam ? { responsible_team: action.responsibleTeam } : {}),\n  last_maintenance_date: new Date(lastMs).toISOString(),\n  next_maintenance_date: new Date(lastMs + action.cycleDays * 86400000).toISOString(),\n  active: true,\n  updated_at: $now,\n};\nconst next = { ...data, preventive_schedule: schedule };\nreturn { body: { data: next, ifVersion: current.version, publish: false }, encodedId: action.encodedId, audit: action.audit };"
+      }
+    },
+    {
+      "id": "http-patch",
+      "name": "Patch full record",
+      "type": "httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1080,
+        300
+      ],
+      "parameters": {
+        "url": "={{ 'https://synapsedx.sbs/v1/capabilities/datasets/city-maintenance/records/' + $json.encodedId }}",
+        "method": "PATCH",
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        "auth": {
+          "credentialRef": "synapsedx-organization",
+          "header": "X-API-Key",
+          "allowedOrigins": [
+            "https://synapsedx.sbs"
+          ]
+        },
+        "body": "={{ $json.body }}",
+        "includeInput": false,
+        "timeoutMs": 15000
+      }
+    }
+  ],
+  "connections": {
+    "DX manual execution": {
+      "main": [
+        [
+          {
+            "node": "Validate DX envelope and action fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate DX envelope and action fields": {
+      "main": [
+        [
+          {
+            "node": "Read current record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read current record": {
+      "main": [
+        [
+          {
+            "node": "Merge and enforce invariants",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge and enforce invariants": {
+      "main": [
+        [
+          {
+            "node": "Patch full record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "access": {
+      "mode": "owner-only"
+    }
+  }
+}

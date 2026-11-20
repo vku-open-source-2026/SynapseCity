@@ -31,7 +31,7 @@ const h = await startHarness();
 h.config.publicUrl = h.base;
 const originalFetch = globalThis.fetch;
 try {
-  for (const slug of ['city-incidents']) {
+  for (const slug of ['city-incidents', 'city-maintenance']) {
     const dataset = await createDataset(h, { slug, name: slug, public: false }, { token: 'admin-token' });
     assert.equal(dataset.status, 201, JSON.stringify(dataset.body));
   }
@@ -157,6 +157,61 @@ try {
   assert.equal(selfMerge.status, 'error');
   assert.match(String(selfMerge.error || ''), /duplicate_is_primary/);
 
+  // --- maintenance.schedule: anchor a preventive schedule on a work order ---
+  const createWorkOrder = async (title: string, completedAt: string | null) => {
+    const created = await api(h, '/v1/capabilities/datasets/city-maintenance/records', {
+      token: 'admin-token', method: 'POST',
+      body: {
+        data: {
+          type: 'corrective', title, asset_id: 'AST_BRIDGE_1', priority: 'high', status: completedAt ? 'completed' : 'scheduled',
+          ...(completedAt ? { completed_at: completedAt } : {}),
+        },
+        publish: false,
+      },
+    });
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    return String(created.body.id);
+  };
+  const daysAgo = (days: number) => new Date(Date.now() - days * 86400000).toISOString();
+  const overdueAnchor = await createWorkOrder('Quarterly drainage inspection', daysAgo(40));
+  const freshAnchor = await createWorkOrder('Lamp housing inspection', daysAgo(0));
+  for (const [anchor, cycle] of [[overdueAnchor, 30], [freshAnchor, 90]] as Array<[string, number]>) {
+    const schedule = await run('city-maintenance-schedule', 'maintenance', {
+      work_order_id: anchor, cycle_days: cycle, warning_days: 7, responsible_team: 'Roads team',
+    });
+    assert.equal(schedule.status, 'success', schedule.error);
+  }
+  const overdueRecord = (await api(h, `/v1/capabilities/datasets/city-maintenance/records/${overdueAnchor}`, { token: 'admin-token' })).body;
+  assert.equal(overdueRecord.data.preventive_schedule.cycle_days, 30);
+  assert.ok(Date.parse(overdueRecord.data.preventive_schedule.next_maintenance_date) < Date.now(), 'the overdue schedule did not anchor on the completion date');
+
+  // --- maintenance.schedule-check: one preventive order per due schedule, once ---
+  const preventiveOrders = async () => (await api(h, '/v1/capabilities/datasets/city-maintenance/records/query', {
+    token: 'admin-token', method: 'POST', body: { where: { type: 'preventive' }, limit: 100 },
+  })).body;
+  const firstCheck = await run('city-maintenance-schedule-check', 'maintenance', {}, 'execute');
+  assert.equal(firstCheck.status, 'success', firstCheck.error);
+  assert.equal(firstCheck.output.created, 1, 'the overdue schedule did not produce exactly one order');
+  assert.equal(firstCheck.output.created_ids.length, 1);
+  let orders = (await preventiveOrders()).items;
+  assert.equal(orders.length, 1, 'the schedule check created more than one order');
+  const planned = orders[0];
+  assert.equal(String(planned.data.schedule_source_id), overdueAnchor);
+  assert.equal(String(planned.data.schedule_run_date), new Date().toISOString().slice(0, 10));
+  assert.equal(String(planned.data.status), 'scheduled');
+  assert.equal(String(planned.data.priority), 'high', 'the preventive order did not inherit the anchor priority');
+  assert.ok(Date.parse(String(planned.data.schedule_next_due)) > Date.now(), 'the order did not advance the next due date');
+  assert.notEqual(String((await api(h, `/v1/capabilities/datasets/city-maintenance/records/${freshAnchor}`, { token: 'admin-token' })).body.data.preventive_schedule.next_maintenance_date), undefined, 'the fresh schedule vanished');
+
+  const secondCheck = await run('city-maintenance-schedule-check', 'maintenance', {}, 'execute');
+  assert.equal(secondCheck.status, 'success', secondCheck.error);
+  assert.equal(secondCheck.output.created, 0, 're-running the check duplicated a preventive order');
+  orders = (await preventiveOrders()).items;
+  assert.equal(orders.length, 1, 're-running the check created a second order');
+  const lookaheadCheck = await run('city-maintenance-schedule-check', 'maintenance', { lookahead_days: 90 }, 'execute');
+  assert.equal(lookaheadCheck.status, 'success', lookaheadCheck.error);
+  assert.equal(lookaheadCheck.output.created, 1, 'the lookahead window did not pick up the fresh schedule');
+
   console.log(JSON.stringify({
     passed: true,
     engine: 'real Tier-1',
@@ -166,6 +221,8 @@ try {
     upvotes: afterSecond.data.upvotes,
     mergedDuplicates: merge.output.closed.length,
     mergeFailures: merge.output.failed.length,
+    scheduleOrdersCreated: firstCheck.output.created + lookaheadCheck.output.created,
+    scheduleRecheckCreated: secondCheck.output.created,
     productAPICalls: 0,
   }));
 } finally {

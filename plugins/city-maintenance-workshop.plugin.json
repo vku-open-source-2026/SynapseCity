@@ -298,6 +298,76 @@
         "onSubmit": "act-maintenance-review-submit"
       },
       {
+        "id": "maintenance-schedule",
+        "type": "form",
+        "title": "Set a preventive schedule",
+        "width": "half",
+        "action": "update",
+        "fields": [
+          {
+            "name": "work_order_id",
+            "type": "text",
+            "label": "Anchor work order id",
+            "required": true
+          },
+          {
+            "name": "cycle_days",
+            "type": "number",
+            "label": "Cycle (days)",
+            "required": true
+          },
+          {
+            "name": "warning_days",
+            "type": "number",
+            "label": "Warning lead (days)"
+          },
+          {
+            "name": "responsible_team",
+            "type": "text",
+            "label": "Responsible team"
+          },
+          {
+            "name": "cycle_description",
+            "type": "text",
+            "label": "Cycle description"
+          }
+        ],
+        "resource": "maintenance",
+        "workflowRef": {
+          "name": "city-maintenance-schedule",
+          "checksum": "de9a4afc65edd6563e9e8d318707b9e2104683afc1923ed39880361d6841026f"
+        },
+        "onSubmit": "act-maintenance-schedule-submit"
+      },
+      {
+        "id": "maintenance-schedule-check",
+        "type": "form",
+        "title": "Run schedule check",
+        "width": "half",
+        "action": "execute",
+        "presentation": "inline",
+        "fields": [
+          {
+            "name": "lookahead_days",
+            "type": "number",
+            "label": "Lookahead (days)",
+            "defaultValue": "0"
+          },
+          {
+            "name": "max_orders",
+            "type": "number",
+            "label": "Max orders per run",
+            "defaultValue": "25"
+          }
+        ],
+        "resource": "maintenance",
+        "workflowRef": {
+          "name": "city-maintenance-schedule-check",
+          "checksum": "ca0a7c0e8ec6ed69b04ac9dae1294310ad6c1356b646f4d94cd1214a44220576"
+        },
+        "onSubmit": "act-maintenance-schedule-check-submit"
+      },
+      {
         "id": "act-workspace-navigation-link1",
         "type": "action",
         "title": "Navigate Overview",
@@ -777,6 +847,104 @@
           "inputs": [],
           "actions": []
         }
+      },
+      {
+        "id": "act-maintenance-schedule-submit",
+        "type": "action",
+        "title": "Submit Set a preventive schedule",
+        "operation": {
+          "kind": "update",
+          "target": "maintenance-schedule",
+          "mappings": [
+            {
+              "field": "work_order_id",
+              "source": "event",
+              "value": "values.work_order_id",
+              "required": true
+            },
+            {
+              "field": "cycle_days",
+              "source": "event",
+              "value": "values.cycle_days",
+              "required": true
+            },
+            {
+              "field": "warning_days",
+              "source": "event",
+              "value": "values.warning_days",
+              "required": false
+            },
+            {
+              "field": "responsible_team",
+              "source": "event",
+              "value": "values.responsible_team",
+              "required": false
+            },
+            {
+              "field": "cycle_description",
+              "source": "event",
+              "value": "values.cycle_description",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-maintenance-schedule-open",
+        "type": "action",
+        "title": "Open Set a preventive schedule",
+        "operation": {
+          "kind": "openForm",
+          "target": "maintenance-schedule",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-maintenance-schedule-check-submit",
+        "type": "action",
+        "title": "Submit Run schedule check",
+        "operation": {
+          "kind": "execute",
+          "target": "maintenance-schedule-check",
+          "mappings": [
+            {
+              "field": "lookahead_days",
+              "source": "event",
+              "value": "values.lookahead_days",
+              "required": false,
+              "transform": "number"
+            },
+            {
+              "field": "max_orders",
+              "source": "event",
+              "value": "values.max_orders",
+              "required": false,
+              "transform": "number"
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-maintenance-schedule-check-open",
+        "type": "action",
+        "title": "Open Run schedule check",
+        "operation": {
+          "kind": "openForm",
+          "target": "maintenance-schedule-check",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
       }
     ]
   },
@@ -785,5 +953,5 @@
     "path": "plugins/city-maintenance-workshop.plugin.json",
     "revision": "2026-11-15.business"
   },
-  "checksum": "sha256:d7bf6c6fe12af05772609b98f2cd510621bda6fbc48306f8b92d804ace5516d3"
+  "checksum": "sha256:00b22838a9964bf6504ccb5b9988740b4d43c422b942bea099afe500ddf91481"
 }

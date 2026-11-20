@@ -176,7 +176,9 @@ const transitionFields: Record<string, string> = subject === 'incident'
     : subject === 'maintenance'
         ? (workflowPath.includes('assign')
             ? { work_order_id: recordId, assigned_to: 'tech-2' }
-            : { work_order_id: recordId })
+            : workflowPath.includes('schedule')
+                ? { work_order_id: recordId, cycle_days: 30, warning_days: 7, responsible_team: 'Roads team' }
+                : { work_order_id: recordId })
         : subject === 'dispatch'
             ? { order_id: recordId }
             : { event_id: recordId, resolution_note: 'Event closed after final sweep' };

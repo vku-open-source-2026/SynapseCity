@@ -128,9 +128,9 @@ test('real Tier-1 engine rejects a malformed transition before any HTTP call', {
     }
 });
 
-test('real Tier-1 engine executes the incident domain transitions with CAS', { skip: available ? false : skipReason }, () => {
+test('real Tier-1 engine executes the single-record domain transitions with CAS', { skip: available ? false : skipReason }, () => {
     const domain = (manifest.domainWorkflows || []).filter((entry) => entry.method === 'PATCH' && entry.workflow !== 'city-incident-merge');
-    assert.ok(domain.length >= 3, 'incident domain transitions are registered');
+    assert.ok(domain.length >= 4, 'single-record domain transitions are registered');
     for (const entry of domain) {
         const result = runHarness(entry.file, entry.dataset, manifest.persistence.credentialRef, 'good');
         assert.equal(result.ok, true, JSON.stringify(result));
@@ -159,6 +159,13 @@ test('real Tier-1 engine executes the incident domain transitions with CAS', { s
         if (entry.workflow === 'city-incident-upvote') {
             assert.equal(body.data.upvotes, 1);
             assert.deepEqual(body.data.upvoters, ['member-test']);
+        }
+        if (entry.workflow === 'city-maintenance-schedule') {
+            assert.equal(body.data.preventive_schedule.cycle_days, 30);
+            assert.equal(body.data.preventive_schedule.warning_days, 7);
+            assert.equal(body.data.preventive_schedule.responsible_team, 'Roads team');
+            assert.ok(body.data.preventive_schedule.next_maintenance_date, 'the schedule must compute a next-due date');
+            assert.ok(body.data.unrelated.keep, 'the schedule erased unrelated record data');
         }
 
         const malformed = runHarness(entry.file, entry.dataset, manifest.persistence.credentialRef, 'malformed');

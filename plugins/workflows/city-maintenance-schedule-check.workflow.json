@@ -1,0 +1,217 @@
+{
+  "name": "city-maintenance-schedule-check",
+  "nodes": [
+    {
+      "id": "dx-manual-trigger",
+      "name": "DX manual execution",
+      "type": "manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        200,
+        300
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "validate-envelope",
+      "name": "Validate DX envelope and action fields",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        300
+      ],
+      "parameters": {
+        "code": "const envelope = $input || {};\nconst text = (value) => (typeof value === 'string' ? value.trim() : '');\nconst integer = (value) => {\n  const parsed = typeof value === 'number' ? value : typeof value === 'string' && value.trim() ? Number(value) : NaN;\n  return Number.isFinite(parsed) && Number.isInteger(parsed) ? parsed : null;\n};\nconst envelopeKeys = new Set(['pluginId', 'widgetId', 'product', 'resource', 'submittedBy', 'submittedAt', 'action', 'fields']);\nconst unknownEnvelope = Object.keys(envelope).filter((key) => !envelopeKeys.has(key));\nif (unknownEnvelope.length) throw new Error('unknown_envelope_fields:' + unknownEnvelope.join(','));\nconst product = text(envelope.product);\nconst resource = text(envelope.resource);\nconst submittedBy = text(envelope.submittedBy);\nif (!submittedBy) throw new Error('submitted_by_required');\nconst fields = envelope.fields && typeof envelope.fields === 'object' && !Array.isArray(envelope.fields) ? envelope.fields : null;\nif (!fields) throw new Error('fields_required');\nif (product !== 'city') throw new Error('unsupported_product');\nif (resource !== 'maintenance') throw new Error('unsupported_resource');\nconst allowed = new Set([\"lookahead_days\",\"max_orders\"]);\nconst unknown = Object.keys(fields).filter((key) => !allowed.has(key));\nif (unknown.length) throw new Error('unknown_fields:' + unknown.join(','));\nconst lookaheadRaw = fields.lookahead_days === undefined || fields.lookahead_days === null || fields.lookahead_days === '' ? 0 : integer(fields.lookahead_days);\nif (lookaheadRaw === null || lookaheadRaw < 0 || lookaheadRaw > 90) throw new Error('lookahead_days_out_of_range');\nconst maxOrdersRaw = fields.max_orders === undefined || fields.max_orders === null || fields.max_orders === '' ? 25 : integer(fields.max_orders);\nif (maxOrdersRaw === null || maxOrdersRaw < 1 || maxOrdersRaw > 50) throw new Error('max_orders_out_of_range');\nconst audit = {\n  product, resource, operation: 'maintenance.schedule-check',\n  pluginId: text(envelope.pluginId), widgetId: text(envelope.widgetId),\n  submittedBy, submittedAt: text(envelope.submittedAt) || $now,\n};\n\nreturn { lookaheadDays: lookaheadRaw, maxOrders: maxOrdersRaw, submitter: submittedBy, audit, operation: 'maintenance.schedule-check' };"
+      }
+    },
+    {
+      "id": "http-query-maintenance",
+      "name": "Query maintenance records",
+      "type": "httpRequest",
+      "typeVersion": 4,
+      "position": [
+        640,
+        300
+      ],
+      "parameters": {
+        "url": "https://synapsedx.sbs/v1/capabilities/datasets/city-maintenance/records/query",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        "auth": {
+          "credentialRef": "synapsedx-organization",
+          "header": "X-API-Key",
+          "allowedOrigins": [
+            "https://synapsedx.sbs"
+          ]
+        },
+        "body": "={{ { limit: 500 } }}",
+        "includeInput": true,
+        "timeoutMs": 15000
+      }
+    },
+    {
+      "id": "plan-orders",
+      "name": "Plan due schedule orders",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        860,
+        300
+      ],
+      "parameters": {
+        "code": "const response = $input || {};\nconst state = response.input;\nif (response.statusCode !== 200 || !response.body || !Array.isArray(response.body.items)) throw new Error('maintenance_query_failed');\nconst total = Number(response.body.total);\nif (Number.isFinite(total) && total > response.body.items.length) throw new Error('maintenance_query_truncated');\nconst now = $now;\nconst nowMs = Date.parse(now);\nconst today = now.slice(0, 10);\nconst sources = [];\nconst orders = [];\nfor (const item of response.body.items) {\n  const data = item && typeof item.data === 'object' && item.data ? item.data : null;\n  if (!data) continue;\n  if (String(data.type) === 'preventive' && data.schedule_source_id) {\n    orders.push({ id: String(item.id || ''), data });\n    continue;\n  }\n  if (data.preventive_schedule && typeof data.preventive_schedule === 'object' && !Array.isArray(data.preventive_schedule)) {\n    sources.push({ id: String(item.id || ''), data });\n  }\n}\nconst horizon = nowMs + state.lookaheadDays * 86400000;\nconst entries = [];\nconst skipped = [];\nlet invalidSchedules = 0;\nfor (const source of sources) {\n  const schedule = source.data.preventive_schedule;\n  if (schedule.active === false) { skipped.push({ id: source.id, reason: 'schedule_inactive' }); continue; }\n  const cycleDays = Number(schedule.cycle_days);\n  if (!Number.isInteger(cycleDays) || cycleDays < 1 || cycleDays > 3650) { invalidSchedules += 1; continue; }\n  // The newest preventive order for this source carries the advanced due date\n  // and today's run marker; both make a re-run a no-op.\n  const prior = orders\n    .filter((order) => String(order.data.schedule_source_id) === source.id)\n    .sort((left, right) => String(right.data.created_at || '').localeCompare(String(left.data.created_at || '')))[0];\n  if (prior && String(prior.data.schedule_run_date) === today) { skipped.push({ id: source.id, reason: 'already_checked_today' }); continue; }\n  const scheduledMs = Date.parse(prior && prior.data.schedule_next_due ? prior.data.schedule_next_due : schedule.next_maintenance_date);\n  if (!Number.isFinite(scheduledMs)) { invalidSchedules += 1; continue; }\n  if (scheduledMs > horizon) continue;\n  if (entries.length >= state.maxOrders) { skipped.push({ id: source.id, reason: 'max_orders_reached' }); continue; }\n  entries.push({\n    data: {\n      type: 'preventive',\n      title: 'Preventive: ' + String(source.data.title || source.id).slice(0, 180),\n      asset_id: source.data.asset_id === undefined ? null : source.data.asset_id,\n      priority: source.data.priority || 'medium',\n      status: 'scheduled',\n      scheduled_date: now,\n      schedule_source_id: source.id,\n      schedule_run_date: today,\n      schedule_cycle_days: cycleDays,\n      schedule_next_due: new Date(scheduledMs + cycleDays * 86400000).toISOString(),\n      ...(schedule.responsible_team ? { responsible_team: schedule.responsible_team } : {}),\n      created_by: state.submitter,\n      created_at: now,\n      updated_at: now,\n    },\n    publish: false,\n  });\n}\nreturn {\n  state,\n  scanned: response.body.items.length,\n  due: entries.length,\n  skipped,\n  invalidSchedules,\n  runDate: today,\n  bulk: { records: entries },\n};"
+      }
+    },
+    {
+      "id": "if-orders",
+      "name": "Orders due?",
+      "type": "if",
+      "typeVersion": 1,
+      "position": [
+        1080,
+        300
+      ],
+      "parameters": {
+        "condition": "={{ $json.bulk.records.length > 0 }}"
+      }
+    },
+    {
+      "id": "http-bulk-create",
+      "name": "Create preventive work orders",
+      "type": "httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1300,
+        180
+      ],
+      "parameters": {
+        "url": "https://synapsedx.sbs/v1/capabilities/datasets/city-maintenance/records/bulk",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        "auth": {
+          "credentialRef": "synapsedx-organization",
+          "header": "X-API-Key",
+          "allowedOrigins": [
+            "https://synapsedx.sbs"
+          ]
+        },
+        "body": "={{ $json.bulk }}",
+        "includeInput": true,
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "id": "summarize-created",
+      "name": "Summarize created orders",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        180
+      ],
+      "parameters": {
+        "code": "const response = $input || {};\nconst state = response.input;\nif (response.statusCode !== 200 && response.statusCode !== 201) throw new Error('schedule_bulk_failed');\nconst body = response.body || {};\nconst created = Array.isArray(body.created) ? body.created : [];\nconst errors = Array.isArray(body.errors) ? body.errors : [];\nreturn {\n  operation: 'maintenance.schedule-check',\n  run_date: state.runDate,\n  scanned: state.scanned,\n  due: state.due,\n  created: created.length,\n  created_ids: created.map((entry) => String(entry.id || '')).filter((entry) => entry),\n  failed: errors.map((entry) => ({ index: entry.index, code: entry.code })),\n  skipped: state.skipped,\n};"
+      }
+    },
+    {
+      "id": "summarize-empty",
+      "name": "Summarize empty run",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        420
+      ],
+      "parameters": {
+        "code": "const state = $input || {};\nreturn {\n  operation: 'maintenance.schedule-check',\n  run_date: state.runDate,\n  scanned: state.scanned,\n  due: state.due,\n  created: 0,\n  created_ids: [],\n  failed: [],\n  skipped: state.skipped,\n};"
+      }
+    }
+  ],
+  "connections": {
+    "DX manual execution": {
+      "main": [
+        [
+          {
+            "node": "Validate DX envelope and action fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate DX envelope and action fields": {
+      "main": [
+        [
+          {
+            "node": "Query maintenance records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query maintenance records": {
+      "main": [
+        [
+          {
+            "node": "Plan due schedule orders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Plan due schedule orders": {
+      "main": [
+        [
+          {
+            "node": "Orders due?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Orders due?": {
+      "main": [
+        [
+          {
+            "node": "Create preventive work orders",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Summarize empty run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create preventive work orders": {
+      "main": [
+        [
+          {
+            "node": "Summarize created orders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "access": {
+      "mode": "owner-only"
+    }
+  }
+}

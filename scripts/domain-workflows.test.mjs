@@ -28,7 +28,7 @@ const HARNESS = path.join(ROOT, 'scripts', 'domain-workflows-harness.mts');
 const available = fs.existsSync(TSX) && fs.existsSync(ENGINE) && fs.existsSync(DX_HARNESS);
 const skipReason = available ? '' : 'sibling SynapseOne engine/tsx or SynapseDX testing harness not available; domain engine test is local-only';
 
-test('real engine + real DX routes: merge closes duplicates, upvote is idempotent', { skip: available ? false : skipReason }, () => {
+test('real engine + real DX routes: merge, upvote and the schedule check behave', { skip: available ? false : skipReason }, () => {
     const stdout = execFileSync(TSX, [HARNESS], {
         cwd: ROOT,
         encoding: 'utf8',
@@ -50,4 +50,6 @@ test('real engine + real DX routes: merge closes duplicates, upvote is idempoten
     assert.equal(verdict.upvotes, 1, 'the upvote is not idempotent per reporter');
     assert.equal(verdict.mergedDuplicates, 2, 'the merge did not close both duplicates');
     assert.equal(verdict.mergeFailures, 1, 'the missing duplicate was not tolerated');
+    assert.equal(verdict.scheduleOrdersCreated, 2, 'the schedule check did not create one order per due schedule');
+    assert.equal(verdict.scheduleRecheckCreated, 0, 're-running the schedule check duplicated an order');
 });
