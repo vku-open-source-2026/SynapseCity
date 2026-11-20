@@ -164,15 +164,26 @@ npm ci
 npm run check:release
 npm run build
 npm test
-npm run start:service                              # city service
+(cd apps/city-service && cargo run)                  # city service (production Rust binary)
+npm run start:service:legacy                        # legacy TS reference server (tests only)
 npm run dev --workspace=@synapsecity/console       # console dev server
 npm run dev:contribution                           # contribution UI dev server
 npm run build:contribution                         # contribution UI build
 (cd apps/gateway && cargo test)                    # Rust gateway tests
+(cd apps/city-service && cargo test)               # city backend tests (Rust + legacy TS)
 (cd apps/contribution-service && cargo test)       # contribution backend tests
 docker compose up -d --build                       # production stack
 docker compose -p synapsecity up -d --no-deps --build contribution-service contribution-console
 ```
+
+City-service note: the shipped backend is the Rust binary in
+`apps/city-service` — `cargo run` in development, the Dockerfile entrypoint in
+production. The Express server in `apps/city-service/src/server.ts` is kept
+only as the behavioural reference for the test suite
+(`npm run start:service:legacy`); it is never deployed. Because two backends
+exist, a fix landed in only one of them reads as done while the other drifts -
+implement API changes in the Rust service first, and keep the TS reference in
+step (or record the divergence here) when its tests cover the same behaviour.
 
 Before release, verify:
 

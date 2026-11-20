@@ -3,11 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "license": "Apache-2.0",
-  "description": "SynapseCity Tier-3 domain backend",
+  "description": "SynapseCity Tier-3 domain backend - legacy TypeScript behavioural reference server. The production city-service is the Rust binary in this directory (see Dockerfile); this Express server is kept for the test suite only.",
   "type": "commonjs",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/src/server.js",
+    "start:legacy": "node dist/src/server.js",
     "test": "npm run build && node --test dist/src/*.test.js"
   },
   "dependencies": {

@@ -126,6 +126,10 @@ npm run build
 SYNAPSEDX_BASE_URL=https://synapsedx.sbs npm run start:service
 ```
 
+`npm run start:service` runs the production Rust service
+(`cargo run` in `apps/city-service`, the same binary the Dockerfile ships).
+The legacy TypeScript server is test-only: `npm run start:service:legacy`.
+
 `npm run check:release` verifies that the dependency is a registry semver
 release and rejects `file:`/sibling-checkout dependencies.
 

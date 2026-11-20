@@ -7,7 +7,7 @@ Tier-3 → Tier-2 → Tier-1 boundary.
 
 1. Tier 1 (SynapseOne) and Tier 2 (SynapseDX) are healthy at their public HTTPS
    URLs.
-2. SynapseCity is running (`docker compose up -d` or `npm run start:service`).
+2. SynapseCity is running (`docker compose up -d`, or the production Rust service via `(cd apps/city-service && cargo run)`).
 3. An operator/admin session token is available as `CITY_DEMO_TOKEN`
    (or pass `--token`). Never commit the token.
 
