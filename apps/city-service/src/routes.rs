@@ -3421,28 +3421,44 @@ async fn incidents_action(ctx: &Ctx<'_>, id: &str, action: &str) -> ApiResult<Re
                     "duplicate_ids_required",
                 ));
             }
+            let merge_notes = web::string_field(&body, "merge_notes").unwrap_or_else(|| format!(
+                "Merged into {}",
+                existing
+                    .get("incident_number")
+                    .and_then(Value::as_str)
+                    .unwrap_or(id)
+            ));
+            let mut closed: Vec<String> = Vec::new();
+            let mut failed: Vec<Value> = Vec::new();
             for duplicate_id in &duplicate_ids {
-                if find_incident(ctx, duplicate_id).await?.is_some() {
-                    let mut patch = Map::new();
-                    patch.insert("status".into(), json!("closed"));
-                    patch.insert("resolution_type".into(), json!("duplicate"));
-                    patch.insert(
-                        "merged_into".into(),
-                        existing.get("id").cloned().unwrap_or(Value::Null),
+                if find_incident(ctx, duplicate_id).await?.is_none() {
+                    tracing::warn!(
+                        incident_id = %id,
+                        duplicate_id = %duplicate_id,
+                        "incident merge: duplicate incident not found"
                     );
-                    patch.insert(
-                        "resolution_notes".into(),
-                        json!(
-                            web::string_field(&body, "merge_notes").unwrap_or_else(|| format!(
-                                "Merged into {}",
-                                existing
-                                    .get("incident_number")
-                                    .and_then(Value::as_str)
-                                    .unwrap_or(id)
-                            ))
-                        ),
-                    );
-                    let _ = update_incident(ctx, duplicate_id, patch).await;
+                    failed.push(json!({ "id": duplicate_id, "error": "not_found" }));
+                    continue;
+                }
+                let mut patch = Map::new();
+                patch.insert("status".into(), json!("closed"));
+                patch.insert("resolution_type".into(), json!("duplicate"));
+                patch.insert(
+                    "merged_into".into(),
+                    existing.get("id").cloned().unwrap_or(Value::Null),
+                );
+                patch.insert("resolution_notes".into(), json!(merge_notes.clone()));
+                match update_incident(ctx, duplicate_id, patch).await {
+                    Ok(_) => closed.push(duplicate_id.clone()),
+                    Err(error) => {
+                        tracing::warn!(
+                            incident_id = %id,
+                            duplicate_id = %duplicate_id,
+                            error = %error,
+                            "incident merge: closing the duplicate failed"
+                        );
+                        failed.push(json!({ "id": duplicate_id, "error": error.code }));
+                    }
                 }
             }
             let mut merged: Vec<String> = existing
@@ -3453,12 +3469,18 @@ async fn incidents_action(ctx: &Ctx<'_>, id: &str, action: &str) -> ApiResult<Re
                 .into_iter()
                 .filter_map(|value| value.as_str().map(str::to_string))
                 .collect();
-            merged.extend(duplicate_ids);
+            // Only duplicates that actually closed become part of the merged
+            // reporter list; failed ones stay open and are reported below.
+            merged.extend(closed.iter().cloned());
             merged.sort();
             merged.dedup();
             let mut patch = Map::new();
             patch.insert("merged_reporter_ids".into(), json!(merged));
-            let updated = update_incident(ctx, id, patch).await?;
+            let mut updated = update_incident(ctx, id, patch).await?;
+            // Response-only partial-failure detail; the stored record keeps
+            // its existing shape. `failed` is empty on a complete merge.
+            updated.insert("closed".into(), json!(closed));
+            updated.insert("failed".into(), json!(failed));
             Ok(web::json_response(Value::Object(updated)))
         }
         "related" => {
@@ -7958,6 +7980,173 @@ mod route_tests {
         )
         .await;
         assert_eq!(status, StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
+    async fn incident_merge_reports_per_duplicate_close_failures() {
+        let server = MockServer::start().await;
+        let config = Config::for_test(&server.uri());
+        let token = admin_token(&config);
+        mount_dataset(
+            &server,
+            "city-incidents",
+            "SynapseCity infrastructure incidents",
+            "CityIncident",
+            "Public projection of generalized infrastructure incidents",
+            true,
+        )
+        .await;
+        mount_dataset(
+            &server,
+            "city-incident-internal",
+            "SynapseCity incident internal records",
+            "CityIncidentInternal",
+            "Private reporter identity and internal incident notes",
+            false,
+        )
+        .await;
+
+        let incident = |id: &str, number: &str| {
+            json!({
+                "id": id, "version": 1,
+                "createdAt": "2026-11-01T00:00:00.000Z",
+                "updatedAt": "2026-11-01T00:00:00.000Z",
+                "data": {
+                    "id": id, "incident_number": number, "title": "Pump failure",
+                    "category": "utility", "status": "open", "public_visible": true
+                }
+            })
+        };
+        for (id, number) in [("inc-1", "INC-100"), ("dup-1", "INC-101"), ("dup-2", "INC-102")] {
+            Mock::given(method("GET"))
+                .and(path(format!("/v1/capabilities/datasets/city-incidents/records/{id}")))
+                .respond_with(ResponseTemplate::new(200).set_body_json(incident(id, number)))
+                .mount(&server)
+                .await;
+        }
+        // Unknown duplicate: record GET 404s and the list fallback is empty.
+        Mock::given(method("GET"))
+            .and(path("/v1/capabilities/datasets/city-incidents/records/dup-3"))
+            .respond_with(
+                ResponseTemplate::new(404).set_body_json(json!({"error": {"code": "not_found"}})),
+            )
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/v1/capabilities/datasets/city-incidents/records"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "items": [], "total": 0, "limit": 500, "offset": 0, "nextCursor": null
+            })))
+            .mount(&server)
+            .await;
+        // Internal sidecar lookups miss for every incident in this flow; the
+        // close/merge patches carry internal fields (resolution_notes,
+        // merged_reporter_ids) so the sidecar is created per incident.
+        Mock::given(method("POST"))
+            .and(path("/v1/capabilities/datasets/city-incident-internal/records"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": "created", "version": 1,
+                "createdAt": "2026-11-01T00:00:00.000Z",
+                "updatedAt": "2026-11-01T00:00:00.000Z",
+                "data": { "id": "created" }
+            })))
+            .mount(&server)
+            .await;
+        for id in [
+            "internal-inc-1",
+            "inc-1",
+            "internal-dup-1",
+            "dup-1",
+            "internal-dup-2",
+            "dup-2",
+        ] {
+            Mock::given(method("GET"))
+                .and(path(format!("/v1/capabilities/datasets/city-incident-internal/records/{id}")))
+                .respond_with(
+                    ResponseTemplate::new(404)
+                        .set_body_json(json!({"error": {"code": "not_found"}})),
+                )
+                .mount(&server)
+                .await;
+            Mock::given(method("DELETE"))
+                .and(path(format!("/v1/capabilities/datasets/city-incident-internal/records/{id}")))
+                .respond_with(
+                    ResponseTemplate::new(404)
+                        .set_body_json(json!({"error": {"code": "not_found"}})),
+                )
+                .mount(&server)
+                .await;
+        }
+        // dup-1 closes; dup-2 hits a Tier-2 failure.
+        Mock::given(method("PATCH"))
+            .and(path("/v1/capabilities/datasets/city-incidents/records/dup-1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": "dup-1", "version": 2,
+                "createdAt": "2026-11-01T00:00:00.000Z",
+                "updatedAt": "2026-11-01T00:00:01.000Z",
+                "data": {
+                    "id": "dup-1", "incident_number": "INC-101", "title": "Pump failure",
+                    "category": "utility", "status": "closed", "resolution_type": "duplicate",
+                    "merged_into": "inc-1", "public_visible": true
+                }
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("PATCH"))
+            .and(path("/v1/capabilities/datasets/city-incidents/records/dup-2"))
+            .respond_with(ResponseTemplate::new(500))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("PATCH"))
+            .and(path("/v1/capabilities/datasets/city-incidents/records/inc-1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": "inc-1", "version": 2,
+                "createdAt": "2026-11-01T00:00:00.000Z",
+                "updatedAt": "2026-11-01T00:00:02.000Z",
+                "data": {
+                    "id": "inc-1", "incident_number": "INC-100", "title": "Pump failure",
+                    "category": "utility", "status": "open", "public_visible": true,
+                    "merged_reporter_ids": ["dup-1"]
+                }
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let app = app(AppState::new(
+            config,
+            Client::new(&server.uri(), Credentials::none()).unwrap(),
+        ));
+        let (status, _, body) = call(
+            app,
+            Method::POST,
+            "/v1/incidents/inc-1/merge",
+            Some(&token),
+            Some(json!({ "duplicate_ids": ["dup-1", "dup-2", "dup-3"] })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        let closed: Vec<&str> = body["closed"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|value| value.as_str())
+            .collect();
+        assert_eq!(closed, ["dup-1"]);
+        let failed = body["failed"].as_array().unwrap();
+        assert_eq!(failed[0]["id"], "dup-2");
+        assert_eq!(failed[0]["error"], "tier2_unavailable");
+        assert_eq!(failed[1]["id"], "dup-3");
+        assert_eq!(failed[1]["error"], "not_found");
+        let merged: Vec<&str> = body["merged_reporter_ids"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|value| value.as_str())
+            .collect();
+        assert_eq!(merged, ["dup-1"]);
     }
 
     #[tokio::test]
