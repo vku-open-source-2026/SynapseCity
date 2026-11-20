@@ -1015,19 +1015,77 @@ fn city_metadata(ctx: &Ctx<'_>) -> Value {
     })
 }
 
+/// Bounded publication probe for the public projections: every public
+/// city-* dataset must actually be published, otherwise `/v1/public/*`
+/// stays silently empty while record writes keep succeeding.
+async fn public_dataset_publication(ctx: &Ctx<'_>) -> Vec<Value> {
+    let opts = ctx.opts();
+    let mut unpublished = Vec::new();
+    for spec in tier2::DATASETS.iter().filter(|spec| spec.public) {
+        match ctx.client().datasets().get(spec.id, &opts).await {
+            Ok(dataset) if dataset.status == "published" => {}
+            Ok(dataset) => {
+                tracing::warn!(
+                    dataset = %spec.id,
+                    status = %dataset.status,
+                    "public dataset is not published"
+                );
+                unpublished.push(json!({ "dataset": spec.id, "status": dataset.status }));
+            }
+            Err(error) => {
+                tracing::warn!(
+                    dataset = %spec.id,
+                    error = %error,
+                    "could not verify dataset publication status"
+                );
+                unpublished.push(json!({ "dataset": spec.id, "status": "unknown" }));
+            }
+        }
+    }
+    unpublished
+}
+
 async fn health(ctx: &Ctx<'_>, ready: bool) -> ApiResult<Response> {
     let opts = ctx.opts();
     match ctx.client().health(&opts).await {
-        Ok(tier2) => Ok(web::status_json(
-            StatusCode::OK,
-            json!({
-                "status": if ready { "ready" } else { "ok" },
-                "service": "synapsecity",
-                "tier": 3,
-                "tier2": tier2,
-                "tier2Url": ctx.config().tier2_url,
-            }),
-        )),
+        Ok(tier2) => {
+            let unpublished = public_dataset_publication(ctx).await;
+            // /health stays 200 so the container healthcheck reflects the
+            // process; /ready gates on the publication state and answers
+            // not_ready while a public dataset is not published.
+            if ready && !unpublished.is_empty() {
+                return Ok(web::status_json(
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    json!({
+                        "status": "not_ready",
+                        "service": "synapsecity",
+                        "tier": 3,
+                        "tier2": tier2,
+                        "tier2Url": ctx.config().tier2_url,
+                        "datasets": {
+                            "name": "tier2-public-datasets",
+                            "status": "degraded",
+                            "unpublished": unpublished,
+                        },
+                    }),
+                ));
+            }
+            Ok(web::status_json(
+                StatusCode::OK,
+                json!({
+                    "status": if ready { "ready" } else { "ok" },
+                    "service": "synapsecity",
+                    "tier": 3,
+                    "tier2": tier2,
+                    "tier2Url": ctx.config().tier2_url,
+                    "datasets": {
+                        "name": "tier2-public-datasets",
+                        "status": if unpublished.is_empty() { "ok" } else { "degraded" },
+                        "unpublished": unpublished,
+                    },
+                }),
+            ))
+        }
         Err(error) => Ok(web::status_json(
             StatusCode::SERVICE_UNAVAILABLE,
             json!({
@@ -8147,6 +8205,100 @@ mod route_tests {
             .filter_map(|value| value.as_str())
             .collect();
         assert_eq!(merged, ["dup-1"]);
+    }
+
+    #[tokio::test]
+    async fn ready_reports_degraded_publication_while_health_stays_200() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/v1/capabilities/health"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "status": "ok", "service": "synapsedx", "tier": 2
+            })))
+            .mount(&server)
+            .await;
+        // city-assets lost its publication; city-incidents is healthy.
+        Mock::given(method("GET"))
+            .and(path("/v1/capabilities/datasets/city-assets"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": "city-assets", "slug": "city-assets",
+                "name": "SynapseCity infrastructure assets",
+                "entityType": "CityAsset", "license": "PDDL-1.0",
+                "public": true, "status": "draft",
+                "description": "Public projection of city infrastructure assets",
+                "schemaVersion": "1.0.0",
+                "createdAt": "2026-11-01T00:00:00.000Z",
+                "updatedAt": "2026-11-01T00:00:00.000Z"
+            })))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/v1/capabilities/datasets/city-incidents"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": "city-incidents", "slug": "city-incidents",
+                "name": "SynapseCity infrastructure incidents",
+                "entityType": "CityIncident", "license": "PDDL-1.0",
+                "public": true, "status": "published",
+                "description": "Public projection of generalized infrastructure incidents",
+                "schemaVersion": "1.0.0",
+                "createdAt": "2026-11-01T00:00:00.000Z",
+                "updatedAt": "2026-11-01T00:00:00.000Z"
+            })))
+            .mount(&server)
+            .await;
+
+        let app = app(state(&server.uri()));
+        let (status, _, body) = call(app.clone(), Method::GET, "/ready", None, None).await;
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{body}");
+        assert_eq!(body["status"], "not_ready");
+        assert_eq!(body["datasets"]["status"], "degraded");
+        assert_eq!(body["datasets"]["unpublished"][0]["dataset"], "city-assets");
+        assert_eq!(body["datasets"]["unpublished"][0]["status"], "draft");
+
+        // The container healthcheck depends on /health answering 200; the
+        // degraded publication is reported as a component, not an outage.
+        let (status, _, body) = call(app, Method::GET, "/health", None, None).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(body["status"], "ok");
+        assert_eq!(body["datasets"]["status"], "degraded");
+        assert_eq!(body["datasets"]["unpublished"][0]["dataset"], "city-assets");
+    }
+
+    #[tokio::test]
+    async fn ready_is_ready_when_all_public_datasets_are_published() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/v1/capabilities/health"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "status": "ok", "service": "synapsedx", "tier": 2
+            })))
+            .mount(&server)
+            .await;
+        mount_dataset(
+            &server,
+            "city-assets",
+            "SynapseCity infrastructure assets",
+            "CityAsset",
+            "Public projection of city infrastructure assets",
+            true,
+        )
+        .await;
+        mount_dataset(
+            &server,
+            "city-incidents",
+            "SynapseCity infrastructure incidents",
+            "CityIncident",
+            "Public projection of generalized infrastructure incidents",
+            true,
+        )
+        .await;
+
+        let app = app(state(&server.uri()));
+        let (status, _, body) = call(app, Method::GET, "/ready", None, None).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(body["status"], "ready");
+        assert_eq!(body["datasets"]["status"], "ok");
+        assert_eq!(body["datasets"]["unpublished"].as_array().unwrap().len(), 0);
     }
 
     #[tokio::test]

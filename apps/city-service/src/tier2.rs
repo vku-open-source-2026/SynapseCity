@@ -257,30 +257,62 @@ pub async fn ensure_dataset(
     match client.datasets().get(spec.id, opts).await {
         Ok(existing) => {
             let desired_public = spec.public;
-            let needs_reconcile = existing.license != LICENSE
+            // A public dataset must be *published*, not merely flagged public:
+            // a publish that failed at bootstrap leaves the public projections
+            // silently empty, so status drift triggers a publish retry here.
+            let publish_drift = desired_public && existing.status != "published";
+            let metadata_drift = existing.license != LICENSE
                 || existing.public != desired_public
                 || existing.name != spec.name
                 || existing.entity_type != spec.entity_type
                 || existing.description.as_deref().unwrap_or("") != spec.description;
-            if !needs_reconcile {
+            if !publish_drift && !metadata_drift {
                 return Ok(existing);
             }
             if existing.public && !desired_public && existing.status == "published" {
-                let _ = client.datasets().revoke(existing.id.as_str(), opts).await;
+                if let Err(error) = client.datasets().revoke(existing.id.as_str(), opts).await {
+                    tracing::warn!(
+                        dataset = %spec.id,
+                        error = %error,
+                        "dataset revoke failed during reconcile"
+                    );
+                }
             }
-            let patch = json!({
-                "name": spec.name,
-                "entityType": spec.entity_type,
-                "license": LICENSE,
-                "description": spec.description,
-                "public": desired_public,
-                "schemaVersion": existing.schema_version.clone().unwrap_or_else(|| "1.0.0".into()),
-            });
-            client
-                .datasets()
-                .update(existing.id.as_str(), patch, opts)
-                .await
-                .map_err(ApiError::from)
+            let mut current = existing;
+            if metadata_drift {
+                let patch = json!({
+                    "name": spec.name,
+                    "entityType": spec.entity_type,
+                    "license": LICENSE,
+                    "description": spec.description,
+                    "public": desired_public,
+                    "schemaVersion": current.schema_version.clone().unwrap_or_else(|| "1.0.0".into()),
+                });
+                current = client
+                    .datasets()
+                    .update(current.id.as_str(), patch, opts)
+                    .await
+                    .map_err(ApiError::from)?;
+            }
+            if publish_drift {
+                // The records API keeps working while a dataset is
+                // unpublished, so a failed retry must not fail every record
+                // operation. It is retried on the next reconcile and
+                // surfaces as degraded readiness through /ready.
+                match client.datasets().publish(current.id.as_str(), opts).await {
+                    Ok(published) => Ok(published),
+                    Err(error) => {
+                        tracing::warn!(
+                            dataset = %spec.id,
+                            error = %error,
+                            "public dataset is not published; the next reconcile will retry"
+                        );
+                        Ok(current)
+                    }
+                }
+            } else {
+                Ok(current)
+            }
         }
         Err(error) if error.is_not_found() => {
             let input = DatasetInput {
@@ -298,7 +330,17 @@ pub async fn ensure_dataset(
                     if spec.public {
                         match client.datasets().publish(created.id.as_str(), opts).await {
                             Ok(published) => Ok(published),
-                            Err(_) => Ok(created),
+                            Err(error) => {
+                                // Bootstrap must not fail on a transient publish
+                                // error: the reconcile path retries while
+                                // status != "published" and /ready reports it.
+                                tracing::warn!(
+                                    dataset = %spec.id,
+                                    error = %error,
+                                    "dataset publish failed at bootstrap; reconcile will retry"
+                                );
+                                Ok(created)
+                            }
                         }
                     } else {
                         Ok(created)
@@ -678,11 +720,209 @@ pub fn actor_of(session: Option<&SessionPrincipal>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{request_options, request_options_from};
+    use super::{ensure_dataset, request_options, request_options_from, ASSETS};
     use serde_json::json;
     use synapsedx::{Client, Credentials, RecordListQuery, RequestOptions};
     use wiremock::matchers::{header, method, path, query_param};
     use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    const DATASET_BASE: &str = "/v1/capabilities/datasets/city-assets";
+
+    fn dataset_body(status: &str, name: &str) -> serde_json::Value {
+        json!({
+            "id": "city-assets",
+            "slug": "city-assets",
+            "name": name,
+            "entityType": "CityAsset",
+            "license": "PDDL-1.0",
+            "public": true,
+            "status": status,
+            "description": "Public projection of city infrastructure assets",
+            "schemaVersion": "1.0.0",
+            "createdAt": "2026-11-01T00:00:00.000Z",
+            "updatedAt": "2026-11-01T00:00:00.000Z"
+        })
+    }
+
+    async fn unpublished_mounts(server: &MockServer) {
+        Mock::given(method("PATCH"))
+            .and(path(DATASET_BASE))
+            .respond_with(ResponseTemplate::new(200).set_body_json(dataset_body(
+                "published",
+                "SynapseCity infrastructure assets",
+            )))
+            .expect(0)
+            .mount(server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/v1/capabilities/datasets"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(0)
+            .mount(server)
+            .await;
+    }
+
+    #[tokio::test]
+    async fn ensure_dataset_republishes_a_public_dataset_that_is_not_published() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path(DATASET_BASE))
+            .respond_with(ResponseTemplate::new(200).set_body_json(dataset_body(
+                "draft",
+                "SynapseCity infrastructure assets",
+            )))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path(format!("{DATASET_BASE}/publish")))
+            .respond_with(ResponseTemplate::new(200).set_body_json(dataset_body(
+                "published",
+                "SynapseCity infrastructure assets",
+            )))
+            .expect(1)
+            .mount(&server)
+            .await;
+        unpublished_mounts(&server).await;
+
+        let client = Client::new(server.uri(), Credentials::none()).unwrap();
+        let opts = RequestOptions::new();
+        let dataset = ensure_dataset(&client, &opts, ASSETS).await.unwrap();
+        assert_eq!(dataset.status, "published");
+    }
+
+    #[tokio::test]
+    async fn ensure_dataset_publish_retry_failure_does_not_fail_the_call() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path(DATASET_BASE))
+            .respond_with(ResponseTemplate::new(200).set_body_json(dataset_body(
+                "draft",
+                "SynapseCity infrastructure assets",
+            )))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path(format!("{DATASET_BASE}/publish")))
+            .respond_with(ResponseTemplate::new(500))
+            .expect(1)
+            .mount(&server)
+            .await;
+        unpublished_mounts(&server).await;
+
+        let client = Client::new(server.uri(), Credentials::none()).unwrap();
+        let opts = RequestOptions::new();
+        // Records keep working while the dataset is unpublished; the failed
+        // retry is logged and retried on the next reconcile.
+        let dataset = ensure_dataset(&client, &opts, ASSETS).await.unwrap();
+        assert_eq!(dataset.status, "draft");
+    }
+
+    #[tokio::test]
+    async fn ensure_dataset_updates_metadata_before_republishing() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path(DATASET_BASE))
+            .respond_with(ResponseTemplate::new(200).set_body_json(dataset_body(
+                "draft",
+                "Stale dataset name",
+            )))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("PATCH"))
+            .and(path(DATASET_BASE))
+            .respond_with(ResponseTemplate::new(200).set_body_json(dataset_body(
+                "draft",
+                "SynapseCity infrastructure assets",
+            )))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path(format!("{DATASET_BASE}/publish")))
+            .respond_with(ResponseTemplate::new(200).set_body_json(dataset_body(
+                "published",
+                "SynapseCity infrastructure assets",
+            )))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = Client::new(server.uri(), Credentials::none()).unwrap();
+        let opts = RequestOptions::new();
+        let dataset = ensure_dataset(&client, &opts, ASSETS).await.unwrap();
+        assert_eq!(dataset.status, "published");
+        assert_eq!(dataset.name, "SynapseCity infrastructure assets");
+    }
+
+    #[tokio::test]
+    async fn ensure_dataset_leaves_a_published_healthy_dataset_alone() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path(DATASET_BASE))
+            .respond_with(ResponseTemplate::new(200).set_body_json(dataset_body(
+                "published",
+                "SynapseCity infrastructure assets",
+            )))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path(format!("{DATASET_BASE}/publish")))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(0)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/v1/capabilities/datasets"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(0)
+            .mount(&server)
+            .await;
+
+        let client = Client::new(server.uri(), Credentials::none()).unwrap();
+        let opts = RequestOptions::new();
+        let dataset = ensure_dataset(&client, &opts, ASSETS).await.unwrap();
+        assert_eq!(dataset.status, "published");
+    }
+
+    #[tokio::test]
+    async fn ensure_dataset_create_publish_failure_returns_the_created_dataset() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path(DATASET_BASE))
+            .respond_with(
+                ResponseTemplate::new(404).set_body_json(json!({"error": {"code": "not_found"}})),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/v1/capabilities/datasets"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(dataset_body(
+                "draft",
+                "SynapseCity infrastructure assets",
+            )))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path(format!("{DATASET_BASE}/publish")))
+            .respond_with(ResponseTemplate::new(500))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = Client::new(server.uri(), Credentials::none()).unwrap();
+        let opts = RequestOptions::new();
+        // Bootstrap does not fail on a transient publish error; the
+        // reconcile path retries while status != "published".
+        let dataset = ensure_dataset(&client, &opts, ASSETS).await.unwrap();
+        assert_eq!(dataset.status, "draft");
+        assert_eq!(dataset.id, "city-assets");
+    }
 
     #[test]
     fn credential_precedence_session_then_config_and_header_then_config() {
