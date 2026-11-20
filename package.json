@@ -28,6 +28,7 @@
     "test:tier-boundary": "node --test --test-concurrency=1 scripts/tier-boundary.test.mjs",
     "test:workflow-artifacts": "node --test --test-concurrency=1 scripts/workflow-artifacts.test.mjs",
     "test:workflow-engine": "node --test --test-concurrency=1 scripts/workflow-engine.test.mjs",
+    "test:domain-workflows": "node --test --test-concurrency=1 scripts/domain-workflows.test.mjs",
     "workflows:validate": "node workflows/validate.mjs",
     "build:contribution": "npm --prefix apps/contribution-console run build",
     "dev:contribution": "npm --prefix apps/contribution-console run dev"

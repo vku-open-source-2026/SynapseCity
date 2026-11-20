@@ -366,6 +366,122 @@
         "onSubmit": "act-incident-close-submit"
       },
       {
+        "id": "incident-comment",
+        "type": "form",
+        "title": "Comment on an incident",
+        "width": "half",
+        "action": "update",
+        "fields": [
+          {
+            "name": "incident_id",
+            "type": "text",
+            "label": "Incident id",
+            "required": true
+          },
+          {
+            "name": "comment",
+            "type": "textarea",
+            "label": "Comment",
+            "required": true
+          },
+          {
+            "name": "is_internal",
+            "type": "checkbox",
+            "label": "Internal only"
+          }
+        ],
+        "resource": "incidents",
+        "workflowRef": {
+          "name": "city-incident-comment",
+          "checksum": "ea37ab8f757f2900dc98ffdddbb23b4e1e642a49eeec1b8a0a6ef24963abd329"
+        },
+        "onSubmit": "act-incident-comment-submit"
+      },
+      {
+        "id": "incident-visibility",
+        "type": "form",
+        "title": "Set incident visibility",
+        "width": "half",
+        "action": "update",
+        "fields": [
+          {
+            "name": "incident_id",
+            "type": "text",
+            "label": "Incident id",
+            "required": true
+          },
+          {
+            "name": "visibility",
+            "type": "select",
+            "label": "Visibility",
+            "required": true,
+            "options": [
+              "internal",
+              "public"
+            ]
+          }
+        ],
+        "resource": "incidents",
+        "workflowRef": {
+          "name": "city-incident-visibility",
+          "checksum": "a5bfd731516a2fee6cf475f973e7b4340410996f4859e514b1b7f0db4e10a15b"
+        },
+        "onSubmit": "act-incident-visibility-submit"
+      },
+      {
+        "id": "incident-upvote",
+        "type": "form",
+        "title": "Upvote an incident",
+        "width": "half",
+        "action": "update",
+        "fields": [
+          {
+            "name": "incident_id",
+            "type": "text",
+            "label": "Incident id",
+            "required": true
+          }
+        ],
+        "resource": "incidents",
+        "workflowRef": {
+          "name": "city-incident-upvote",
+          "checksum": "36d7d582a08e245e71d7c1daff42bdfdeab9b2647313b96e501cadcd06c5052e"
+        },
+        "onSubmit": "act-incident-upvote-submit"
+      },
+      {
+        "id": "incident-merge",
+        "type": "form",
+        "title": "Merge duplicate incidents",
+        "width": "full",
+        "action": "update",
+        "fields": [
+          {
+            "name": "incident_id",
+            "type": "text",
+            "label": "Primary incident id",
+            "required": true
+          },
+          {
+            "name": "duplicate_ids",
+            "type": "text",
+            "label": "Duplicate ids (comma-separated, up to 5)",
+            "required": true
+          },
+          {
+            "name": "merge_notes",
+            "type": "textarea",
+            "label": "Merge note"
+          }
+        ],
+        "resource": "incidents",
+        "workflowRef": {
+          "name": "city-incident-merge",
+          "checksum": "de4bd272bfdf9f216ab17af4fed6d321384fad98c36baebd758e8c9a75939f5e"
+        },
+        "onSubmit": "act-incident-merge-submit"
+      },
+      {
         "id": "act-workspace-navigation-link1",
         "type": "action",
         "title": "Navigate Overview",
@@ -996,6 +1112,168 @@
           "inputs": [],
           "actions": []
         }
+      },
+      {
+        "id": "act-incident-comment-submit",
+        "type": "action",
+        "title": "Submit Comment on an incident",
+        "operation": {
+          "kind": "update",
+          "target": "incident-comment",
+          "mappings": [
+            {
+              "field": "incident_id",
+              "source": "event",
+              "value": "values.incident_id",
+              "required": true
+            },
+            {
+              "field": "comment",
+              "source": "event",
+              "value": "values.comment",
+              "required": true
+            },
+            {
+              "field": "is_internal",
+              "source": "event",
+              "value": "values.is_internal",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incident-comment-open",
+        "type": "action",
+        "title": "Open Comment on an incident",
+        "operation": {
+          "kind": "openForm",
+          "target": "incident-comment",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incident-visibility-submit",
+        "type": "action",
+        "title": "Submit Set incident visibility",
+        "operation": {
+          "kind": "update",
+          "target": "incident-visibility",
+          "mappings": [
+            {
+              "field": "incident_id",
+              "source": "event",
+              "value": "values.incident_id",
+              "required": true
+            },
+            {
+              "field": "visibility",
+              "source": "event",
+              "value": "values.visibility",
+              "required": true
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incident-visibility-open",
+        "type": "action",
+        "title": "Open Set incident visibility",
+        "operation": {
+          "kind": "openForm",
+          "target": "incident-visibility",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incident-upvote-submit",
+        "type": "action",
+        "title": "Submit Upvote an incident",
+        "operation": {
+          "kind": "update",
+          "target": "incident-upvote",
+          "mappings": [
+            {
+              "field": "incident_id",
+              "source": "event",
+              "value": "values.incident_id",
+              "required": true
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incident-upvote-open",
+        "type": "action",
+        "title": "Open Upvote an incident",
+        "operation": {
+          "kind": "openForm",
+          "target": "incident-upvote",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incident-merge-submit",
+        "type": "action",
+        "title": "Submit Merge duplicate incidents",
+        "operation": {
+          "kind": "update",
+          "target": "incident-merge",
+          "mappings": [
+            {
+              "field": "incident_id",
+              "source": "event",
+              "value": "values.incident_id",
+              "required": true
+            },
+            {
+              "field": "duplicate_ids",
+              "source": "event",
+              "value": "values.duplicate_ids",
+              "required": true
+            },
+            {
+              "field": "merge_notes",
+              "source": "event",
+              "value": "values.merge_notes",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-incident-merge-open",
+        "type": "action",
+        "title": "Open Merge duplicate incidents",
+        "operation": {
+          "kind": "openForm",
+          "target": "incident-merge",
+          "mappings": [],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
       }
     ]
   },
@@ -1004,5 +1282,5 @@
     "path": "plugins/city-incident-desk.plugin.json",
     "revision": "2026-11-15.business"
   },
-  "checksum": "sha256:3fe8c5a937df9aa31238f1c84b9f3c7bc86212fe3744e429332e841060f4d2ad"
+  "checksum": "sha256:3906c168ab62112d8f155ef8892634f9b450a73a066122b00f2bbdd4e854861f"
 }

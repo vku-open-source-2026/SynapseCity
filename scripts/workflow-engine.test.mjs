@@ -128,6 +128,50 @@ test('real Tier-1 engine rejects a malformed transition before any HTTP call', {
     }
 });
 
+test('real Tier-1 engine executes the incident domain transitions with CAS', { skip: available ? false : skipReason }, () => {
+    const domain = (manifest.domainWorkflows || []).filter((entry) => entry.method === 'PATCH' && entry.workflow !== 'city-incident-merge');
+    assert.ok(domain.length >= 3, 'incident domain transitions are registered');
+    for (const entry of domain) {
+        const result = runHarness(entry.file, entry.dataset, manifest.persistence.credentialRef, 'good');
+        assert.equal(result.ok, true, JSON.stringify(result));
+        assert.equal(result.status, 'success', `${entry.workflow}: ${result.error}`);
+        assert.equal(result.calls.length, 2, `${entry.workflow} must GET then PATCH`);
+        const [read, patch] = result.calls;
+        assert.equal(read.method, 'GET');
+        assert.equal(patch.method, 'PATCH');
+        assert.equal(patch.headers['x-api-key'], 'test-api-key-secret');
+        const body = JSON.parse(patch.body);
+        assert.equal(body.ifVersion, 3, `${entry.workflow} must send optimistic CAS`);
+        assert.equal(body.publish, false, `${entry.workflow} must stay private`);
+        assert.equal(body.data.unrelated.keep, true, `${entry.workflow} erased unrelated record data`);
+        assert.equal(result.validationOutput.audit.operation, entry.operation);
+        assert.equal(result.validationOutput.audit.submittedBy, 'member-test');
+
+        if (entry.workflow === 'city-incident-comment') {
+            assert.equal(body.data.comments.length, 1);
+            assert.equal(body.data.comments[0].comment, 'Crew dispatched to the site');
+            assert.equal(body.data.comments[0].is_internal, true);
+            assert.equal(body.data.comments[0].user_id, 'member-test');
+        }
+        if (entry.workflow === 'city-incident-visibility') {
+            assert.equal(body.data.public_visible, false, 'internal visibility must clear public_visible');
+        }
+        if (entry.workflow === 'city-incident-upvote') {
+            assert.equal(body.data.upvotes, 1);
+            assert.deepEqual(body.data.upvoters, ['member-test']);
+        }
+
+        const malformed = runHarness(entry.file, entry.dataset, manifest.persistence.credentialRef, 'malformed');
+        assert.equal(malformed.status, 'error', `${entry.workflow} accepted a malformed action`);
+        assert.equal(malformed.calls.length, 0, `${entry.workflow} made an HTTP call`);
+
+        const conflict = runHarness(entry.file, entry.dataset, manifest.persistence.credentialRef, 'conflict');
+        assert.equal(conflict.status, 'error', `${entry.workflow} ignored a version conflict`);
+        assert.match(String(conflict.error || ''), /409/);
+        assert.equal(conflict.calls.length, 2);
+    }
+});
+
 test('real Tier-1 engine rejects a malformed form without an HTTP call', { skip: available ? false : skipReason }, () => {
     for (const entry of manifest.workflows.filter((item) => item.operation.endsWith('.create'))) {
         const result = runHarness(entry.file, entry.dataset, manifest.persistence.credentialRef, 'malformed');

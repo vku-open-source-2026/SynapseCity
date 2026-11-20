@@ -198,6 +198,45 @@
     "status": "source_ready",
     "generator": "plugins/workflows/generate-workspace-actions.mjs"
   },
+  "domainWorkflows": [
+    {
+      "operation": "incidents.comment",
+      "workflow": "city-incident-comment",
+      "file": "plugins/workflows/city-incident-comment.workflow.json",
+      "dataset": "city-incidents",
+      "method": "PATCH",
+      "resource": "incidents",
+      "status": "source_ready"
+    },
+    {
+      "operation": "incidents.visibility",
+      "workflow": "city-incident-visibility",
+      "file": "plugins/workflows/city-incident-visibility.workflow.json",
+      "dataset": "city-incidents",
+      "method": "PATCH",
+      "resource": "incidents",
+      "status": "source_ready"
+    },
+    {
+      "operation": "incidents.upvote",
+      "workflow": "city-incident-upvote",
+      "file": "plugins/workflows/city-incident-upvote.workflow.json",
+      "dataset": "city-incidents",
+      "method": "PATCH",
+      "resource": "incidents",
+      "status": "source_ready"
+    },
+    {
+      "operation": "incidents.merge",
+      "workflow": "city-incident-merge",
+      "file": "plugins/workflows/city-incident-merge.workflow.json",
+      "dataset": "city-incidents",
+      "method": "PATCH",
+      "resource": "incidents",
+      "status": "source_ready"
+    }
+  ],
+  "domainNote": "Third City batch (incident comment/visibility/upvote/merge). Same validation/CAS pattern as the lifecycle batch; merge is the multi-record orchestration the generic dispatcher cannot express (fixed 5 duplicate slots, or-filter query reads, CAS close per slot, re-read before the primary annotation). Bundle workflowRef checksums for this batch pin the portable workflow graph checksum (sha256 over the canonical {nodes, connections, settings}); the pre-existing pins are import-time DX snapshots.",
   "fileActionWorkflows": [
     {
       "workflow": "city-csv-import",

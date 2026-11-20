@@ -166,7 +166,13 @@ const createFields: Record<string, string> = {
 const transitionFields: Record<string, string> = subject === 'incident'
     ? (workflowPath.includes('resolve')
         ? { incident_id: recordId, resolution_notes: 'Fixed the span', resolution_type: 'fixed' }
-        : { incident_id: recordId, assigned_to: 'operator-2' })
+        : workflowPath.includes('comment')
+            ? { incident_id: recordId, comment: 'Crew dispatched to the site', is_internal: true }
+            : workflowPath.includes('visibility')
+                ? { incident_id: recordId, visibility: 'internal' }
+                : workflowPath.includes('upvote')
+                    ? { incident_id: recordId }
+                    : { incident_id: recordId, assigned_to: 'operator-2' })
     : subject === 'maintenance'
         ? (workflowPath.includes('assign')
             ? { work_order_id: recordId, assigned_to: 'tech-2' }

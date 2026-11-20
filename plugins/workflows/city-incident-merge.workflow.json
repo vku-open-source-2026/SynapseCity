@@ -1,0 +1,768 @@
+{
+  "name": "city-incident-merge",
+  "nodes": [
+    {
+      "id": "dx-manual-trigger",
+      "name": "DX manual execution",
+      "type": "manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        200,
+        300
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "validate-envelope",
+      "name": "Validate DX envelope and action fields",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        300
+      ],
+      "parameters": {
+        "code": "const envelope = $input || {};\nconst text = (value) => (typeof value === 'string' ? value.trim() : '');\nconst envelopeKeys = new Set(['pluginId', 'widgetId', 'product', 'resource', 'submittedBy', 'submittedAt', 'action', 'fields']);\nconst unknownEnvelope = Object.keys(envelope).filter((key) => !envelopeKeys.has(key));\nif (unknownEnvelope.length) throw new Error('unknown_envelope_fields:' + unknownEnvelope.join(','));\nconst product = text(envelope.product);\nconst resource = text(envelope.resource);\nconst submittedBy = text(envelope.submittedBy);\nif (!submittedBy) throw new Error('submitted_by_required');\nconst fields = envelope.fields && typeof envelope.fields === 'object' && !Array.isArray(envelope.fields) ? envelope.fields : null;\nif (!fields) throw new Error('fields_required');\nif (product !== 'city') throw new Error('unsupported_product');\nif (resource !== 'incidents') throw new Error('unsupported_resource');\nconst recordId = text(fields.incident_id);\nif (!/^[A-Za-z0-9_@.:+-]{1,256}$/.test(recordId)) throw new Error('record_id_invalid');\nconst encodedId = encodeURIComponent(recordId);\nconst allowed = new Set([\"incident_id\",\"duplicate_ids\",\"merge_notes\"]);\nconst unknown = Object.keys(fields).filter((key) => !allowed.has(key));\nif (unknown.length) throw new Error('unknown_fields:' + unknown.join(','));\nconst rawDuplicates = text(fields.duplicate_ids);\nif (!rawDuplicates) throw new Error('duplicate_ids_required');\nconst duplicateIds = [...new Set(rawDuplicates.split(',').map((entry) => entry.trim()).filter((entry) => entry))];\nif (duplicateIds.length < 1 || duplicateIds.length > 5) throw new Error('duplicate_ids_limit_1_5');\nfor (const duplicate of duplicateIds) {\n  if (!/^[A-Za-z0-9_@.:+-]{1,256}$/.test(duplicate)) throw new Error('duplicate_id_invalid:' + duplicate);\n  if (duplicate === recordId) throw new Error('duplicate_is_primary');\n}\nconst mergeNotes = text(fields.merge_notes);\nif (mergeNotes.length > 4000) throw new Error('merge_notes_max_4000');\nconst audit = {\n  product, resource, operation: 'incidents.merge', recordId,\n  pluginId: text(envelope.pluginId), widgetId: text(envelope.widgetId),\n  submittedBy, submittedAt: text(envelope.submittedAt) || $now,\n};\n\nreturn { recordId, encodedId, duplicateIds, mergeNotes, audit, operation: 'incidents.merge' };"
+      }
+    },
+    {
+      "id": "http-get-primary",
+      "name": "Read primary incident",
+      "type": "httpRequest",
+      "typeVersion": 4,
+      "position": [
+        640,
+        300
+      ],
+      "parameters": {
+        "url": "={{ 'https://synapsedx.sbs/v1/capabilities/datasets/city-incidents/records/' + $json.encodedId }}",
+        "method": "GET",
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        "auth": {
+          "credentialRef": "synapsedx-organization",
+          "header": "X-API-Key",
+          "allowedOrigins": [
+            "https://synapsedx.sbs"
+          ]
+        },
+        "includeInput": true,
+        "timeoutMs": 15000
+      }
+    },
+    {
+      "id": "prepare-query",
+      "name": "Prepare duplicate query",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        860,
+        300
+      ],
+      "parameters": {
+        "code": "const response = $input || {};\nconst current = response.body;\nconst action = response.input;\nif (response.statusCode !== 200 || !current || typeof current.data !== 'object' || !current.data) throw new Error('record_not_found');\nconst primary = current.data;\nif (!Number.isInteger(current.version)) throw new Error('record_version_unavailable');\nconst primaryId = String(primary.id || action.recordId);\nconst mergeNotes = action.mergeNotes || 'Merged into ' + String(primary.incident_number || primaryId);\nreturn {\n  action,\n  primary: { id: primaryId, data: primary, version: current.version, encodedId: action.encodedId },\n  duplicateIds: action.duplicateIds,\n  mergeNotes,\n  query: { where: { or: action.duplicateIds.map((duplicate) => ({ id: duplicate })) }, limit: 100 },\n};"
+      }
+    },
+    {
+      "id": "http-query-duplicates",
+      "name": "Query duplicate incidents",
+      "type": "httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1080,
+        300
+      ],
+      "parameters": {
+        "url": "https://synapsedx.sbs/v1/capabilities/datasets/city-incidents/records/query",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        "auth": {
+          "credentialRef": "synapsedx-organization",
+          "header": "X-API-Key",
+          "allowedOrigins": [
+            "https://synapsedx.sbs"
+          ]
+        },
+        "body": "={{ $json.query }}",
+        "includeInput": true,
+        "timeoutMs": 15000
+      }
+    },
+    {
+      "id": "plan-closes",
+      "name": "Plan duplicate closes",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        300
+      ],
+      "parameters": {
+        "code": "const response = $input || {};\nconst state = response.input;\nif (response.statusCode !== 200 || !response.body || !Array.isArray(response.body.items)) throw new Error('duplicate_query_failed');\nconst found = new Map(response.body.items.map((item) => [String(item.id), item]));\nconst slots = [];\nconst missing = [];\nfor (const duplicateId of state.duplicateIds) {\n  const item = found.get(String(duplicateId));\n  if (!item || typeof item.data !== 'object' || !item.data || !Number.isInteger(item.version)) {\n    missing.push({ id: duplicateId, error: 'not_found' });\n    continue;\n  }\n  slots.push({\n    exists: true,\n    url: 'https://synapsedx.sbs/v1/capabilities/datasets/city-incidents/records/' + encodeURIComponent(String(duplicateId)),\n    body: {\n      data: {\n        ...item.data,\n        status: 'closed',\n        resolution_type: 'duplicate',\n        merged_into: state.primary.id,\n        resolution_notes: state.mergeNotes,\n        closed_at: $now,\n      },\n      ifVersion: item.version,\n      publish: false,\n    },\n  });\n}\nwhile (slots.length < 5) slots.push({ exists: false });\nreturn {\n  action: state.action,\n  primary: state.primary,\n  duplicateIds: state.duplicateIds,\n  mergeNotes: state.mergeNotes,\n  missing,\n  slots,\n  query: { where: { or: state.duplicateIds.map((duplicate) => ({ id: duplicate })) }, limit: 100 },\n};"
+      }
+    },
+    {
+      "id": "if-duplicate-1",
+      "name": "Has duplicate 1?",
+      "type": "if",
+      "typeVersion": 1,
+      "position": [
+        1520,
+        300
+      ],
+      "parameters": {
+        "condition": "={{ $json.slots[0].exists === true }}"
+      }
+    },
+    {
+      "id": "patch-duplicate-1",
+      "name": "Close duplicate 1",
+      "type": "httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1740,
+        180
+      ],
+      "parameters": {
+        "url": "={{ $json.slots[0].url }}",
+        "method": "PATCH",
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        "auth": {
+          "credentialRef": "synapsedx-organization",
+          "header": "X-API-Key",
+          "allowedOrigins": [
+            "https://synapsedx.sbs"
+          ]
+        },
+        "body": "={{ $json.slots[0].body }}",
+        "includeInput": true,
+        "timeoutMs": 15000
+      }
+    },
+    {
+      "id": "restore-state-1",
+      "name": "Restore merge state 1",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        1960,
+        180
+      ],
+      "parameters": {
+        "code": "const response = $input || {};\nreturn response.input || {};"
+      }
+    },
+    {
+      "id": "if-duplicate-2",
+      "name": "Has duplicate 2?",
+      "type": "if",
+      "typeVersion": 1,
+      "position": [
+        2180,
+        300
+      ],
+      "parameters": {
+        "condition": "={{ $json.slots[1].exists === true }}"
+      }
+    },
+    {
+      "id": "patch-duplicate-2",
+      "name": "Close duplicate 2",
+      "type": "httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2400,
+        180
+      ],
+      "parameters": {
+        "url": "={{ $json.slots[1].url }}",
+        "method": "PATCH",
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        "auth": {
+          "credentialRef": "synapsedx-organization",
+          "header": "X-API-Key",
+          "allowedOrigins": [
+            "https://synapsedx.sbs"
+          ]
+        },
+        "body": "={{ $json.slots[1].body }}",
+        "includeInput": true,
+        "timeoutMs": 15000
+      }
+    },
+    {
+      "id": "restore-state-2",
+      "name": "Restore merge state 2",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        2620,
+        180
+      ],
+      "parameters": {
+        "code": "const response = $input || {};\nreturn response.input || {};"
+      }
+    },
+    {
+      "id": "if-duplicate-3",
+      "name": "Has duplicate 3?",
+      "type": "if",
+      "typeVersion": 1,
+      "position": [
+        2840,
+        300
+      ],
+      "parameters": {
+        "condition": "={{ $json.slots[2].exists === true }}"
+      }
+    },
+    {
+      "id": "patch-duplicate-3",
+      "name": "Close duplicate 3",
+      "type": "httpRequest",
+      "typeVersion": 4,
+      "position": [
+        3060,
+        180
+      ],
+      "parameters": {
+        "url": "={{ $json.slots[2].url }}",
+        "method": "PATCH",
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        "auth": {
+          "credentialRef": "synapsedx-organization",
+          "header": "X-API-Key",
+          "allowedOrigins": [
+            "https://synapsedx.sbs"
+          ]
+        },
+        "body": "={{ $json.slots[2].body }}",
+        "includeInput": true,
+        "timeoutMs": 15000
+      }
+    },
+    {
+      "id": "restore-state-3",
+      "name": "Restore merge state 3",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        3280,
+        180
+      ],
+      "parameters": {
+        "code": "const response = $input || {};\nreturn response.input || {};"
+      }
+    },
+    {
+      "id": "if-duplicate-4",
+      "name": "Has duplicate 4?",
+      "type": "if",
+      "typeVersion": 1,
+      "position": [
+        3500,
+        300
+      ],
+      "parameters": {
+        "condition": "={{ $json.slots[3].exists === true }}"
+      }
+    },
+    {
+      "id": "patch-duplicate-4",
+      "name": "Close duplicate 4",
+      "type": "httpRequest",
+      "typeVersion": 4,
+      "position": [
+        3720,
+        180
+      ],
+      "parameters": {
+        "url": "={{ $json.slots[3].url }}",
+        "method": "PATCH",
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        "auth": {
+          "credentialRef": "synapsedx-organization",
+          "header": "X-API-Key",
+          "allowedOrigins": [
+            "https://synapsedx.sbs"
+          ]
+        },
+        "body": "={{ $json.slots[3].body }}",
+        "includeInput": true,
+        "timeoutMs": 15000
+      }
+    },
+    {
+      "id": "restore-state-4",
+      "name": "Restore merge state 4",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        3940,
+        180
+      ],
+      "parameters": {
+        "code": "const response = $input || {};\nreturn response.input || {};"
+      }
+    },
+    {
+      "id": "if-duplicate-5",
+      "name": "Has duplicate 5?",
+      "type": "if",
+      "typeVersion": 1,
+      "position": [
+        4160,
+        300
+      ],
+      "parameters": {
+        "condition": "={{ $json.slots[4].exists === true }}"
+      }
+    },
+    {
+      "id": "patch-duplicate-5",
+      "name": "Close duplicate 5",
+      "type": "httpRequest",
+      "typeVersion": 4,
+      "position": [
+        4380,
+        180
+      ],
+      "parameters": {
+        "url": "={{ $json.slots[4].url }}",
+        "method": "PATCH",
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        "auth": {
+          "credentialRef": "synapsedx-organization",
+          "header": "X-API-Key",
+          "allowedOrigins": [
+            "https://synapsedx.sbs"
+          ]
+        },
+        "body": "={{ $json.slots[4].body }}",
+        "includeInput": true,
+        "timeoutMs": 15000
+      }
+    },
+    {
+      "id": "restore-state-5",
+      "name": "Restore merge state 5",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        4600,
+        180
+      ],
+      "parameters": {
+        "code": "const response = $input || {};\nreturn response.input || {};"
+      }
+    },
+    {
+      "id": "http-requery-duplicates",
+      "name": "Re-read duplicate incidents",
+      "type": "httpRequest",
+      "typeVersion": 4,
+      "position": [
+        4820,
+        300
+      ],
+      "parameters": {
+        "url": "https://synapsedx.sbs/v1/capabilities/datasets/city-incidents/records/query",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        "auth": {
+          "credentialRef": "synapsedx-organization",
+          "header": "X-API-Key",
+          "allowedOrigins": [
+            "https://synapsedx.sbs"
+          ]
+        },
+        "body": "={{ $json.query }}",
+        "includeInput": true,
+        "timeoutMs": 15000
+      }
+    },
+    {
+      "id": "merge-primary",
+      "name": "Merge primary annotation",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        5040,
+        300
+      ],
+      "parameters": {
+        "code": "const response = $input || {};\nconst state = response.input;\nif (response.statusCode !== 200 || !response.body || !Array.isArray(response.body.items)) throw new Error('duplicate_requery_failed');\nconst primaryId = state.primary.id;\nconst closedIds = [];\nfor (const item of response.body.items) {\n  const data = item && typeof item.data === 'object' && item.data ? item.data : null;\n  if (!data) continue;\n  if (String(data.status) === 'closed' && String(data.merged_into) === String(primaryId)) {\n    closedIds.push(String(item.id));\n  }\n}\nconst existing = Array.isArray(state.primary.data.merged_reporter_ids)\n  ? state.primary.data.merged_reporter_ids.map((entry) => String(entry || '')).filter((entry) => entry)\n  : [];\nconst merged = [...new Set([...existing, ...closedIds])].sort();\nconst next = { ...state.primary.data, merged_reporter_ids: merged };\nreturn {\n  body: { data: next, ifVersion: state.primary.version, publish: false },\n  url: 'https://synapsedx.sbs/v1/capabilities/datasets/city-incidents/records/' + state.primary.encodedId,\n  closedIds,\n  missing: state.missing,\n  duplicateIds: state.duplicateIds,\n  audit: state.action.audit,\n};"
+      }
+    },
+    {
+      "id": "http-patch-primary",
+      "name": "Patch primary incident",
+      "type": "httpRequest",
+      "typeVersion": 4,
+      "position": [
+        5260,
+        300
+      ],
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "method": "PATCH",
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        "auth": {
+          "credentialRef": "synapsedx-organization",
+          "header": "X-API-Key",
+          "allowedOrigins": [
+            "https://synapsedx.sbs"
+          ]
+        },
+        "body": "={{ $json.body }}",
+        "includeInput": true,
+        "timeoutMs": 15000
+      }
+    },
+    {
+      "id": "summarize-merge",
+      "name": "Summarize merge",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        5480,
+        300
+      ],
+      "parameters": {
+        "code": "const response = $input || {};\nconst state = response.input;\nif (response.statusCode !== 200 && response.statusCode !== 201) throw new Error('primary_write_failed');\nconst closed = state.closedIds;\nconst failed = state.duplicateIds\n  .filter((duplicate) => !closed.includes(duplicate))\n  .map((duplicate) => {\n    const known = (state.missing || []).find((entry) => entry.id === duplicate);\n    return { id: duplicate, error: known ? known.error : 'close_failed' };\n  });\nreturn {\n  operation: 'incidents.merge',\n  incident_id: state.audit.recordId,\n  closed,\n  failed,\n  merged_reporter_ids: state.body.data.merged_reporter_ids,\n};"
+      }
+    }
+  ],
+  "connections": {
+    "DX manual execution": {
+      "main": [
+        [
+          {
+            "node": "Validate DX envelope and action fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate DX envelope and action fields": {
+      "main": [
+        [
+          {
+            "node": "Read primary incident",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read primary incident": {
+      "main": [
+        [
+          {
+            "node": "Prepare duplicate query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare duplicate query": {
+      "main": [
+        [
+          {
+            "node": "Query duplicate incidents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query duplicate incidents": {
+      "main": [
+        [
+          {
+            "node": "Plan duplicate closes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Plan duplicate closes": {
+      "main": [
+        [
+          {
+            "node": "Has duplicate 1?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has duplicate 1?": {
+      "main": [
+        [
+          {
+            "node": "Close duplicate 1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Has duplicate 2?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Close duplicate 1": {
+      "main": [
+        [
+          {
+            "node": "Restore merge state 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore merge state 1": {
+      "main": [
+        [
+          {
+            "node": "Has duplicate 2?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has duplicate 2?": {
+      "main": [
+        [
+          {
+            "node": "Close duplicate 2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Has duplicate 3?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Close duplicate 2": {
+      "main": [
+        [
+          {
+            "node": "Restore merge state 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore merge state 2": {
+      "main": [
+        [
+          {
+            "node": "Has duplicate 3?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has duplicate 3?": {
+      "main": [
+        [
+          {
+            "node": "Close duplicate 3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Has duplicate 4?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Close duplicate 3": {
+      "main": [
+        [
+          {
+            "node": "Restore merge state 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore merge state 3": {
+      "main": [
+        [
+          {
+            "node": "Has duplicate 4?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has duplicate 4?": {
+      "main": [
+        [
+          {
+            "node": "Close duplicate 4",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Has duplicate 5?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Close duplicate 4": {
+      "main": [
+        [
+          {
+            "node": "Restore merge state 4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore merge state 4": {
+      "main": [
+        [
+          {
+            "node": "Has duplicate 5?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has duplicate 5?": {
+      "main": [
+        [
+          {
+            "node": "Close duplicate 5",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Re-read duplicate incidents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Close duplicate 5": {
+      "main": [
+        [
+          {
+            "node": "Restore merge state 5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore merge state 5": {
+      "main": [
+        [
+          {
+            "node": "Re-read duplicate incidents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Re-read duplicate incidents": {
+      "main": [
+        [
+          {
+            "node": "Merge primary annotation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge primary annotation": {
+      "main": [
+        [
+          {
+            "node": "Patch primary incident",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Patch primary incident": {
+      "main": [
+        [
+          {
+            "node": "Summarize merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "access": {
+      "mode": "owner-only"
+    }
+  }
+}

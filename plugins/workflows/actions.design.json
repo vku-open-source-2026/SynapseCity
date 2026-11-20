@@ -327,5 +327,165 @@
         "assignment history is preserved"
       ]
     }
+  ],
+  "domainActions": [
+    {
+      "operation": "incidents.comment",
+      "method": "PATCH",
+      "dataset": "city-incidents",
+      "recordIdField": "incident_id",
+      "fields": [
+        {
+          "name": "incident_id",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "comment",
+          "type": "textarea",
+          "required": true
+        },
+        {
+          "name": "is_internal",
+          "type": "checkbox"
+        }
+      ],
+      "allowedFrom": [
+        "reported",
+        "open",
+        "acknowledged",
+        "assigned",
+        "investigating",
+        "in_progress",
+        "waiting_approval",
+        "resolved",
+        "closed"
+      ],
+      "patch": {
+        "comments": "{append entry {id, comment, user_id, user_name, is_internal, posted_at, created_at}}"
+      },
+      "invariants": [
+        "the incident must exist and carry a record version",
+        "a comment entry is appended; existing comments and unrelated fields are preserved",
+        "the comment author is the submitting member identity, never a client-supplied name",
+        "the write stays private (publish:false); the City service remains the only publisher"
+      ]
+    },
+    {
+      "operation": "incidents.visibility",
+      "method": "PATCH",
+      "dataset": "city-incidents",
+      "recordIdField": "incident_id",
+      "fields": [
+        {
+          "name": "incident_id",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "visibility",
+          "type": "select",
+          "required": true,
+          "options": [
+            "internal",
+            "public"
+          ]
+        }
+      ],
+      "allowedFrom": [
+        "reported",
+        "open",
+        "acknowledged",
+        "assigned",
+        "investigating",
+        "in_progress",
+        "waiting_approval",
+        "resolved",
+        "closed"
+      ],
+      "patch": {
+        "public_visible": "{visibility === 'public'}"
+      },
+      "invariants": [
+        "visibility must be internal or public",
+        "internal means public_visible:false so the City service never publishes the record to the open-data layer",
+        "the write stays private (publish:false); publication remains a City service decision"
+      ]
+    },
+    {
+      "operation": "incidents.upvote",
+      "method": "PATCH",
+      "dataset": "city-incidents",
+      "recordIdField": "incident_id",
+      "fields": [
+        {
+          "name": "incident_id",
+          "type": "text",
+          "required": true
+        }
+      ],
+      "allowedFrom": [
+        "reported",
+        "open",
+        "acknowledged",
+        "assigned",
+        "investigating",
+        "in_progress",
+        "waiting_approval",
+        "resolved",
+        "closed"
+      ],
+      "patch": {
+        "upvotes": "{upvotes + 1}",
+        "upvoters": "{append submitter id}"
+      },
+      "invariants": [
+        "one upvote per reporter: a submitter already present in upvoters returns an idempotent result without a second write",
+        "upvoters entries are reporter identities recorded by the workflow, never client-supplied",
+        "the write stays private (publish:false)"
+      ]
+    },
+    {
+      "operation": "incidents.merge",
+      "method": "PATCH",
+      "dataset": "city-incidents",
+      "recordIdField": "incident_id",
+      "fields": [
+        {
+          "name": "incident_id",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "duplicate_ids",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "merge_notes",
+          "type": "textarea"
+        }
+      ],
+      "allowedFrom": [
+        "reported",
+        "open",
+        "acknowledged",
+        "assigned",
+        "investigating",
+        "in_progress",
+        "waiting_approval",
+        "resolved"
+      ],
+      "patch": {
+        "merged_reporter_ids": "{existing union successfully closed duplicate ids, sorted, deduplicated}"
+      },
+      "invariants": [
+        "1..5 duplicates per merge; a duplicate id equal to the primary is rejected",
+        "each duplicate closes with resolution_type:duplicate, merged_into:<primary id> and the shared resolution notes",
+        "only duplicates that are actually closed after the writes extend merged_reporter_ids; not-found duplicates are reported as failed and skipped",
+        "a CAS conflict on any duplicate close fails the run for an explicit re-run instead of a silent partial merge",
+        "every write stays private (publish:false)"
+      ]
+    }
   ]
 }

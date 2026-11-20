@@ -11,6 +11,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -144,7 +145,7 @@ test('transition flows use includeInput, merge invariants and conditional full P
 });
 
 test('no artifact writes via a projection, Base SDK or Tier-3 API', () => {
-    for (const entry of manifest.workflows) {
+    for (const entry of manifest.workflows.concat(manifest.domainWorkflows || [])) {
         const text = JSON.stringify(readWorkflow(entry.file));
         assert.ok(!/webhook|publish-record|synapseone\.api/.test(text), 'no webhook/LDS/first-party projection node');
         assert.ok(!/synapsecity-sos|sos\.synapsecity\.sbs|\/v1\/emergency/i.test(text), 'no SOS references');
@@ -161,6 +162,7 @@ test('incident workflows keep internal fields out of public writes', () => {
     const internal = ['assigned_to', 'reporter_type', 'resolution_notes'];
     const incidentFiles = manifest.workflows
         .concat(manifest.lifecycleWorkflows || [])
+        .concat((manifest.domainWorkflows || []).filter((entry) => entry.resource === 'incidents'))
         .filter((entry) => entry.resource === 'incidents');
     for (const entry of incidentFiles) {
         const workflow = readWorkflow(entry.file);
@@ -234,10 +236,65 @@ test('transition action design is implemented and keeps invariants', () => {
     }
 });
 
+test('domain workflows pin their portable graph checksum and keep incident writes private', () => {
+    const canonicalJson = (value) => {
+        if (value === null || typeof value !== 'object') return JSON.stringify(value);
+        if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+        return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
+    };
+    const graphChecksum = (workflow) =>
+        `sha256:${createHash('sha256').update(canonicalJson({
+            nodes: workflow.nodes,
+            connections: workflow.connections,
+            settings: workflow.settings || {},
+        }), 'utf8').digest('hex')}`;
+
+    const domainEntries = manifest.domainWorkflows || [];
+    assert.ok(domainEntries.length >= 4, 'the incident domain batch is registered');
+    const byWorkflow = new Map(domainEntries.map((entry) => [entry.workflow, entry]));
+    const bundleDir = path.join(ROOT, 'plugins');
+    for (const name of fs.readdirSync(bundleDir).filter((file) => file.endsWith('.plugin.json'))) {
+        const bundle = JSON.parse(fs.readFileSync(path.join(bundleDir, name), 'utf8'));
+        for (const widget of bundle.plugin.widgets.filter((item) => item.type === 'form' && byWorkflow.has(item.workflowRef?.name))) {
+            const entry = byWorkflow.get(widget.workflowRef.name);
+            const workflow = readWorkflow(entry.file);
+            // The pin must equal the portable workflow graph checksum so the
+            // DX source import produces an artifact this plugin resolves to.
+            assert.equal(
+                `sha256:${widget.workflowRef.checksum}`,
+                graphChecksum(workflow),
+                `${name}/${widget.id} pins a stale ${entry.workflow} checksum`,
+            );
+            assert.equal(workflow.settings?.access?.mode, 'owner-only', `${entry.workflow} must be owner-only`);
+        }
+    }
+
+    const merge = readWorkflow('plugins/workflows/city-incident-merge.workflow.json');
+    // The merge orchestration caps duplicates at the fixed slot count and only
+    // annotates the primary with duplicates that are actually closed.
+    const plan = merge.nodes.find((node) => node.name === 'Plan duplicate closes');
+    assert.match(plan.parameters.code, /while \(slots\.length < 5\)/);
+    const annotate = merge.nodes.find((node) => node.name === 'Merge primary annotation');
+    assert.match(annotate.parameters.code, /merged_into\) === String\(primaryId\)/);
+    assert.match(annotate.parameters.code, /new Set\(\[\.\.\.existing, \.\.\.closedIds\]\)/);
+    assert.match(annotate.parameters.code, /publish: false/);
+    const closes = merge.nodes.filter((node) => node.type === 'httpRequest' && node.parameters.method === 'PATCH');
+    assert.equal(closes.length, 6, 'five duplicate closes plus the primary annotation');
+    for (const close of closes) {
+        assert.equal(close.parameters.auth.credentialRef, 'synapsedx-organization');
+    }
+
+    const upvote = readWorkflow('plugins/workflows/city-incident-upvote.workflow.json');
+    const decide = upvote.nodes.find((node) => node.name === 'Decide upvote path and version');
+    assert.match(decide.parameters.code, /upvoters\.includes\(action\.submitter\)/);
+    assert.match(decide.parameters.code, /publish: false/);
+});
+
 test('product forms bind executable workflows; Common forms retain app-scoped capability actions', () => {
     const workflows = new Set([
         ...manifest.workflows.map((entry) => entry.workflow),
         ...(manifest.lifecycleWorkflows || []).map((entry) => entry.workflow),
+        ...(manifest.domainWorkflows || []).map((entry) => entry.workflow),
         ...(manifest.fileActionWorkflows || []).map((entry) => entry.workflow),
     ]);
     if (manifest.genericActionWorkflow?.workflow) workflows.add(manifest.genericActionWorkflow.workflow);
