@@ -4,19 +4,30 @@ import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import http, { type IncomingMessage, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { permissionsForRole, signToken, type SessionRole } from './auth';
 
 process.env.ALLOW_LOCAL_DEPENDENCIES = 'true';
 process.env.AUTH_SECRET = 'city-test-session-secret';
-// This suite exercises the explicit development-only demo session shell.
-process.env.CITY_AUTH_MODE = 'demo';
-// Non-production test only: keep the pre-migration auth routes reachable.
-process.env.TIER3_AUTH_MODE = 'legacy';
 
 type StoredRecord = { id: string; data: Record<string, unknown> };
 const datasets = new Map<string, Record<string, unknown>>();
 const records = new Map<string, Map<string, Record<string, unknown>>>();
 const publishedDatasets: string[] = [];
 const writeRequests: Array<{ method: string; path: string; body: unknown }> = [];
+
+// The Tier-3 login surface is retired; operator tests sign their sessions
+// directly instead of authenticating through /v1/auth (which answers 410).
+function tokenFor(role: SessionRole, username = 'qa'): string {
+  return signToken({
+    sub: `user-${username}`,
+    username,
+    email: `${username}@example.com`,
+    full_name: username,
+    role,
+    permissions: permissionsForRole(role),
+    typ: 'access',
+  });
+}
 
 function recordsFor(datasetId: string): Map<string, Record<string, unknown>> {
   if (!records.has(datasetId)) records.set(datasetId, new Map());
@@ -45,7 +56,6 @@ let fake: Server;
 let city: Server;
 let baseUrl: string;
 let accessToken = '';
-let refreshToken = '';
 
 before(async () => {
   fake = http.createServer(async (req, res) => {
@@ -192,74 +202,36 @@ function json(method: string, body?: unknown, token?: string): RequestInit {
   };
 }
 
-test('login issues an HMAC session and never forwards the password', async () => {
-  const response = await request('/v1/auth/login', json('POST', { username: 'qa', password: 'qa-secret' }));
-  assert.equal(response.status, 200);
-  assert.match(response.body.access_token, /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
-  assert.equal(response.body.token_type, 'Bearer');
-  assert.equal(typeof response.body.expires_in, 'number');
-  assert.equal(response.body.user.username, 'qa');
-  assert.equal(response.body.user.role, 'admin');
-  assert.ok(Array.isArray(response.body.user.permissions));
-  accessToken = response.body.access_token;
-  refreshToken = response.body.refresh_token;
-  assert.notEqual(accessToken, refreshToken);
-  assert.equal(JSON.stringify(writeRequests).includes('qa-secret'), false, 'passwords must never reach Tier-2');
+test('the retired auth surface answers 410 workspace_moved for every path', async () => {
+  const probes: Array<{ method: string; path: string; body?: unknown }> = [
+    { method: 'POST', path: '/v1/auth/login', body: { username: 'qa', password: 'qa-secret' } },
+    { method: 'POST', path: '/v1/auth/register', body: { username: 'citizen1', email: 'citizen@example.com', password: 'secret123', full_name: 'Citizen One', phone: '0900000000' } },
+    { method: 'POST', path: '/v1/auth/refresh', body: { refresh_token: 'anything' } },
+    { method: 'POST', path: '/v1/auth/logout', body: {} },
+    { method: 'POST', path: '/v1/auth/change-password', body: { current_password: 'old', new_password: 'new-secret' } },
+    { method: 'GET', path: '/v1/auth/me' },
+    { method: 'GET', path: '/v1/auth/verify' },
+    { method: 'DELETE', path: '/v1/auth/unknown' },
+  ];
+  for (const probe of probes) {
+    const response = await request(probe.path, json(probe.method, probe.body));
+    assert.equal(response.status, 410, `${probe.method} ${probe.path}`);
+    assert.equal(response.body.error, 'workspace_moved');
+    assert.equal(response.body.workspace_url, 'https://synapsedx.sbs/workspace');
+    assert.equal(response.body.access_token, undefined, 'no session may be minted');
+    assert.equal(response.body.refresh_token, undefined, 'no session may be minted');
+  }
+  // No credential may reach Tier-2 through the retired surface.
+  assert.equal(JSON.stringify(writeRequests).includes('qa-secret'), false);
+  assert.equal(JSON.stringify(writeRequests).includes('secret123'), false);
 });
 
-test('login rejects empty credentials', async () => {
-  const noPassword = await request('/v1/auth/login', json('POST', { username: 'qa' }));
-  assert.equal(noPassword.status, 400);
-  const noUsername = await request('/v1/auth/login', json('POST', { password: 'x' }));
-  assert.equal(noUsername.status, 400);
-});
-
-test('me, verify, refresh, logout and change-password work with the Bearer token', async () => {
-  const me = await request('/v1/auth/me', json('GET', undefined, accessToken));
+test('operator flows use a locally signed admin session', async () => {
+  accessToken = tokenFor('admin', 'qa');
+  const me = await request('/v1/users/me', json('GET', undefined, accessToken));
   assert.equal(me.status, 200);
   assert.equal(me.body.username, 'qa');
-
-  const verify = await request('/v1/auth/verify', json('GET', undefined, accessToken));
-  assert.equal(verify.status, 200);
-  assert.equal(verify.body.valid, true);
-
-  const refreshed = await request('/v1/auth/refresh', json('POST', { refresh_token: refreshToken }));
-  assert.equal(refreshed.status, 200);
-  assert.notEqual(refreshed.body.access_token, accessToken);
-  accessToken = refreshed.body.access_token;
-  refreshToken = refreshed.body.refresh_token;
-
-  const changed = await request('/v1/auth/change-password', json('POST', { current_password: 'old', new_password: 'new-secret' }, accessToken));
-  // The demo shell stores no credentials, so a password change must be refused
-  // rather than reported as successful. Tier-2 mode proxies the real IAM call.
-  assert.equal(changed.status, 503);
-  assert.equal(changed.body.error, 'identity_not_configured');
-
-  const revokedToken = accessToken;
-  const logout = await request('/v1/auth/logout', json('POST', {}, revokedToken));
-  assert.equal(logout.status, 204);
-  const revoked = await request('/v1/auth/me', json('GET', undefined, revokedToken), { anonymous: true });
-  assert.equal(revoked.status, 401, 'logout must revoke the access token');
-
-  // Re-authenticate for the remaining operator tests; the previous token is
-  // revoked deliberately.
-  const relogin = await request('/v1/auth/login', json('POST', { username: 'qa', password: 'qa-secret' }));
-  assert.equal(relogin.status, 200);
-  accessToken = relogin.body.access_token;
-  refreshToken = relogin.body.refresh_token;
-
-  const badRefresh = await request('/v1/auth/refresh', json('POST', { refresh_token: 'not-a-token' }));
-  assert.equal(badRefresh.status, 401);
-});
-
-test('register returns a session without storing the password', async () => {
-  const registered = await request('/v1/auth/register', json('POST', {
-    username: 'citizen1', email: 'citizen@example.com', password: 'secret123', full_name: 'Citizen One', phone: '0900000000',
-  }));
-  assert.equal(registered.status, 201);
-  assert.equal(registered.body.user.username, 'citizen1');
-  assert.equal(registered.body.user.role, 'citizen');
-  assert.equal(JSON.stringify(writeRequests).includes('secret123'), false);
+  assert.equal(me.body.id, 'user-qa');
 });
 
 test('/v1/users requires a session and returns 401, never 404', async () => {

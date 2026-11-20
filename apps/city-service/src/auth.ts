@@ -11,10 +11,10 @@ import type { NextFunction, Request, Response } from 'express';
  * - it does not create an identity table, session table or cache;
  * - tokens are signed locally and carry the operator principal.
  *
- * Production deployments must delegate authentication to the Tier-1 IAM
- * service and keep this shell only as a transport/session adapter. The demo
- * login accepts non-empty credentials and issues a principal so the operations
- * console can be exercised without a Tier-1 account.
+ * The Tier-3 login surface is retired (every /v1/auth/* request answers
+ * 410 workspace_moved); login and registration belong to the Tier-2
+ * SynapseDX workspace. This module only verifies the short-lived Bearer
+ * sessions operator requests present; it no longer mints them.
  */
 
 export type SessionRole = 'admin' | 'manager' | 'technician' | 'volunteer' | 'citizen';
@@ -83,18 +83,6 @@ function resolveSecret(): string {
 const AUTH_SECRET = resolveSecret();
 
 /**
- * The demo credential shell is a local development aid, never an identity
- * provider. It is enabled by default outside production and must be opted into
- * explicitly in production with `AUTH_DEMO_MODE=true`.
- */
-export function demoModeEnabled(): boolean {
-  const configured = (process.env.AUTH_DEMO_MODE || '').trim().toLowerCase();
-  if (configured === 'true') return true;
-  if (configured === 'false') return false;
-  return process.env.NODE_ENV !== 'production';
-}
-
-/**
  * Ephemeral demo-session revocation list. This is not a user/session store: it
  * only remembers the `jti` of tokens that were logged out until they expire, so
  * `AUTH_SECRET`-signed demo sessions can be invalidated. Production revocation
@@ -106,11 +94,6 @@ function activeRevocations(now: number): void {
   for (const [jti, exp] of revokedTokens) {
     if (exp <= now) revokedTokens.delete(jti);
   }
-}
-
-export function revokeSession(principal: Pick<SessionPrincipal, 'jti' | 'exp'>): void {
-  if (!principal.jti) return;
-  revokedTokens.set(principal.jti, Number(principal.exp) || Math.floor(Date.now() / 1000) + ACCESS_TTL_SECONDS);
 }
 
 export function isSessionRevoked(jti: string | undefined): boolean {
@@ -269,42 +252,6 @@ export function principalFromInput(input: PrincipalInput, defaultRole: SessionRo
     typ: 'access',
     iat: now,
     exp: now + ACCESS_TTL_SECONDS,
-  };
-}
-
-export interface SessionResponse {
-  access_token: string;
-  refresh_token: string;
-  token_type: 'Bearer';
-  expires_in: number;
-  user: SessionUser;
-}
-
-export function issueSession(principal: Omit<SessionPrincipal, 'typ' | 'iat' | 'exp'>): SessionResponse {
-  const role = normalizeRole(principal.role, 'citizen');
-  const base = {
-    sub: principal.sub,
-    username: principal.username,
-    email: principal.email,
-    full_name: principal.full_name,
-    ...(principal.phone ? { phone: principal.phone } : {}),
-    role,
-    // Permissions are always derived from the signed role, never copied from a
-    // caller-supplied list.
-    permissions: permissionsForRole(role),
-    ...(principal.demo ? { demo: true } : {}),
-    ...(principal.auth_source ? { auth_source: principal.auth_source } : {}),
-    ...(principal.tier2_token ? { tier2_token: principal.tier2_token } : {}),
-    ...(principal.tier2_refresh_token ? { tier2_refresh_token: principal.tier2_refresh_token } : {}),
-  };
-  const access_token = signToken({ ...base, typ: 'access' });
-  const refresh_token = signToken({ ...base, typ: 'refresh' });
-  return {
-    access_token,
-    refresh_token,
-    token_type: 'Bearer',
-    expires_in: ACCESS_TTL_SECONDS,
-    user: sessionUser(base),
   };
 }
 

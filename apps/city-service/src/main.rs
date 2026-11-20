@@ -81,7 +81,6 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!(
         port = config.port,
         tier2 = %config.tier2_url,
-        auth_mode = %config.auth_mode,
         "starting SynapseCity Rust service"
     );
     let app = Router::new()

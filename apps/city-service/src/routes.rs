@@ -17,7 +17,7 @@ use chrono::{SecondsFormat, Utc};
 use serde_json::{json, Map, Value};
 
 use crate::ai;
-use crate::auth::{self, SessionPrincipal, VerifiedIdentity};
+use crate::auth::{self, SessionPrincipal};
 use crate::config::Config;
 use crate::domain;
 use crate::error::{ApiError, ApiResult};
@@ -343,18 +343,10 @@ pub async fn dispatch(State(state): State<AppState>, req: Request) -> ApiResult<
         ("GET", ["ready"]) => health(&ctx, true).await,
         ("GET", ["metrics"]) => metrics(&ctx),
         ("GET", ["v1", "city"]) => Ok(web::json_response(city_metadata(&ctx))),
-        // Every legacy auth path is retired, including read/session paths that
-        // used to answer 401/404. Clients must use the DX workspace login.
+        // The retired password/session surface. This arm is the ONLY auth
+        // route logic: every /v1/auth/* method answers 410 workspace_moved,
+        // and no handler, credential path or session mint exists behind it.
         (_, ["v1", "auth", ..]) => Ok(workspace_moved()),
-        ("POST", ["v1", "auth", "login"]) | ("POST", ["v1", "auth", "register"]) => {
-            Ok(workspace_moved())
-        }
-        (_, ["v1", "auth", "refresh"]) => Ok(workspace_moved()),
-        ("POST", ["v1", "auth", "logout"]) => auth_logout(&ctx).await,
-        ("POST", ["v1", "auth", "change-password"]) => auth_change_password(&ctx).await,
-        ("GET", ["v1", "auth", "me"]) => auth_me(&ctx),
-        ("GET", ["v1", "auth", "verify"]) => auth_verify(&ctx),
-        (_, ["v1", "auth", "login"]) | (_, ["v1", "auth", "register"]) => Ok(workspace_moved()),
         ("GET", ["v1", "files", "quota"]) => files_quota(&ctx).await,
         ("GET", ["v1", "files"]) => files_list(&ctx).await,
         ("POST", ["v1", "files"]) => files_create(&ctx).await,
@@ -565,12 +557,16 @@ pub async fn dispatch(State(state): State<AppState>, req: Request) -> ApiResult<
     }
 }
 
+/// The single authoritative Tier-2 workspace URL, matching
+/// src/workspace-moved.ts in the legacy TS reference server.
+const WORKSPACE_URL: &str = "https://synapsedx.sbs/workspace";
+
 fn workspace_moved() -> Response {
     web::status_json(
         StatusCode::GONE,
         json!({
             "error": "workspace_moved",
-            "workspace_url": "https://synapsedx.sbs/workspace",
+            "workspace_url": WORKSPACE_URL,
             "detail": "Tier-3 work interfaces moved to the SynapseDX workspace.",
         }),
     )
@@ -1009,7 +1005,11 @@ fn city_metadata(ctx: &Ctx<'_>) -> Value {
             "datasets": { "status": "available", "transport": "synapsedx" },
             "records": { "status": "available", "transport": "synapsedx" },
             "files": domain::files::files_capability_status(),
-            "identity": { "status": if ctx.config().demo_auth_allowed() { "demo" } else { "available" }, "mode": ctx.config().auth_mode },
+            "identity": {
+                "status": "moved",
+                "workspace": WORKSPACE_URL,
+                "detail": "Tier-3 login, registration and sessions are retired; they belong to the SynapseDX workspace.",
+            },
             "geo": { "status": "shared", "provider": "tier2" },
         },
     })
@@ -1128,350 +1128,10 @@ fn metrics(ctx: &Ctx<'_>) -> ApiResult<Response> {
 // ---------------------------------------------------------------------------
 // Auth
 // ---------------------------------------------------------------------------
-
-fn user_from_identity(
-    identity: &VerifiedIdentity,
-    role: &str,
-    profile: Option<&Map<String, Value>>,
-) -> SessionPrincipal {
-    let username = profile
-        .and_then(|profile| profile.get("username"))
-        .and_then(Value::as_str)
-        .filter(|value| !value.is_empty())
-        .map(str::to_string)
-        .unwrap_or_else(|| {
-            if identity.email.is_empty() {
-                identity.user_id.clone()
-            } else {
-                identity.email.clone()
-            }
-        });
-    let now = Utc::now().timestamp();
-    SessionPrincipal {
-        sub: identity.user_id.clone(),
-        username: username.clone(),
-        email: if identity.email.is_empty() {
-            format!("{username}@synapsecity.local")
-        } else {
-            identity.email.clone()
-        },
-        full_name: profile
-            .and_then(|profile| profile.get("full_name"))
-            .and_then(Value::as_str)
-            .map(str::to_string)
-            .or_else(|| (!identity.display_name.is_empty()).then(|| identity.display_name.clone()))
-            .unwrap_or_else(|| username.clone()),
-        phone: profile
-            .and_then(|profile| profile.get("phone"))
-            .and_then(Value::as_str)
-            .map(str::to_string)
-            .or_else(|| identity.scopes.first().cloned().filter(|_| false)),
-        role: role.to_string(),
-        permissions: auth::permissions_for_role(role),
-        typ: "access".into(),
-        iat: now,
-        exp: now + 3600,
-        jti: Some(uuid::Uuid::new_v4().to_string()),
-        demo: None,
-        auth_source: Some("tier2".into()),
-        tier2_token: identity.access_token.clone(),
-        tier2_refresh_token: identity.refresh_token.clone(),
-    }
-}
-
-async fn find_city_profile(
-    ctx: &Ctx<'_>,
-    identity: &VerifiedIdentity,
-) -> Option<Map<String, Value>> {
-    let opts = ctx.opts();
-    if let Ok(profile) = tier2::get(ctx.client(), &opts, USERS, &identity.user_id).await {
-        return Some(profile);
-    }
-    let rows = tier2::list_all(ctx.client(), &opts, USERS, 500)
-        .await
-        .ok()?;
-    let email = identity.email.to_ascii_lowercase();
-    rows.items.into_iter().find(|row| {
-        row.get("email")
-            .and_then(Value::as_str)
-            .map(|value| value.eq_ignore_ascii_case(&email))
-            .unwrap_or(false)
-    })
-}
-
-fn session_for_identity(
-    ctx: &Ctx<'_>,
-    identity: &VerifiedIdentity,
-    role: &str,
-    session: &auth::Tier2Session,
-    profile: Option<&Map<String, Value>>,
-) -> ApiResult<Value> {
-    let mut base = user_from_identity(identity, role, profile);
-    base.tier2_token = session.token.clone();
-    base.tier2_refresh_token = session.refresh_token.clone();
-    base.auth_source = Some("tier2".into());
-    Ok(auth::issue_session(ctx.config(), base, false).json())
-}
-
-async fn auth_login(ctx: &Ctx<'_>) -> ApiResult<Response> {
-    let identifier = web::string_field(ctx.body, "email")
-        .or_else(|| web::string_field(ctx.body, "username"))
-        .unwrap_or_default();
-    let password = web::string_field(ctx.body, "password").unwrap_or_default();
-    if identifier.is_empty() {
-        return Err(ApiError::bad_request("email_required", "email_required"));
-    }
-    if password.trim().is_empty() {
-        return Err(ApiError::bad_request(
-            "password_required",
-            "password_required",
-        ));
-    }
-    if ctx.config().demo_auth_allowed() {
-        let role = auth::normalize_role(
-            &std::env::var("AUTH_DEMO_ROLE").unwrap_or_else(|_| "admin".into()),
-            auth::ROLE_CITIZEN,
-        );
-        let base = auth::principal_from_input(
-            ctx.config(),
-            &identifier,
-            web::string_field(ctx.body, "email").as_deref(),
-            web::string_field(ctx.body, "full_name").as_deref(),
-            web::string_field(ctx.body, "phone").as_deref(),
-            &role,
-        );
-        return Ok(web::json_response(
-            auth::issue_session(ctx.config(), base, true).json(),
-        ));
-    }
-    if !identifier.contains('@') {
-        return Err(ApiError::bad_request(
-            "email_required",
-            "Tier-2 identity requires an email address.",
-        ));
-    }
-    let opts = ctx.opts();
-    let session = ctx
-        .client()
-        .auth()
-        .login(
-            &identifier,
-            Some(&password),
-            web::string_field(ctx.body, "org_slug").as_deref(),
-            &opts,
-        )
-        .await
-        .map_err(auth::identity_error)?;
-    let value = serde_json::to_value(&session).unwrap_or(Value::Null);
-    let identity = auth::identity_from_session(&value)?;
-    let profile = find_city_profile(ctx, &identity).await;
-    let role = auth::role_for_identity(ctx.config(), &identity, profile.as_ref());
-    let response = session_for_identity(
-        ctx,
-        &identity,
-        &role,
-        &auth::Tier2Session {
-            identity: identity.clone(),
-            token: Some(session.access_token.clone()),
-            refresh_token: Some(session.refresh_token.clone()),
-            exchanged: false,
-        },
-        profile.as_ref(),
-    )?;
-    Ok(web::json_response(response))
-}
-
-async fn auth_register(ctx: &Ctx<'_>) -> ApiResult<Response> {
-    let email = web::string_field(ctx.body, "email")
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    let password = web::string_field(ctx.body, "password").unwrap_or_default();
-    let full_name = web::string_field(ctx.body, "full_name")
-        .or_else(|| web::string_field(ctx.body, "display_name"))
-        .unwrap_or_default();
-    if email.is_empty() {
-        return Err(ApiError::bad_request("email_required", "email_required"));
-    }
-    if !email.contains('@') {
-        return Err(ApiError::bad_request("email_invalid", "email_invalid"));
-    }
-    if password.len() < 6 {
-        return Err(ApiError::bad_request(
-            "password_too_short",
-            "password_too_short",
-        ));
-    }
-    if ctx.config().demo_auth_allowed() {
-        let base = auth::principal_from_input(
-            ctx.config(),
-            &web::string_field(ctx.body, "username").unwrap_or_else(|| email.clone()),
-            Some(&email),
-            Some(if full_name.is_empty() {
-                &email
-            } else {
-                &full_name
-            }),
-            web::string_field(ctx.body, "phone").as_deref(),
-            auth::ROLE_CITIZEN,
-        );
-        return Ok(web::status_json(
-            StatusCode::CREATED,
-            auth::issue_session(ctx.config(), base, true).json(),
-        ));
-    }
-    let opts = ctx.opts();
-    let session = ctx
-        .client()
-        .auth()
-        .register(
-            &email,
-            &password,
-            (!full_name.is_empty()).then_some(full_name.as_str()),
-            web::string_field(ctx.body, "org_slug").as_deref(),
-            &opts,
-        )
-        .await
-        .map_err(auth::identity_error)?;
-    let value = serde_json::to_value(&session).unwrap_or(Value::Null);
-    let identity = auth::identity_from_session(&value)?;
-    let profile =
-        json!({ "username": if full_name.is_empty() { email.clone() } else { full_name.clone() } });
-    let response = session_for_identity(
-        ctx,
-        &identity,
-        auth::ROLE_CITIZEN,
-        &auth::Tier2Session {
-            identity: identity.clone(),
-            token: Some(session.access_token.clone()),
-            refresh_token: Some(session.refresh_token.clone()),
-            exchanged: false,
-        },
-        Some(profile.as_object().unwrap_or(&Map::new())),
-    )?;
-    Ok(web::status_json(StatusCode::CREATED, response))
-}
-
-async fn auth_refresh(ctx: &Ctx<'_>) -> ApiResult<Response> {
-    let token = web::string_field(ctx.body, "refresh_token").unwrap_or_default();
-    let principal = auth::verify_token(ctx.config(), &token, "refresh").ok_or_else(|| {
-        ApiError::new(
-            StatusCode::UNAUTHORIZED,
-            "invalid_refresh_token",
-            "invalid_refresh_token",
-        )
-    })?;
-    if principal.demo == Some(true) && !ctx.config().demo_auth_allowed() {
-        return Err(ApiError::unavailable(
-            "identity_not_configured",
-            "Identity verification is unavailable.",
-        ));
-    }
-    if principal.auth_source.as_deref() == Some("tier2") {
-        let refresh = principal.tier2_refresh_token.clone().ok_or_else(|| {
-            ApiError::new(
-                StatusCode::UNAUTHORIZED,
-                "invalid_refresh_token",
-                "no_tier2_refresh_token",
-            )
-        })?;
-        let opts = ctx.opts();
-        let rotated = ctx
-            .client()
-            .auth()
-            .refresh(&refresh, &opts)
-            .await
-            .map_err(auth::identity_error)?;
-        let mut base = principal.clone();
-        base.tier2_token = Some(rotated.access_token);
-        base.tier2_refresh_token = Some(rotated.refresh_token);
-        base.permissions = auth::permissions_for_role(&base.role);
-        return Ok(web::json_response(
-            auth::issue_session(ctx.config(), base, false).json(),
-        ));
-    }
-    let mut base = principal.clone();
-    base.permissions = auth::permissions_for_role(&base.role);
-    Ok(web::json_response(
-        auth::issue_session(ctx.config(), base, principal.demo == Some(true)).json(),
-    ))
-}
-
-async fn auth_logout(ctx: &Ctx<'_>) -> ApiResult<Response> {
-    if let Some(principal) = ctx.principal() {
-        auth::revoke_session(principal);
-    }
-    let token = web::string_field(ctx.body, "refresh_token").unwrap_or_default();
-    if let Some(principal) = auth::verify_token(ctx.config(), &token, "refresh") {
-        auth::revoke_session(&principal);
-        if let Some(refresh) = principal.tier2_refresh_token {
-            let opts = ctx.opts();
-            let _ = ctx.client().auth().logout(&refresh, &opts).await;
-        }
-    }
-    Ok(web::no_content())
-}
-
-async fn auth_change_password(ctx: &Ctx<'_>) -> ApiResult<Response> {
-    let principal = ctx.principal().ok_or_else(|| {
-        ApiError::new(
-            StatusCode::UNAUTHORIZED,
-            "unauthorized",
-            "authentication_required",
-        )
-    })?;
-    let current = web::string_field(ctx.body, "current_password").unwrap_or_default();
-    let new_password = web::string_field(ctx.body, "new_password").unwrap_or_default();
-    if current.trim().is_empty() || new_password.trim().is_empty() {
-        return Err(ApiError::bad_request(
-            "current_and_new_password_required",
-            "current and new password are required",
-        ));
-    }
-    if principal.auth_source.as_deref() != Some("tier2") || principal.tier2_token.is_none() {
-        return Err(ApiError::unavailable(
-            "identity_not_configured",
-            "Password changes require the Tier-2 identity capability.",
-        ));
-    }
-    let opts = ctx.opts();
-    ctx.client()
-        .auth()
-        .change_password(&current, &new_password, &opts)
-        .await
-        .map_err(auth::identity_error)?;
-    Ok(web::no_content())
-}
-
-fn auth_me(ctx: &Ctx<'_>) -> ApiResult<Response> {
-    let principal = ctx.principal().ok_or_else(|| {
-        ApiError::new(
-            StatusCode::UNAUTHORIZED,
-            "unauthorized",
-            "authentication_required",
-        )
-    })?;
-    Ok(web::json_response(auth::user_json(
-        &auth::user_from_principal(principal),
-    )))
-}
-
-fn auth_verify(ctx: &Ctx<'_>) -> ApiResult<Response> {
-    let principal = ctx.principal().ok_or_else(|| {
-        ApiError::new(
-            StatusCode::UNAUTHORIZED,
-            "unauthorized",
-            "authentication_required",
-        )
-    })?;
-    Ok(web::json_response(json!({
-        "valid": true,
-        "user_id": principal.sub,
-        "username": principal.username,
-        "role": principal.role,
-        "permissions": principal.permissions,
-        "identity_source": principal.auth_source.clone().unwrap_or_else(|| "legacy".into()),
-    })))
-}
+// The Tier-3 password/session surface is retired: /v1/auth/* answers
+// 410 workspace_moved (see the dispatch arm). Login, registration, refresh
+// and password change live in the SynapseDX workspace; this service only
+// verifies the short-lived HMAC sessions it issues for operator requests.
 
 // ---------------------------------------------------------------------------
 // Files
@@ -7017,21 +6677,79 @@ mod route_tests {
     #[tokio::test]
     async fn auth_entry_points_are_permanently_410_for_all_methods() {
         let app = app(state("http://127.0.0.1:1"));
-        for method in [Method::POST, Method::GET] {
-            for route in ["login", "register", "refresh"] {
+        // The retired password/session surface: whatever the method or the
+        // sub-path, the single catch-all arm answers 410 and no handler or
+        // credential path exists behind it.
+        for method in [
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::PATCH,
+            Method::DELETE,
+        ] {
+            for route in [
+                "login",
+                "register",
+                "refresh",
+                "logout",
+                "change-password",
+                "me",
+                "verify",
+                "sessions",
+                "totally-unknown-path",
+            ] {
                 let (status, _, body) = call(
                     app.clone(),
                     method.clone(),
                     &format!("/v1/auth/{route}"),
                     None,
-                    Some(json!({})),
+                    Some(json!({
+                        "email": "ops@city.test",
+                        "password": "secret",
+                        "refresh_token": "anything",
+                        "role": "admin",
+                    })),
                 )
                 .await;
                 assert_eq!(status, StatusCode::GONE, "{method} {route}");
-                assert_eq!(body["error"], "workspace_moved");
-                assert_eq!(body["workspace_url"], "https://synapsedx.sbs/workspace");
+                assert_eq!(body["error"], "workspace_moved", "{method} {route}");
+                assert_eq!(
+                    body["workspace_url"],
+                    "https://synapsedx.sbs/workspace",
+                    "{method} {route}"
+                );
+                assert!(
+                    body.get("access_token").is_none(),
+                    "{method} {route}: no session may be minted"
+                );
             }
         }
+        // The bare namespace and nested sub-paths answer 410 as well.
+        for uri in ["/v1/auth", "/v1/auth/", "/v1/auth/verify/extra/segments"] {
+            let (status, _, body) = call(
+                app.clone(),
+                Method::GET,
+                uri,
+                None,
+                None,
+            )
+            .await;
+            assert_eq!(status, StatusCode::GONE, "{uri}");
+            assert_eq!(body["error"], "workspace_moved", "{uri}");
+        }
+    }
+
+    #[tokio::test]
+    async fn city_metadata_reports_the_identity_surface_as_moved() {
+        let app = app(state("http://127.0.0.1:1"));
+        let (status, _, body) = call(app, Method::GET, "/v1/city", None, None).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(body["capabilities"]["identity"]["status"], "moved");
+        assert_eq!(
+            body["capabilities"]["identity"]["workspace"],
+            "https://synapsedx.sbs/workspace"
+        );
+        assert!(body["capabilities"]["identity"].get("mode").is_none());
     }
 
     #[tokio::test]

@@ -12,7 +12,6 @@ process.env.ALLOW_LOCAL_DEPENDENCIES = 'true';
 process.env.AUTH_SECRET = 'city-geo-test-secret';
 process.env.NODE_ENV = 'test';
 process.env.LOG_LEVEL = 'silent';
-process.env.CITY_AUTH_MODE = 'demo';
 delete process.env.CITY_GEO_PROVIDER;
 
 let tier2: MockTier2;

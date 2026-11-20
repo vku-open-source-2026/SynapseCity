@@ -11,16 +11,10 @@ import {
   SessionPrincipal,
   containsPassword,
   hasPermission,
-  issueSession,
-  normalizeRole,
-  permissionsForRole,
-  principalFromInput,
   requireSession,
-  revokeSession,
   sanitizeUser,
   sessionFromRequest,
   sessionUser,
-  verifyToken,
 } from './auth';
 import { missingColumns, parseCsv } from './csv';
 import { workspaceMovedMiddleware } from './workspace-moved';
@@ -58,13 +52,6 @@ import {
 } from './files';
 import {
   identityCapabilityStatus,
-  demoAuthAllowed,
-  authErrorStatus,
-  identityDependency,
-  roleForIdentity,
-  tier2Login,
-  tier2Register,
-  type Tier2Session,
 } from './identity';
 import {
   geoCoderStatus,
@@ -777,245 +764,16 @@ async function pushNotification(req: Request, input: Parameters<typeof buildNoti
 }
 
 // ---------------------------------------------------------------------------
-// Auth session shell
+// Retired auth surface
 // ---------------------------------------------------------------------------
-// The City product owns the /v1/auth namespace as a stateless session adapter.
-// In `tier2` mode (default) credentials are verified by the Tier-2 auth
-// capability, which proxies Tier-1 IAM. City stores no passwords and keeps the
-// Tier-1 token inside the signed session. The demo shell is explicit and
-// development-only. See identity.ts for the full design note.
-
-const IDENTITY_DEPENDENCY = identityDependency();
-
-const authRateLimit = rateLimit({
-  name: 'auth',
-  windowMs: Math.max(1000, Number(process.env.AUTH_RATE_WINDOW_MS || 300_000)),
-  max: Math.max(1, Number(process.env.AUTH_RATE_LIMIT || 30)),
-});
-
-export function demoRole(): SessionPrincipal['role'] {
-  // Demo role is operator configuration, never a request field.
-  return normalizeRole(process.env.AUTH_DEMO_ROLE || 'admin', 'citizen');
-}
-
-function identityUnavailable(res: Response, status = 503, code = 'identity_not_configured', detail = 'Identity verification is unavailable.'): void {
-  res.status(status).json({ error: code, detail, dependency: IDENTITY_DEPENDENCY });
-}
-
-function isEmail(value: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-}
-
-async function findCityProfile(client: CapabilitiesClient, identity: { userId: string; email: string }): Promise<Record<string, unknown> | null> {
-  try {
-    const dataset = await ensureDataset(client, DATASETS.users);
-    try {
-      return recordData(await client.records.get(dataset.id, identity.userId));
-    } catch (error) {
-      if (!(error instanceof CapabilitiesError) || error.status !== 404) throw error;
-    }
-    const page = await client.records.list(dataset.id, { limit: 500, offset: 0 });
-    const email = identity.email.toLowerCase();
-    return page.items
-      .map((item) => recordData(item))
-      .find((row) => String(row.email || '').toLowerCase() === email) || null;
-  } catch (error) {
-    // A missing operator profile store must not turn identity verification into
-    // an outage; the default role is citizen, never admin.
-    console.warn('[synapsecity] operator_profile_lookup_failed', (error as Error).message);
-    return null;
-  }
-}
-
-function sessionForVerifiedIdentity(identity: Tier2Session['identity'], role: SessionPrincipal['role'], tokens: Tier2Session, profile?: Record<string, unknown> | null) {
-  const username = String(profile?.username || identity.email || identity.userId);
-  return issueSession({
-    sub: identity.userId,
-    username,
-    email: identity.email || `${username}@synapsecity.local`,
-    full_name: String(profile?.full_name || identity.displayName || username),
-    ...(profile?.phone ? { phone: String(profile.phone) } : {}),
-    role,
-    permissions: permissionsForRole(role),
-    auth_source: 'tier2',
-    ...(tokens.token ? { tier2_token: tokens.token } : {}),
-    ...(tokens.refreshToken ? { tier2_refresh_token: tokens.refreshToken } : {}),
-  });
-}
-
-// Tier-3 auth surface is retired: every /v1/auth request is answered with
-// 410 workspace_moved before rate limiting, credential handling or session
-// code. Work interfaces live in the Tier-2 DX workspace.
+// Tier-3 login, registration, refresh, logout, password change and session
+// introspection are retired: work interfaces and login live in the Tier-2
+// SynapseDX workspace. This middleware is the entire /v1/auth surface - it
+// answers 410 workspace_moved for every method and sub-path before any rate
+// limiter, credential parsing or session code, so no password-handling path
+// exists in this service. Operator requests still present the short-lived
+// HMAC Bearer session verified by requireSession/sessionFromRequest.
 app.use('/v1/auth', workspaceMovedMiddleware('city'));
-
-app.post('/v1/auth/login', authRateLimit, async (req, res) => {
-  const body = objectBody(req.body);
-  const usernameOrEmail = String(body.email || body.username || '').trim();
-  const password = String(body.password || '');
-  if (!usernameOrEmail) return res.status(400).json({ error: 'email_required' });
-  if (!password.trim()) return res.status(400).json({ error: 'password_required' });
-
-  if (demoAuthAllowed()) {
-    // `body.role` is intentionally ignored: a caller cannot choose its role.
-    const principal = principalFromInput({
-      username: usernameOrEmail,
-      email: typeof body.email === 'string' ? body.email : undefined,
-      full_name: typeof body.full_name === 'string' ? body.full_name : undefined,
-      phone: typeof body.phone === 'string' ? body.phone : undefined,
-    }, demoRole());
-    return res.json(issueSession({ ...principal, demo: true, auth_source: 'demo' }));
-  }
-
-  if (!isEmail(usernameOrEmail)) {
-    return res.status(400).json({ error: 'email_required', detail: 'Tier-2 identity requires an email address.' });
-  }
-  const client = capabilitiesFromRequest(req);
-  try {
-    const tokens = await tier2Login(client, {
-      email: usernameOrEmail,
-      password,
-      ...(typeof body.org_slug === 'string' ? { orgSlug: body.org_slug } : {}),
-    });
-    const profile = await findCityProfile(client, tokens.identity);
-    const role = roleForIdentity(tokens.identity, profile);
-    res.json(sessionForVerifiedIdentity(tokens.identity, role, tokens, profile));
-  } catch (error) {
-    const mapped = authErrorStatus(error);
-    identityUnavailable(res, mapped.status, mapped.code, mapped.detail);
-  }
-});
-
-app.post('/v1/auth/register', authRateLimit, async (req, res) => {
-  const body = objectBody(req.body);
-  const email = String(body.email || '').trim().toLowerCase();
-  const password = String(body.password || '');
-  const fullName = String(body.full_name || body.display_name || '').trim();
-  if (!email) return res.status(400).json({ error: 'email_required' });
-  if (!isEmail(email)) return res.status(400).json({ error: 'email_invalid' });
-  if (fullName && !String(body.username || '').trim() && fullName.length > 200) return res.status(400).json({ error: 'full_name_too_long' });
-  if (password.length < 6) return res.status(400).json({ error: 'password_too_short' });
-
-  if (demoAuthAllowed()) {
-    // Self-registration never grants an operator role. Passwords are not stored.
-    const principal = principalFromInput({ username: String(body.username || email), email, full_name: fullName || email, phone: typeof body.phone === 'string' ? body.phone : undefined }, 'citizen');
-    return res.status(201).json(issueSession({ ...principal, role: 'citizen', permissions: permissionsForRole('citizen'), demo: true, auth_source: 'demo' }));
-  }
-
-  const client = capabilitiesFromRequest(req);
-  try {
-    const tokens = await tier2Register(client, {
-      email,
-      password,
-      ...(fullName ? { displayName: fullName } : {}),
-      ...(typeof body.org_slug === 'string' ? { orgSlug: body.org_slug } : {}),
-    });
-    // A self-registered identity is always a citizen; operator roles are only
-    // assigned by a City administrator through /v1/users.
-    const session = sessionForVerifiedIdentity(tokens.identity, 'citizen', tokens, { username: fullName || email });
-    res.status(201).json(session);
-  } catch (error) {
-    const mapped = authErrorStatus(error);
-    identityUnavailable(res, mapped.status, mapped.code, mapped.detail);
-  }
-});
-
-app.post('/v1/auth/refresh', authRateLimit, async (req, res) => {
-  const body = objectBody(req.body);
-  const token = String(body.refresh_token || '');
-  const principal = token ? verifyToken(token, 'refresh') : null;
-  if (!principal) return res.status(401).json({ error: 'invalid_refresh_token' });
-  if (principal.demo && !demoAuthAllowed()) return identityUnavailable(res);
-
-  if (principal.auth_source === 'tier2') {
-    if (!principal.tier2_refresh_token) return res.status(401).json({ error: 'invalid_refresh_token', detail: 'no_tier2_refresh_token' });
-    const client = capabilitiesFromRequest(req);
-    try {
-      const rotated = await client.auth.refresh(principal.tier2_refresh_token) as unknown as Record<string, unknown>;
-      const accessToken = String(rotated.accessToken || rotated.access_token || '');
-      const refreshToken = String(rotated.refreshToken || rotated.refresh_token || principal.tier2_refresh_token);
-      return res.json(issueSession({
-        sub: principal.sub,
-        username: principal.username,
-        email: principal.email,
-        full_name: principal.full_name,
-        ...(principal.phone ? { phone: principal.phone } : {}),
-        role: principal.role,
-        permissions: permissionsForRole(principal.role),
-        auth_source: 'tier2',
-        ...(accessToken ? { tier2_token: accessToken } : {}),
-        tier2_refresh_token: refreshToken,
-      }));
-    } catch (error) {
-      const mapped = authErrorStatus(error);
-      return identityUnavailable(res, mapped.status === 401 ? 401 : 503, mapped.status === 401 ? 'invalid_refresh_token' : mapped.code, mapped.detail);
-    }
-  }
-
-  res.json(issueSession({
-    sub: principal.sub,
-    username: principal.username,
-    email: principal.email,
-    full_name: principal.full_name,
-    ...(principal.phone ? { phone: principal.phone } : {}),
-    role: principal.role,
-    permissions: permissionsForRole(principal.role),
-    auth_source: principal.auth_source || (principal.demo ? 'demo' : undefined),
-    demo: principal.demo === true,
-    ...(principal.tier2_token ? { tier2_token: principal.tier2_token } : {}),
-    ...(principal.tier2_refresh_token ? { tier2_refresh_token: principal.tier2_refresh_token } : {}),
-  }));
-});
-
-app.post('/v1/auth/logout', async (req, res) => {
-  const principal = sessionFromRequest(req);
-  const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
-  const refresh = String(body.refresh_token || '');
-  const refreshPrincipal = refresh ? verifyToken(refresh, 'refresh') : null;
-  if (principal) revokeSession(principal);
-  if (refreshPrincipal) revokeSession(refreshPrincipal);
-  const tier2Refresh = refreshPrincipal?.tier2_refresh_token || principal?.tier2_refresh_token;
-  if (tier2Refresh) {
-    // Best-effort Tier-1 session revocation; City still invalidates its own jti.
-    await capabilitiesFromRequest(req).auth.logout(tier2Refresh).catch(() => undefined);
-  }
-  res.status(204).end();
-});
-
-app.post('/v1/auth/change-password', requireSession, async (req, res) => {
-  const body = objectBody(req.body);
-  const currentPassword = String(body.current_password || '');
-  const newPassword = String(body.new_password || '');
-  if (!currentPassword.trim() || !newPassword.trim()) {
-    return res.status(400).json({ error: 'current_and_new_password_required' });
-  }
-  const principal = (req as AuthedRequest).session as SessionPrincipal;
-  if (principal.auth_source !== 'tier2' || !principal.tier2_token) {
-    return identityUnavailable(res, 503, 'identity_not_configured', 'Password changes require the Tier-2 identity capability.');
-  }
-  try {
-    await capabilitiesFromRequest(req).auth.changePassword(currentPassword, newPassword);
-    res.status(204).end();
-  } catch (error) {
-    const mapped = authErrorStatus(error);
-    identityUnavailable(res, mapped.status, mapped.code, mapped.detail);
-  }
-});
-
-app.get('/v1/auth/me', requireSession, (req, res) => {
-  res.json(sessionUser((req as AuthedRequest).session as SessionPrincipal));
-});
-
-app.get('/v1/auth/verify', requireSession, (req, res) => {
-  const principal = (req as AuthedRequest).session as SessionPrincipal;
-  res.json({
-    valid: true,
-    user_id: principal.sub,
-    username: principal.username,
-    role: principal.role,
-    permissions: principal.permissions,
-    identity_source: principal.auth_source || (principal.demo ? 'demo' : 'legacy'),
-  });
-});
 
 // ---------------------------------------------------------------------------
 // Service metadata

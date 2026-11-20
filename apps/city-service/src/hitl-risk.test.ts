@@ -11,7 +11,6 @@ import type { SessionRole } from './auth';
 
 process.env.ALLOW_LOCAL_DEPENDENCIES = 'true';
 process.env.AUTH_SECRET = 'city-hitl-test-secret';
-process.env.CITY_AUTH_MODE = 'demo';
 process.env.CITY_HITL_REQUIRED = 'true';
 process.env.NODE_ENV = 'test';
 process.env.LOG_LEVEL = 'silent';

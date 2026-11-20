@@ -12,7 +12,6 @@ process.env.ALLOW_LOCAL_DEPENDENCIES = 'true';
 process.env.AUTH_SECRET = 'city-files-test-secret';
 process.env.NODE_ENV = 'test';
 process.env.LOG_LEVEL = 'silent';
-process.env.CITY_AUTH_MODE = 'demo';
 process.env.CITY_FILES_MAX_BYTES = String(2 * 1024 * 1024);
 process.env.CITY_PUBLIC_URL = 'https://city.test';
 

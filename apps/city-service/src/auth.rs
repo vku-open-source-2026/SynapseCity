@@ -2,7 +2,6 @@
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 //! City stateless HMAC session shell and Tier-2 identity boundary.
 
-use std::collections::HashSet;
 use std::sync::Mutex;
 
 use axum::http::{HeaderMap, StatusCode};
@@ -24,6 +23,7 @@ pub const ROLE_ADMIN: &str = "admin";
 pub const ROLE_MANAGER: &str = "manager";
 pub const ROLE_TECHNICIAN: &str = "technician";
 pub const ROLE_VOLUNTEER: &str = "volunteer";
+#[cfg(test)]
 pub const ROLE_CITIZEN: &str = "citizen";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -64,6 +64,11 @@ pub struct SessionUser {
     pub updated_at: String,
 }
 
+/// Login and registration are retired (every /v1/auth/* answers 410), so the
+/// production service never mints sessions; it only verifies the Bearer tokens
+/// tests and out-of-band operator tooling sign with AUTH_SECRET. The minting
+/// helpers below exist for the test suites only.
+#[cfg(test)]
 #[derive(Debug, Clone)]
 pub struct SessionResponse {
     pub access_token: String,
@@ -72,6 +77,7 @@ pub struct SessionResponse {
     pub user: SessionUser,
 }
 
+#[cfg(test)]
 impl SessionResponse {
     pub fn json(&self) -> Value {
         json!({
@@ -99,6 +105,7 @@ pub fn user_json(user: &SessionUser) -> Value {
     })
 }
 
+#[cfg(test)]
 pub fn is_role(value: &str) -> bool {
     matches!(
         value,
@@ -106,6 +113,7 @@ pub fn is_role(value: &str) -> bool {
     )
 }
 
+#[cfg(test)]
 pub fn normalize_role(value: &str, fallback: &str) -> String {
     let value = value.trim().to_ascii_lowercase();
     if is_role(&value) {
@@ -224,6 +232,7 @@ fn signature(secret: &str, payload: &str) -> String {
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes())
 }
 
+#[cfg(test)]
 pub fn sign_token(config: &Config, claims: &SessionPrincipal) -> String {
     let payload = base64::engine::general_purpose::URL_SAFE_NO_PAD
         .encode(serde_json::to_vec(claims).unwrap_or_default());
@@ -263,15 +272,6 @@ pub fn verify_token(config: &Config, token: &str, expected: &str) -> Option<Sess
 
 static REVOKED: Mutex<Vec<(String, i64)>> = Mutex::new(Vec::new());
 
-pub fn revoke_session(claims: &SessionPrincipal) {
-    let Some(jti) = claims.jti.clone() else {
-        return;
-    };
-    let mut revoked = REVOKED.lock().unwrap_or_else(|poison| poison.into_inner());
-    revoked.push((jti, claims.exp));
-    revoked.retain(|(_, exp)| *exp > Utc::now().timestamp());
-}
-
 pub fn is_revoked(jti: Option<&str>) -> bool {
     let Some(jti) = jti else {
         return false;
@@ -282,6 +282,7 @@ pub fn is_revoked(jti: Option<&str>) -> bool {
     revoked.iter().any(|(value, _)| value == jti)
 }
 
+#[cfg(test)]
 pub fn principal_from_input(
     config: &Config,
     username: &str,
@@ -333,6 +334,7 @@ pub fn principal_from_input(
     }
 }
 
+#[cfg(test)]
 pub fn issue_session(config: &Config, mut base: SessionPrincipal, demo: bool) -> SessionResponse {
     let role = normalize_role(&base.role, ROLE_CITIZEN);
     base.role = role.clone();
@@ -438,32 +440,6 @@ pub fn session_from_headers(config: &Config, headers: &HeaderMap) -> Option<Sess
     bearer_token(headers).and_then(|token| verify_token(config, &token, "access"))
 }
 
-pub fn require_session(config: &Config, headers: &HeaderMap) -> Result<SessionPrincipal, ApiError> {
-    session_from_headers(config, headers).ok_or_else(|| {
-        ApiError::new(
-            StatusCode::UNAUTHORIZED,
-            "unauthorized",
-            "authentication_required",
-        )
-    })
-}
-
-pub fn require_permission(
-    config: &Config,
-    headers: &HeaderMap,
-    permission: &str,
-) -> Result<SessionPrincipal, ApiError> {
-    let principal = require_session(config, headers)?;
-    if has_permission(&principal, permission) {
-        Ok(principal)
-    } else {
-        Err(ApiError::forbidden(
-            "forbidden",
-            format!("{permission}_required"),
-        ))
-    }
-}
-
 pub fn user_from_principal(principal: &SessionPrincipal) -> SessionUser {
     SessionUser {
         id: principal.sub.clone(),
@@ -476,200 +452,4 @@ pub fn user_from_principal(principal: &SessionPrincipal) -> SessionUser {
         created_at: crate::now_iso(),
         updated_at: crate::now_iso(),
     }
-}
-
-// ---------------------------------------------------------------------------
-// Tier-2 identity
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone)]
-pub struct VerifiedIdentity {
-    pub user_id: String,
-    pub email: String,
-    pub display_name: String,
-    pub access_token: Option<String>,
-    pub refresh_token: Option<String>,
-    pub expires_in: Option<i64>,
-    pub scopes: Vec<String>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Tier2Session {
-    pub identity: VerifiedIdentity,
-    pub token: Option<String>,
-    pub refresh_token: Option<String>,
-    pub exchanged: bool,
-}
-
-fn first_string(values: &[Option<&Value>]) -> String {
-    values
-        .iter()
-        .filter_map(|value| value.and_then(|entry| entry.as_str()))
-        .map(str::trim)
-        .find(|value| !value.is_empty())
-        .unwrap_or("")
-        .to_string()
-}
-
-fn scopes_of(raw: &Value) -> Vec<String> {
-    raw.get("scopes")
-        .and_then(Value::as_array)
-        .map(|values| {
-            values
-                .iter()
-                .filter_map(Value::as_str)
-                .filter(|value| !value.is_empty())
-                .map(str::to_string)
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-pub fn identity_from_session(session: &Value) -> Result<VerifiedIdentity, ApiError> {
-    let access_token = first_string(&[session.get("accessToken"), session.get("access_token")]);
-    let refresh_token = first_string(&[session.get("refreshToken"), session.get("refresh_token")]);
-    let user = session.get("user").cloned().unwrap_or_else(|| json!({}));
-    let email = first_string(&[user.get("email"), session.get("email")]);
-    let user_id = first_string(&[
-        user.get("id"),
-        user.get("sub"),
-        session.get("userId"),
-        session.get("sub"),
-    ]);
-    if user_id.is_empty() && email.is_empty() {
-        return Err(ApiError::bad_gateway(
-            "identity_missing_subject",
-            "The identity provider returned no subject.",
-        ));
-    }
-    let display_name = first_string(&[
-        user.get("display_name"),
-        user.get("displayName"),
-        user.get("full_name"),
-    ]);
-    let mut scopes = scopes_of(session);
-    scopes.extend(scopes_of(&user));
-    Ok(VerifiedIdentity {
-        user_id: if user_id.is_empty() {
-            format!("user-{email}")
-        } else {
-            user_id
-        },
-        email,
-        display_name: if display_name.is_empty() {
-            "".into()
-        } else {
-            display_name
-        },
-        access_token: (!access_token.is_empty()).then_some(access_token),
-        refresh_token: (!refresh_token.is_empty()).then_some(refresh_token),
-        expires_in: session
-            .get("expiresIn")
-            .or_else(|| session.get("expires_in"))
-            .and_then(Value::as_i64),
-        scopes,
-    })
-}
-
-pub fn role_for_identity(
-    config: &Config,
-    identity: &VerifiedIdentity,
-    profile: Option<&Map<String, Value>>,
-) -> String {
-    let email = identity.email.to_ascii_lowercase();
-    if !email.is_empty() && config.bootstrap_admins.contains(&email) {
-        return ROLE_ADMIN.into();
-    }
-    if let Some(profile) = profile {
-        if profile
-            .get("status")
-            .and_then(Value::as_str)
-            .map(|value| !value.eq_ignore_ascii_case("inactive"))
-            .unwrap_or(true)
-        {
-            if let Some(raw) = profile.get("role").and_then(Value::as_str) {
-                if !raw.trim().is_empty() {
-                    return normalize_role(raw, ROLE_CITIZEN);
-                }
-            }
-        }
-    }
-    normalize_role(&config.default_role, ROLE_CITIZEN)
-}
-
-pub fn auth_error_status(error: &synapsedx::Error) -> (StatusCode, String, String) {
-    match error.status() {
-        Some(401) => (
-            StatusCode::UNAUTHORIZED,
-            "invalid_credentials".into(),
-            "Email or password is incorrect.".into(),
-        ),
-        Some(400) | Some(422) => (
-            StatusCode::BAD_REQUEST,
-            "invalid_request".into(),
-            "The identity provider rejected the request.".into(),
-        ),
-        Some(403) => (
-            StatusCode::FORBIDDEN,
-            "auth_rejected".into(),
-            "The identity provider rejected this identity operation.".into(),
-        ),
-        Some(429) => (
-            StatusCode::TOO_MANY_REQUESTS,
-            "rate_limited".into(),
-            "Too many authentication attempts.".into(),
-        ),
-        Some(409) => (
-            StatusCode::CONFLICT,
-            "identity_conflict".into(),
-            "The identity already exists.".into(),
-        ),
-        Some(503) | Some(502) => (
-            StatusCode::SERVICE_UNAVAILABLE,
-            "identity_not_configured".into(),
-            "The Tier-2 identity capability is unavailable.".into(),
-        ),
-        Some(404) => (
-            StatusCode::SERVICE_UNAVAILABLE,
-            "identity_not_configured".into(),
-            "The Tier-2 identity capability is not published on this deployment.".into(),
-        ),
-        _ => (
-            StatusCode::SERVICE_UNAVAILABLE,
-            "identity_not_configured".into(),
-            "Identity verification is unavailable.".into(),
-        ),
-    }
-}
-
-pub fn identity_error(error: synapsedx::Error) -> ApiError {
-    let (status, code, detail) = auth_error_status(&error);
-    ApiError::new(status, code, detail)
-}
-
-pub fn exchange_enabled() -> bool {
-    matches!(
-        std::env::var("CITY_AUTH_EXCHANGE")
-            .unwrap_or_default()
-            .trim()
-            .to_ascii_lowercase()
-            .as_str(),
-        "true" | "1"
-    )
-}
-
-pub fn exchange_scopes() -> Vec<String> {
-    std::env::var("CITY_AUTH_EXCHANGE_SCOPES")
-        .unwrap_or_else(|_| "read,write".into())
-        .split(',')
-        .map(|entry| entry.trim().to_string())
-        .filter(|entry| !entry.is_empty())
-        .collect()
-}
-
-pub fn bootstrap_admins_set(raw: &str) -> HashSet<String> {
-    raw.split(',')
-        .map(|entry| entry.trim().to_ascii_lowercase())
-        .filter(|entry| !entry.is_empty())
-        .collect()
 }

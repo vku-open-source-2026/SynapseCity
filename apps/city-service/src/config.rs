@@ -2,7 +2,6 @@
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 //! City environment and production fail-closed checks.
 
-use std::collections::HashSet;
 use std::time::Duration;
 
 use url::Url;
@@ -18,10 +17,6 @@ pub struct Config {
     pub auth_secret: String,
     pub auth_secret_ephemeral: bool,
     pub is_production: bool,
-    pub auth_mode: String,
-    pub demo_enabled: bool,
-    pub bootstrap_admins: HashSet<String>,
-    pub default_role: String,
     pub access_ttl_seconds: i64,
     pub refresh_ttl_seconds: i64,
     pub cors_origin: String,
@@ -191,15 +186,6 @@ impl Config {
             allow_local,
             is_production,
         )?;
-        let auth_mode = env("CITY_AUTH_MODE")
-            .or_else(|| env("AUTH_MODE"))
-            .unwrap_or_else(|| "tier2".into())
-            .to_ascii_lowercase();
-        let demo_enabled = match env("AUTH_DEMO_MODE").as_deref() {
-            Some(value) if value.eq_ignore_ascii_case("true") => true,
-            Some(value) if value.eq_ignore_ascii_case("false") => false,
-            _ => !is_production,
-        };
 
         let configured_secret = env("AUTH_SECRET").unwrap_or_default();
         let (auth_secret, auth_secret_ephemeral) = if configured_secret.is_empty() {
@@ -229,13 +215,6 @@ impl Config {
             (configured_secret, false)
         };
 
-        let bootstrap_admins = env("CITY_BOOTSTRAP_ADMIN_EMAILS")
-            .unwrap_or_default()
-            .split(',')
-            .map(|entry| entry.trim().to_ascii_lowercase())
-            .filter(|entry| !entry.is_empty())
-            .collect();
-
         let access_ttl = env_u64("AUTH_ACCESS_TTL_SECONDS", 3600).max(60) as i64;
         let refresh_ttl =
             env_u64("AUTH_REFRESH_TTL_SECONDS", 604_800).max(access_ttl as u64) as i64;
@@ -255,12 +234,6 @@ impl Config {
             auth_secret,
             auth_secret_ephemeral,
             is_production,
-            auth_mode,
-            demo_enabled,
-            bootstrap_admins,
-            default_role: env("CITY_AUTH_DEFAULT_ROLE")
-                .unwrap_or_else(|| "citizen".into())
-                .to_ascii_lowercase(),
             access_ttl_seconds: access_ttl,
             refresh_ttl_seconds: refresh_ttl,
             cors_origin: env("CORS_ORIGIN").unwrap_or_else(|| "https://synapsecity.sbs".into()),
@@ -298,10 +271,6 @@ impl Config {
         })
     }
 
-    pub fn demo_auth_allowed(&self) -> bool {
-        self.auth_mode == "demo" && self.demo_enabled
-    }
-
     pub fn tier2_client(&self) -> Result<synapsedx::Client, String> {
         let mut credentials = synapsedx::Credentials::none();
         if let Some(token) = &self.tier2_token {
@@ -332,10 +301,6 @@ impl Config {
             auth_secret: "0123456789012345678901234567890123456789012345678901234567890123".into(),
             auth_secret_ephemeral: false,
             is_production: false,
-            auth_mode: "demo".into(),
-            demo_enabled: true,
-            bootstrap_admins: HashSet::new(),
-            default_role: "citizen".into(),
             access_ttl_seconds: 3600,
             refresh_ttl_seconds: 604_800,
             cors_origin: "http://localhost".into(),

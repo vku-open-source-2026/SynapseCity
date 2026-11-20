@@ -5,19 +5,11 @@ import assert from 'node:assert/strict';
 import http, { type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { startMockTier2, type MockTier2 } from './mock-tier2';
-import { resetRateLimits } from './security';
 
-// Small limits must be set before the module-level rate limiters are created.
 process.env.ALLOW_LOCAL_DEPENDENCIES = 'true';
 process.env.AUTH_SECRET = 'city-hardening-test-secret';
-// This suite exercises the explicit development-only demo session shell.
-process.env.CITY_AUTH_MODE = 'demo';
-// Non-production test only: keep the pre-migration auth routes reachable.
-process.env.TIER3_AUTH_MODE = 'legacy';
 process.env.NODE_ENV = 'test';
 process.env.LOG_LEVEL = 'silent';
-process.env.AUTH_RATE_LIMIT = '2';
-process.env.AUTH_RATE_WINDOW_MS = '60000';
 
 let tier2: MockTier2;
 let server: Server;
@@ -80,17 +72,16 @@ after(async () => {
   if (tier2) await tier2.close();
 });
 
-test('auth endpoints enforce a rate limit with retry-after', async () => {
-  resetRateLimits();
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const ok = await request('/v1/auth/login', json('POST', { username: 'qa', password: 'x' }));
-    assert.equal(ok.status, 200);
+test('the retired auth surface answers 410 without a rate limiter or session', async () => {
+  // No handler or rate-limiting middleware exists behind /v1/auth anymore;
+  // hammering the retired endpoints must keep answering workspace_moved.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const gone = await request('/v1/auth/login', json('POST', { username: 'qa', password: 'x' }));
+    assert.equal(gone.status, 410);
+    assert.equal(gone.body.error, 'workspace_moved');
+    assert.equal(gone.body.access_token, undefined, 'no session may be minted');
+    assert.equal(gone.headers.get('cache-control'), 'no-store');
   }
-  const limited = await request('/v1/auth/login', json('POST', { username: 'qa', password: 'x' }));
-  assert.equal(limited.status, 429);
-  assert.equal(limited.body.error, 'rate_limited');
-  assert.ok(Number(limited.headers.get('retry-after')) >= 1);
-  resetRateLimits();
 });
 
 test('Turnstile is verified server-side when configured', async () => {
@@ -131,7 +122,8 @@ test('health reports per-capability dependency state instead of a blanket ready'
   assert.equal(health.body.capabilities.ai.transport, 'synapsedx');
   assert.equal(health.body.capabilities.notifications.status, 'partial');
   assert.equal(health.body.capabilities.notifications.external, 'unavailable');
-  assert.equal(health.body.capabilities.identity.mode, 'demo');
+  assert.equal(health.body.capabilities.identity.status, 'moved');
+  assert.equal(health.body.capabilities.identity.workspace, 'https://synapsedx.sbs/workspace');
   assert.equal(health.body.capabilities.geo.provider, 'tier2');
   assert.equal(health.body.capabilities.datasets.status, 'available');
 

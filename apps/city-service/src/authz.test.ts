@@ -9,10 +9,6 @@ import type { SessionRole } from './auth';
 
 process.env.ALLOW_LOCAL_DEPENDENCIES = 'true';
 process.env.AUTH_SECRET = 'city-authz-test-secret';
-// This suite exercises the explicit development-only demo session shell.
-process.env.CITY_AUTH_MODE = 'demo';
-// Non-production test only: keep the pre-migration auth routes reachable.
-process.env.TIER3_AUTH_MODE = 'legacy';
 process.env.NODE_ENV = 'test';
 process.env.LOG_LEVEL = 'silent';
 
@@ -206,18 +202,15 @@ test('an admin can perform operator and admin writes', async () => {
   assert.equal((await request('/v1/alerts', json('POST', { title: 'Low alert', severity: 'low' }, admin))).status, 201);
 });
 
-test('login never trusts a client-supplied role', async () => {
-  process.env.AUTH_DEMO_ROLE = 'citizen';
-  try {
-    const response = await request('/v1/auth/login', json('POST', {
-      username: 'escalation-attempt', password: 'x', role: 'admin', permissions: ['*'],
-    }));
-    assert.equal(response.status, 200);
-    assert.equal(response.body.user.role, 'citizen');
-    assert.deepEqual(response.body.user.permissions, ['public:read']);
-  } finally {
-    delete process.env.AUTH_DEMO_ROLE;
-  }
+test('a client-supplied role can never reach authorization through the retired login', async () => {
+  // The login surface is gone entirely: no role, permission list or credential
+  // in a request body can influence role assignment because no handler reads it.
+  const response = await request('/v1/auth/login', json('POST', {
+    username: 'escalation-attempt', password: 'x', role: 'admin', permissions: ['*'],
+  }));
+  assert.equal(response.status, 410);
+  assert.equal(response.body.error, 'workspace_moved');
+  assert.equal(response.body.access_token, undefined, 'no session may be minted');
 });
 
 test('a stale permission list in a token cannot widen access', async () => {

@@ -12,8 +12,8 @@ process.env.NODE_ENV = 'production';
 process.env.ALLOW_LOCAL_DEPENDENCIES = 'true';
 process.env.AUTH_SECRET = 'city-production-test-secret';
 process.env.LOG_LEVEL = 'silent';
-// The retired auth code is still present for non-production suites. Production
-// must ignore this flag and answer 410 to every /v1/auth request.
+// The legacy escape hatch was removed together with the retired handlers;
+// production (and every environment) answers 410 regardless of this flag.
 process.env.TIER3_AUTH_MODE = 'legacy';
 delete process.env.CITY_AUTH_MODE;
 delete process.env.AUTH_MODE;
@@ -112,6 +112,7 @@ test('public reporting stays anonymous and available', async () => {
 test('production reports capability state honestly', async () => {
   const city = await request('/v1/city');
   assert.equal(city.status, 200);
-  assert.equal(city.body.capabilities.identity.status, 'available');
-  assert.equal(city.body.capabilities.identity.mode, 'tier2');
+  assert.equal(city.body.capabilities.identity.status, 'moved');
+  assert.equal(city.body.capabilities.identity.workspace, 'https://synapsedx.sbs/workspace');
+  assert.equal(city.body.capabilities.identity.mode, undefined, 'no login mode may be advertised');
 });
