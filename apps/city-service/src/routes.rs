@@ -1999,8 +1999,46 @@ async fn files_delete(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
         return Err(ApiError::not_found("file_not_found", "file_not_found"));
     }
     let opts = ctx.opts();
-    let _ = ctx.client().files().delete(id, &opts).await;
-    let _ = tier2::delete(ctx.client(), &opts, tier2::FILES, id).await;
+    if let Err(error) = ctx.client().files().delete(id, &opts).await {
+        if error.is_not_found() {
+            tracing::info!(
+                file_id = %id,
+                "Tier-2 file object already gone; completing the metadata delete"
+            );
+        } else {
+            tracing::warn!(
+                file_id = %id,
+                error = %error,
+                "Tier-2 file object delete failed; keeping the file metadata record"
+            );
+            return Err(ApiError::bad_gateway(
+                "upstream_delete_failed",
+                "The Tier-2 files capability failed to delete this file.",
+            )
+            .with_dependency("tier2-files"));
+        }
+    }
+    match tier2::delete(ctx.client(), &opts, tier2::FILES, id).await {
+        Ok(()) => {}
+        Err(error) if error.status == StatusCode::NOT_FOUND => {
+            tracing::info!(
+                file_id = %id,
+                "Tier-2 file metadata record already gone"
+            );
+        }
+        Err(error) => {
+            tracing::warn!(
+                file_id = %id,
+                error = %error,
+                "Tier-2 file metadata delete failed; keeping the metadata record"
+            );
+            return Err(ApiError::bad_gateway(
+                "upstream_delete_failed",
+                "The Tier-2 records API failed to delete the file metadata record.",
+            )
+            .with_dependency("tier2-records"));
+        }
+    }
     Ok(web::no_content())
 }
 
@@ -7747,6 +7785,179 @@ mod route_tests {
         .await;
         assert_eq!(status, StatusCode::UNSUPPORTED_MEDIA_TYPE, "{body}");
         assert_eq!(body["code"], "unsupported_file_type");
+    }
+
+    #[tokio::test]
+    async fn file_delete_failure_returns_502_and_keeps_the_metadata_record() {
+        let server = MockServer::start().await;
+        let config = Config::for_test(&server.uri());
+        let token = admin_token(&config);
+        mount_dataset(
+            &server,
+            "city-files",
+            "SynapseCity file metadata",
+            "CityFile",
+            "Metadata for binary files stored through the Tier-2 files capability",
+            false,
+        )
+        .await;
+        Mock::given(method("GET"))
+            .and(path("/v1/capabilities/datasets/city-files/records/f9"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": "f9", "version": 2,
+                "createdAt": "2026-11-01T00:00:00.000Z",
+                "updatedAt": "2026-11-01T00:00:00.000Z",
+                "data": {
+                    "id": "f9", "filename": "photo.png", "contentType": "image/png",
+                    "owner": "user-qa", "public": false
+                }
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("DELETE"))
+            .and(path("/v1/capabilities/files/f9"))
+            .respond_with(ResponseTemplate::new(500))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("DELETE"))
+            .and(path("/v1/capabilities/datasets/city-files/records/f9"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(0)
+            .mount(&server)
+            .await;
+
+        let app = app(AppState::new(
+            config,
+            Client::new(&server.uri(), Credentials::none()).unwrap(),
+        ));
+        let (status, _, body) = call(
+            app,
+            Method::DELETE,
+            "/v1/files/f9",
+            Some(&token),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_GATEWAY, "{body}");
+        assert_eq!(body["code"], "upstream_delete_failed");
+    }
+
+    #[tokio::test]
+    async fn file_delete_treats_tier2_not_found_as_already_gone() {
+        let server = MockServer::start().await;
+        let config = Config::for_test(&server.uri());
+        let token = admin_token(&config);
+        mount_dataset(
+            &server,
+            "city-files",
+            "SynapseCity file metadata",
+            "CityFile",
+            "Metadata for binary files stored through the Tier-2 files capability",
+            false,
+        )
+        .await;
+        Mock::given(method("GET"))
+            .and(path("/v1/capabilities/datasets/city-files/records/f9"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": "f9", "version": 2,
+                "createdAt": "2026-11-01T00:00:00.000Z",
+                "updatedAt": "2026-11-01T00:00:00.000Z",
+                "data": {
+                    "id": "f9", "filename": "photo.png", "contentType": "image/png",
+                    "owner": "user-qa", "public": false
+                }
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("DELETE"))
+            .and(path("/v1/capabilities/files/f9"))
+            .respond_with(
+                ResponseTemplate::new(404).set_body_json(json!({"error": {"code": "not_found"}})),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("DELETE"))
+            .and(path("/v1/capabilities/datasets/city-files/records/f9"))
+            .respond_with(
+                ResponseTemplate::new(404).set_body_json(json!({"error": {"code": "not_found"}})),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let app = app(AppState::new(
+            config,
+            Client::new(&server.uri(), Credentials::none()).unwrap(),
+        ));
+        let (status, _, _) = call(
+            app,
+            Method::DELETE,
+            "/v1/files/f9",
+            Some(&token),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
+    async fn file_delete_succeeds_when_both_tier2_stores_delete() {
+        let server = MockServer::start().await;
+        let config = Config::for_test(&server.uri());
+        let token = admin_token(&config);
+        mount_dataset(
+            &server,
+            "city-files",
+            "SynapseCity file metadata",
+            "CityFile",
+            "Metadata for binary files stored through the Tier-2 files capability",
+            false,
+        )
+        .await;
+        Mock::given(method("GET"))
+            .and(path("/v1/capabilities/datasets/city-files/records/f9"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": "f9", "version": 2,
+                "createdAt": "2026-11-01T00:00:00.000Z",
+                "updatedAt": "2026-11-01T00:00:00.000Z",
+                "data": {
+                    "id": "f9", "filename": "photo.png", "contentType": "image/png",
+                    "owner": "user-qa", "public": false
+                }
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("DELETE"))
+            .and(path("/v1/capabilities/files/f9"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("DELETE"))
+            .and(path("/v1/capabilities/datasets/city-files/records/f9"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let app = app(AppState::new(
+            config,
+            Client::new(&server.uri(), Credentials::none()).unwrap(),
+        ));
+        let (status, _, _) = call(
+            app,
+            Method::DELETE,
+            "/v1/files/f9",
+            Some(&token),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::NO_CONTENT);
     }
 
     #[tokio::test]
