@@ -29,6 +29,7 @@ const OWNED_V1_PREFIXES: readonly string[] = [
   '/v1/incidents',
   '/v1/maintenance',
   '/v1/preventive-maintenance',
+  '/v1/hitl',
   '/v1/iot',
   '/v1/alerts',
   '/v1/budgets',
@@ -143,7 +144,7 @@ app.use(express.json({ limit: '10mb' }));
 const CORRELATION_ID_RE = /^[A-Za-z0-9_.:-]{1,128}$/;
 app.use((req, res, next) => {
   res.setHeader('access-control-allow-origin', process.env.CORS_ORIGIN || 'https://synapsecity.sbs');
-  res.setHeader('access-control-allow-headers', 'authorization,content-type,x-api-key,x-correlation-id');
+  res.setHeader('access-control-allow-headers', 'authorization,content-type,x-api-key,x-correlation-id,cf-turnstile-response,x-report-id,x-report-edit-token');
   res.setHeader('access-control-allow-methods', 'GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS');
   res.setHeader('x-content-type-options', 'nosniff');
   res.setHeader('referrer-policy', 'no-referrer');
@@ -167,6 +168,7 @@ async function proxy(req: Request, res: Response): Promise<void> {
     'authorization', 'x-api-key', 'x-correlation-id',
     'x-file-name', 'x-filename', 'x-checksum-sha256', 'x-file-visibility',
     'x-entity-type', 'x-entity-id', 'x-request-id',
+    'cf-turnstile-response', 'x-report-id', 'x-report-edit-token',
   ]) {
     const value = req.header(name);
     if (value) headers[name] = value;
@@ -187,9 +189,9 @@ async function proxy(req: Request, res: Response): Promise<void> {
   const type = response.headers.get('content-type');
   res.status(response.status);
   if (type) res.setHeader('content-type', type);
-  // Pagination and download metadata are part of the City contract. Forward the
-  // upstream headers instead of dropping them at the public edge.
-  for (const name of ['cache-control', 'x-total-count', 'etag', 'x-dataset-version', 'content-disposition']) {
+  // Pagination, checksum and download metadata are part of the City contract.
+  // Forward the upstream headers instead of dropping them at the public edge.
+  for (const name of ['cache-control', 'x-total-count', 'x-scan-truncated', 'etag', 'x-dataset-version', 'content-disposition', 'x-checksum-sha256', 'x-content-sha256']) {
     const value = response.headers.get(name);
     if (value) res.setHeader(name, value);
   }

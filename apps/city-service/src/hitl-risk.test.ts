@@ -117,6 +117,47 @@ test('asset risk endpoint exposes factors, freshness and flags (#29)', async () 
   const top = await request('/v1/risk/top?limit=5', json('GET', undefined, admin));
   assert.equal(top.status, 200);
   assert.ok(top.body.items.some((item: any) => item.asset_id === assetId));
+  // One bounded request scores every asset: no silent take(500), explicit
+  // truncation, and a real total.
+  assert.equal(typeof top.body.total, 'number');
+  assert.ok(top.body.total >= top.body.items.length);
+  assert.equal(typeof top.body.scanned, 'number');
+  assert.equal(top.body.truncated, false);
+});
+
+test('technician and volunteer cannot list or decide HITL approvals (#76)', async () => {
+  const technician = tokenFor('technician', 'hitl-tech');
+  const volunteer = tokenFor('volunteer', 'hitl-volunteer');
+  const manager = tokenFor('manager', 'hitl-manager');
+  const admin = tokenFor('admin', 'hitl-admin');
+
+  // The manager creates an approval limited to finance approvers.
+  const incident = await request('/v1/incidents', json('POST', {
+    incidentId: 'inc-hitl-authz', incident_number: 'INC-HITL-AUTHZ', title: 'Authz incident',
+    category: 'repair', severity: 'high', status: 'open',
+  }, manager));
+  assert.equal(incident.status, 201, JSON.stringify(incident.body));
+  const requested = await request('/v1/incidents/inc-hitl-authz/cost-approval', json('POST', {}, manager));
+  assert.equal(requested.status, 202, JSON.stringify(requested.body));
+  const approvalId = requested.body.approval.id as string;
+
+  for (const [role, token] of [['technician', technician], ['volunteer', volunteer]] as const) {
+    const listed = await request('/v1/hitl/approvals', json('GET', undefined, token));
+    assert.equal(listed.status, 403, `${role} must not list approvals`);
+    assert.equal(listed.body.error, 'forbidden');
+    const decided = await request(`/v1/hitl/approvals/${approvalId}/decide`, json('POST', { decision: 'approve' }, token));
+    assert.equal(decided.status, 403, `${role} must not decide approvals`);
+  }
+
+  // Record-level authorization: a manager whose role is not listed as an
+  // approver sees nothing and cannot decide; an admin retains the bypass.
+  const listed = await request('/v1/hitl/approvals', json('GET', undefined, manager));
+  assert.equal(listed.status, 200);
+  assert.equal(listed.body.items.some((item: any) => item.id === approvalId), true);
+  const noRole = await request(`/v1/hitl/approvals/${approvalId}/decide`, json('POST', { decision: 'approve' }, tokenFor('technician', 'other-tech')));
+  assert.equal(noRole.status, 403);
+  const decided = await request(`/v1/hitl/approvals/${approvalId}/decide`, json('POST', { decision: 'approve' }, admin));
+  assert.equal(decided.status, 200);
 });
 
 test('incident cost approval is a Tier-2 HITL decision and blocks self-approval (#30)', async () => {

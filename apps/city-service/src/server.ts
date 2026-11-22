@@ -11,10 +11,12 @@ import {
   SessionPrincipal,
   containsPassword,
   hasPermission,
+  issueReportEditToken,
   requireSession,
   sanitizeUser,
   sessionFromRequest,
   sessionUser,
+  verifyReportEditToken,
 } from './auth';
 import { missingColumns, parseCsv } from './csv';
 import { workspaceMovedMiddleware } from './workspace-moved';
@@ -67,7 +69,7 @@ import {
 } from './analytics';
 import { maintenanceFromAlert, shouldCreateMaintenance, type AlertForAutomation } from './alerts';
 import { derivePreventiveTasks, filterPreventiveTasks, type PreventivePlan } from './preventive';
-import { assertApproved, createApproval, decideApproval, hitlRequired, listPendingApprovals, type HitlError } from './hitl';
+import { assertApproved, createApproval, decideApproval, getApproval, hitlRequired, listPendingApprovals, type ApprovalRecord, type HitlError } from './hitl';
 import { rankAssetsByRisk, scoreAssetRisk, type RiskSensorReading } from './risk';
 import {
   generateReport,
@@ -316,13 +318,37 @@ function assetIsPublic(asset: Record<string, unknown>, options: { includeInactiv
 }
 
 /**
+ * Usable public coordinates. A missing coordinate is omitted, never serialized
+ * as `null` or a `[0,0]` default the backend rejects; public clients render
+ * "location unavailable" without dereferencing it.
+ */
+function usableCoordinates(asset: Record<string, unknown>): { longitude: number; latitude: number } | undefined {
+  const geometry = asset.geometry as { type?: unknown; coordinates?: unknown } | undefined;
+  if (geometry && geometry.type === 'Point' && Array.isArray(geometry.coordinates) && geometry.coordinates.length >= 2) {
+    const longitude = Number(geometry.coordinates[0]);
+    const latitude = Number(geometry.coordinates[1]);
+    if (Number.isFinite(longitude) && Number.isFinite(latitude)
+      && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180
+      && (latitude !== 0 || longitude !== 0)) {
+      return { longitude, latitude };
+    }
+  }
+  const location = (asset.location && typeof asset.location === 'object' ? asset.location : {}) as Record<string, unknown>;
+  const point = location.coordinates as { longitude?: unknown; latitude?: unknown } | undefined;
+  const longitude = Number(point?.longitude);
+  const latitude = Number(point?.latitude);
+  if (Number.isFinite(longitude) && Number.isFinite(latitude)) return { longitude, latitude };
+  return undefined;
+}
+
+/**
  * Public asset projection. The documented contract is a stable JSON object with
  * these fields; it is deliberately *not* an NGSI-LD entity (see README).
  */
 function publicAssetView(row: any): Record<string, unknown> {
   const asset = assetView(row);
   const location = (asset.location || {}) as Record<string, unknown>;
-  const coordinates = coordinatesOf(asset);
+  const usable = usableCoordinates(asset);
   const assetCode = String(asset.asset_code || asset.id || '');
   const url = `${PUBLIC_URL}/asset/${encodeURIComponent(assetCode)}`;
   const view: Record<string, unknown> = {
@@ -335,7 +361,7 @@ function publicAssetView(row: any): Record<string, unknown> {
     status: asset.status,
     location: {
       address: String(location.address || ''),
-      coordinates,
+      ...(usable ? { coordinates: usable } : {}),
       geometry: asset.geometry,
     },
     qr_code: url,
@@ -572,14 +598,35 @@ async function findPublicIncident(req: Request, reference: string): Promise<Reco
   return findRecord(client, dataset.id, reference, ['incident_number', 'incident_code', 'incidentId', 'id']);
 }
 
-async function updateIncident(req: Request, reference: string, patch: Record<string, unknown>): Promise<Record<string, unknown>> {
+/** Restore the private sidecar after a failed public write, mirroring the
+ * Rust service: a sidecar failure aborts before the public record exists, and
+ * a public failure puts the previous sidecar back. */
+async function restoreIncidentInternal(req: Request, incidentId: string, previous: Record<string, unknown> | null): Promise<void> {
+  const client = capabilitiesFromRequest(req);
+  const dataset = await ensureDataset(client, DATASETS.incidentInternal);
+  const internalId = incidentInternalRecordId(incidentId);
+  if (previous) {
+    const payload = { ...previous, id: internalId, incident_id: incidentId };
+    try {
+      await client.records.update(dataset.id, internalId, payload);
+    } catch (error) {
+      if (!(error instanceof CapabilitiesError) || error.status !== 404) return;
+      await client.records.create(dataset.id, payload, { id: internalId, publish: false }).catch(() => undefined);
+    }
+    return;
+  }
+  await client.records.delete(dataset.id, internalId).catch(() => undefined);
+  await client.records.delete(dataset.id, incidentId).catch(() => undefined);
+}
+
+async function updateIncident(req: Request, reference: string, patch: Record<string, unknown>, options: { publish?: boolean } = {}): Promise<Record<string, unknown>> {
   const client = capabilitiesFromRequest(req);
   const dataset = await ensureDataset(client, DATASETS.incidents);
   const found = await findIncident(req, reference);
   if (!found) throw Object.assign(new Error('incident_not_found'), { status: 404 });
   const current = incidentView(found);
   const id = String(current.id || reference);
-  const merged = {
+  const merged: Record<string, unknown> = {
     ...current,
     ...patch,
     id,
@@ -588,12 +635,25 @@ async function updateIncident(req: Request, reference: string, patch: Record<str
   };
   // Field-level redaction happens before the Tier-2 write: `city-incidents` is a
   // public projection, so reporter identity and internal comments must already
-  // be absent from the payload Tier-2 ingests into SynapseLDS.
+  // be absent from the payload Tier-2 ingests into SynapseLDS. The publish flag
+  // is derived server-side: non-public records and citizen reports never reach
+  // the open-data layer.
   const published = toPublishedIncident(merged);
-  const updated = await client.records.update(dataset.id, id, published);
+  const isCitizenReport = merged.source === 'synapsecity-public' || merged.reported_by === 'anonymous';
+  const publish = options.publish ?? (merged.public_visible !== false && !isCitizenReport);
+  const previousInternal = await findIncidentInternal(client, id);
+  // Private sidecar first: if the public write fails we can restore the
+  // previous sidecar instead of leaving reporter data half-updated.
   await writeIncidentInternal(req, id, merged);
+  let updated: Record<string, unknown>;
+  try {
+    updated = recordData(await client.records.update(dataset.id, id, published, { publish }));
+  } catch (error) {
+    await restoreIncidentInternal(req, id, previousInternal);
+    throw error;
+  }
   const internal = toInternalIncident(merged);
-  return incidentView(mergeIncidentInternal(recordData(updated), internal));
+  return incidentView(mergeIncidentInternal(updated, internal));
 }
 
 function incidentNumber(): string {
@@ -893,6 +953,9 @@ function operatorPermission(method: string, rawPath: string): Permission | 'auth
   if (within(path, '/v1/maintenance') || within(path, '/v1/preventive-maintenance')) {
     return read ? 'maintenance:read' : 'maintenance:write';
   }
+  if (within(path, '/v1/hitl')) {
+    return read ? 'approvals:read' : 'approvals:decide';
+  }
   if (within(path, '/v1/iot')) return read ? 'iot:read' : 'iot:write';
   if (within(path, '/v1/alerts')) return read ? 'alerts:read' : 'alerts:write';
   if (within(path, '/v1/budgets')) {
@@ -926,6 +989,7 @@ const OPERATOR_PREFIXES: readonly string[] = [
   '/v1/incidents',
   '/v1/maintenance',
   '/v1/preventive-maintenance',
+  '/v1/hitl',
   '/v1/iot',
   '/v1/alerts',
   '/v1/budgets',
@@ -1003,6 +1067,17 @@ function requesterCanUseFile(principal: SessionPrincipal | null | undefined, rec
   return Boolean(owner) && [principal.sub, principal.username].map((value) => String(value).toLowerCase()).includes(owner);
 }
 
+/**
+ * Public visibility is a read grant only. Overwriting or deleting citizen
+ * evidence requires ownership or an administrative role.
+ */
+function requesterCanWriteFile(principal: SessionPrincipal | null | undefined, record: Record<string, unknown>): boolean {
+  if (!principal) return false;
+  if (principal.role === 'admin' || principal.role === 'manager') return true;
+  const owner = String(record.owner || '').toLowerCase();
+  return Boolean(owner) && [principal.sub, principal.username].map((value) => String(value).toLowerCase()).includes(owner);
+}
+
 async function fileDataset(client: CapabilitiesClient): Promise<Dataset> {
   return ensureDataset(client, DATASETS.files);
 }
@@ -1049,6 +1124,7 @@ async function uploadFileBytes(
     public?: boolean;
     entityType?: string;
     entityId?: string;
+    reportId?: string;
     allowlist?: readonly string[];
     maxBytes?: number;
     checksumSha256?: string;
@@ -1096,6 +1172,7 @@ async function uploadFileBytes(
     public: options.public === true,
     ...(options.entityType ? { entity_type: options.entityType } : {}),
     ...(options.entityId ? { entity_id: options.entityId } : {}),
+    ...(options.reportId ? { report_id: options.reportId } : {}),
     created_at: now,
     updated_at: now,
     source: 'synapsecity',
@@ -1185,6 +1262,38 @@ async function resolvePhotos(req: Request, values: unknown[], options: { publicU
     resolved.push({ url: String(attachment.file_url), attachment });
   }
   return resolved;
+}
+
+const MAX_PUBLIC_INCIDENT_PHOTOS = 10;
+
+/**
+ * Resolve anonymous report photos. Anonymous reports accept City public file
+ * ids only: file ids must belong to a public anonymous upload, and appends
+ * must present the report edit token with files uploaded for that same report.
+ * External URLs are rejected on this path.
+ */
+async function resolvePublicReportPhotos(req: Request, values: unknown[], incidentId?: string): Promise<string[]> {
+  const photos: string[] = [];
+  for (const value of values) {
+    const body = typeof value === 'string' ? { file_id: value } : (value && typeof value === 'object' ? value as Record<string, unknown> : {});
+    const fileId = String(body.file_id || body.fileId || '').trim();
+    if (!fileId || !looksLikeFileId(fileId)) {
+      throw Object.assign(new Error('public_photo_file_id_required'), { status: 400, detail: 'Anonymous reports accept City public file ids only.' });
+    }
+    const record = await getFileMetadata(capabilitiesFromRequest(req), fileId);
+    if (!record || record.public !== true || String(record.owner || '').toLowerCase() !== 'anonymous') {
+      throw Object.assign(new Error('file_not_found'), { status: 404 });
+    }
+    if (incidentId !== undefined && String(record.report_id || '') !== incidentId) {
+      throw Object.assign(new Error('photo_not_uploaded_for_report'), { status: 403, detail: 'The photo was not uploaded for this report.' });
+    }
+    const contentType = String(record.contentType || record.content_type || '');
+    if (!(IMAGE_MIME_TYPES as readonly string[]).includes(contentType)) {
+      throw Object.assign(new Error('unsupported_file_type'), { status: 415, detail: 'Only image files may be attached as incident photos.' });
+    }
+    photos.push(cityFileUrl(String(record.id), { public: true }));
+  }
+  return photos;
 }
 
 app.get('/v1/files/quota', async (req, res, next) => {
@@ -1303,19 +1412,29 @@ app.put('/v1/files/:id/content', uploadRaw, async (req, res, next) => {
     const principal = (req as AuthedRequest).session as SessionPrincipal;
     const client = capabilitiesFromRequest(req);
     const record = await getFileMetadata(client, String(req.params.id));
-    if (!record || !requesterCanUseFile(principal, record)) return res.status(404).json({ error: 'file_not_found' });
+    if (!record || !requesterCanWriteFile(principal, record)) return res.status(404).json({ error: 'file_not_found' });
     const bytes = Buffer.isBuffer(req.body) ? req.body : null;
     if (!bytes || bytes.length === 0) return res.status(400).json({ error: 'binary_body_required' });
+    const isPublic = record.public === true;
+    // The overwrite path enforces exactly the same allowlist and size ceiling
+    // as upload; otherwise a public photo could be replaced with HTML.
     const contentType = String(req.header('content-type') || record.contentType || '').split(';')[0].trim();
+    const validated = validateUpload({
+      filename: record.filename || record.file_name || req.params.id,
+      contentType,
+      size: bytes.length,
+      allowlist: isPublic ? IMAGE_MIME_TYPES : UPLOAD_MIME_TYPES,
+      maxBytes: fileMaxBytesFor(isPublic ? 'photo' : 'document'),
+    });
     const checksum = checksumOf(bytes);
     const expected = normalizeChecksum(req.header('x-checksum-sha256'));
     if (expected && expected !== checksum) return res.status(400).json({ error: 'checksum_mismatch' });
-    await client.files.uploadBytes(String(record.id), bytes, { contentType, checksumSha256: checksum });
+    await client.files.uploadBytes(String(record.id), bytes, { contentType: validated.contentType, checksumSha256: checksum });
     const saved = await saveFileMetadata(req, {
       ...(record as unknown as CityFile),
       id: String(record.id),
-      contentType,
-      size: bytes.length,
+      contentType: validated.contentType,
+      size: validated.size,
       checksumSha256: checksum,
       updated_at: new Date().toISOString(),
     });
@@ -1358,7 +1477,10 @@ app.post('/v1/files/:id/presign', async (req, res, next) => {
     const method = ['GET', 'HEAD', 'PUT', 'DELETE'].includes(String(body.method || 'GET').toUpperCase())
       ? String(body.method || 'GET').toUpperCase() as 'GET' | 'HEAD' | 'PUT' | 'DELETE'
       : 'GET';
-    const expiresIn = Number(body.expires_in ?? body.expiresIn ?? 900);
+    if ((method === 'PUT' || method === 'DELETE') && !requesterCanWriteFile(principal, record)) {
+      return res.status(403).json({ error: 'file_write_forbidden', detail: 'Only the owner or an administrator may mutate this file.' });
+    }
+    const expiresIn = Math.min(Math.max(Number(body.expires_in ?? body.expiresIn ?? 900), 60), 3600);
     const signed = await client.files.presign(String(record.id), { method, expiresIn });
     res.setHeader('cache-control', 'no-store');
     res.json({ file_id: String(record.id), method: signed.method || method, url: signed.url, expires_in: (signed as unknown as Record<string, unknown>).expiresIn ?? expiresIn });
@@ -1370,7 +1492,7 @@ app.post('/v1/files/:id/complete', async (req, res, next) => {
     const principal = (req as AuthedRequest).session as SessionPrincipal;
     const client = capabilitiesFromRequest(req);
     const record = await getFileMetadata(client, String(req.params.id));
-    if (!record || !requesterCanUseFile(principal, record)) return res.status(404).json({ error: 'file_not_found' });
+    if (!record || !requesterCanWriteFile(principal, record)) return res.status(404).json({ error: 'file_not_found' });
     const body = privateInput(req);
     const completed = await client.files.complete(String(record.id), body.size !== undefined ? { size: Number(body.size) } : {});
     const saved = await saveFileMetadata(req, {
@@ -1390,7 +1512,7 @@ app.delete('/v1/files/:id', async (req, res, next) => {
     const principal = (req as AuthedRequest).session as SessionPrincipal;
     const client = capabilitiesFromRequest(req);
     const record = await getFileMetadata(client, String(req.params.id));
-    if (!record || !requesterCanUseFile(principal, record)) return res.status(404).json({ error: 'file_not_found' });
+    if (!record || !requesterCanWriteFile(principal, record)) return res.status(404).json({ error: 'file_not_found' });
     await client.files.delete(String(record.id)).catch((error) => {
       if (!(error instanceof CapabilitiesError) || error.status !== 404) throw error;
     });
@@ -1642,6 +1764,35 @@ function healthScore(asset: Record<string, unknown>, openIncidents: number): Rec
   };
 }
 
+function scoreAssetFromRows(
+  asset: Record<string, unknown>,
+  key: string,
+  code: string,
+  incidentRows: Array<Record<string, unknown>>,
+  maintenanceRows: Array<Record<string, unknown>>,
+  sensorRows: Array<Record<string, unknown>>,
+  readingRows: Array<Record<string, unknown>>,
+): ReturnType<typeof scoreAssetRisk> {
+  const incidents = incidentRows
+    .filter((row) => [row.asset_id, row.assetId, row.asset_code].some((value) => value && (String(value) === key || String(value) === code)));
+  const maintenance = maintenanceRows
+    .filter((row) => [row.asset_id, row.assetId].some((value) => value && (String(value) === key || String(value) === code)));
+  const sensorIds = new Set(sensorRows
+    .filter((row) => [row.asset_id, row.assetId].some((value) => value && (String(value) === key || String(value) === code)))
+    .map((row) => String(row.id || row.sensor_id || '')));
+  const sensors: RiskSensorReading[] = readingRows
+    .filter((row) => sensorIds.size === 0 || sensorIds.has(String(row.sensor_id || row.sensorId || '')))
+    .map((row) => ({
+      metric: row.metric ? String(row.metric) : undefined,
+      value: row.value === undefined ? undefined : Number(row.value),
+      unit: row.unit ? String(row.unit) : undefined,
+      min: row.min === undefined ? undefined : Number(row.min),
+      max: row.max === undefined ? undefined : Number(row.max),
+      observed_at: row.observed_at ? String(row.observed_at) : row.timestamp ? String(row.timestamp) : undefined,
+    }));
+  return scoreAssetRisk({ asset: { ...asset, id: key }, incidents, maintenance, sensors });
+}
+
 async function assetRiskResult(req: Request, assetId: string): Promise<ReturnType<typeof scoreAssetRisk> | null> {
   const c = capabilitiesFromRequest(req);
   const assetsDataset = await ensureDataset(c, DATASETS.assets);
@@ -1658,24 +1809,13 @@ async function assetRiskResult(req: Request, assetId: string): Promise<ReturnTyp
   ]);
   const key = String(assetRecord.id || assetId);
   const code = String(asset.asset_code || asset.feature_code || '');
-  const incidents = incidentRecords.map((row) => recordData(row.data))
-    .filter((row) => [row.asset_id, row.assetId, row.asset_code].some((value) => value && (String(value) === key || String(value) === code)));
-  const maintenance = maintenanceRecords.map((row) => recordData(row.data))
-    .filter((row) => [row.asset_id, row.assetId].some((value) => value && (String(value) === key || String(value) === code)));
-  const sensorIds = new Set(sensorRecords.map((row) => recordData(row.data))
-    .filter((row) => [row.asset_id, row.assetId].some((value) => value && (String(value) === key || String(value) === code)))
-    .map((row) => String(row.id || row.sensor_id || '')));
-  const sensors: RiskSensorReading[] = readingRecords.map((row) => recordData(row.data))
-    .filter((row) => sensorIds.size === 0 || sensorIds.has(String(row.sensor_id || row.sensorId || '')))
-    .map((row) => ({
-      metric: row.metric ? String(row.metric) : undefined,
-      value: row.value === undefined ? undefined : Number(row.value),
-      unit: row.unit ? String(row.unit) : undefined,
-      min: row.min === undefined ? undefined : Number(row.min),
-      max: row.max === undefined ? undefined : Number(row.max),
-      observed_at: row.observed_at ? String(row.observed_at) : row.timestamp ? String(row.timestamp) : undefined,
-    }));
-  return scoreAssetRisk({ asset: { ...asset, id: key }, incidents, maintenance, sensors });
+  return scoreAssetFromRows(
+    asset, key, code,
+    incidentRecords.map((row) => recordData(row.data)),
+    maintenanceRecords.map((row) => recordData(row.data)),
+    sensorRecords.map((row) => recordData(row.data)),
+    readingRecords.map((row) => recordData(row.data)),
+  );
 }
 
 app.put('/v1/assets/:id/criticality', async (req, res, next) => {
@@ -1706,13 +1846,33 @@ app.get('/v1/risk/top', async (req, res, next) => {
   try {
     const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 100);
     const c = capabilitiesFromRequest(req);
-    const assets = await listAllRecords(c, (await ensureDataset(c, DATASETS.assets)).id);
-    const results = [] as ReturnType<typeof scoreAssetRisk>[];
-    for (const asset of assets.slice(0, 500)) {
-      const result = await assetRiskResult(req, String(asset.id));
-      if (result) results.push(result);
-    }
-    res.json({ items: rankAssetsByRisk(results).slice(0, limit), total: results.length });
+    // The four risk inputs are loaded once per request and every asset is
+    // scored in memory. There is no silent take(500): if a dataset scan stops
+    // early the response reports the truncation explicitly.
+    const [assetsDataset, incidentsDataset, maintenanceDataset, sensorsDataset, readingsDataset] = await Promise.all([
+      ensureDataset(c, DATASETS.assets), ensureDataset(c, DATASETS.incidents),
+      ensureDataset(c, DATASETS.maintenance), ensureDataset(c, DATASETS.sensors),
+      ensureDataset(c, DATASETS.sensorData),
+    ]);
+    const [assetRows, incidentRows, maintenanceRows, sensorRows, readingRows] = await Promise.all([
+      listAllRecords(c, assetsDataset.id), listAllRecords(c, incidentsDataset.id),
+      listAllRecords(c, maintenanceDataset.id), listAllRecords(c, sensorsDataset.id),
+      listAllRecords(c, readingsDataset.id),
+    ]);
+    const scanCap = 5000;
+    const truncated = [assetRows, incidentRows, maintenanceRows, sensorRows, readingRows].some((rows) => rows.length >= scanCap);
+    const incidents = incidentRows.map((row) => recordData(row.data));
+    const maintenance = maintenanceRows.map((row) => recordData(row.data));
+    const sensors = sensorRows.map((row) => recordData(row.data));
+    const readings = readingRows.map((row) => recordData(row.data));
+    const results = assetRows.map((asset) => {
+      const view = assetView(asset.data);
+      const key = String(asset.id);
+      const code = String(view.asset_code || view.feature_code || '');
+      return scoreAssetFromRows(view, key, code, incidents, maintenance, sensors, readings);
+    });
+    const ranked = rankAssetsByRisk(results);
+    res.json({ items: ranked.slice(0, limit), total: ranked.length, scanned: assetRows.length, truncated });
   } catch (error) { next(error); }
 });
 
@@ -1789,7 +1949,7 @@ async function createReportRecord(req: Request, body: Record<string, unknown>, a
   const id = String(body.id || randomUUID());
   const record = {
     id,
-    report_code: String(body.report_code || `RPT-${id.slice(0, 8).toUpperCase()}`),
+    report_code: String(body.report_code || `RPT-${Array.from(id).slice(0, 8).join('').toUpperCase()}`),
     ...(asset ? { asset_id: String(asset.id), asset_code: asset.asset_code } : {}),
     report_type: reportType,
     type: reportType,
@@ -1889,7 +2049,11 @@ app.post('/v1/preventive-maintenance', async (req, res, next) => {
     const dataset = await ensureDataset(client, DATASETS.assets);
     const existing = await findRecord(client, dataset.id, assetId, ['asset_code', 'feature_code', 'assetId', 'id']);
     if (!existing) return res.status(404).json({ error: 'asset_not_found' });
-    const cycle = Number(body.cycle_days) || 180;
+    const rawCycle = Number(body.cycle_days);
+    if (body.cycle_days !== undefined && (!Number.isFinite(rawCycle) || rawCycle < 1 || rawCycle > 3650)) {
+      return res.status(400).json({ error: 'cycle_days_out_of_range', detail: 'cycle_days must be an integer between 1 and 3650.' });
+    }
+    const cycle = body.cycle_days === undefined ? 180 : Math.floor(rawCycle);
     const now = new Date();
     const plan = {
       id: randomUUID(),
@@ -1984,9 +2148,17 @@ app.post('/v1/incidents', async (req, res, next) => {
       source: 'synapsecity', sourceVersion: '1.0.0',
     };
     const published = toPublishedIncident(incident);
-    const created = await client.records.create(dataset.id, published, { id: incidentId, publish: published.public_visible !== false });
+    // Sidecar first for atomicity: a private-data failure must abort before a
+    // public record exists, and a public failure removes the orphan sidecar.
     await writeIncidentInternal(req, incidentId, incident);
-    res.status(201).json(incidentView(mergeIncidentInternal(recordData(created), toInternalIncident(incident))));
+    let created: Record<string, unknown>;
+    try {
+      created = recordData(await client.records.create(dataset.id, published, { id: incidentId, publish: published.public_visible !== false }));
+    } catch (error) {
+      await restoreIncidentInternal(req, incidentId, null);
+      throw error;
+    }
+    res.status(201).json(incidentView(mergeIncidentInternal(created, toInternalIncident(incident))));
   } catch (error) { next(error); }
 });
 
@@ -2149,19 +2321,32 @@ app.post('/v1/incidents/:id/reject', async (req, res, next) => {
 
 app.get('/v1/hitl/approvals', async (req, res, next) => {
   try {
+    const principal = (req as AuthedRequest).session as SessionPrincipal;
     const items = await listPendingApprovals(req, req.query.module ? String(req.query.module) : undefined);
     const now = Date.now();
-    res.json({ items: items.map((item) => ({ ...item, escalated: !!item.dueAt && Date.parse(item.dueAt) < now })), total: items.length });
+    const visible = items
+      // Record-level authorization: an approver only sees approvals whose
+      // approverRoles include their role. Admin retains the explicit bypass.
+      .filter((item) => approvalRoleAllowed(item, principal.role))
+      .map((item) => ({ ...item, escalated: !!item.dueAt && Date.parse(item.dueAt) < now }));
+    res.json({ items: visible, total: visible.length });
   } catch (error) { next(error); }
 });
 
 app.post('/v1/hitl/approvals/:id/decide', async (req, res, next) => {
   try {
+    const principal = (req as AuthedRequest).session as SessionPrincipal;
     const input = objectBody(req.body);
     const decision = String(input.decision || '').toLowerCase();
     if (!['approve', 'reject'].includes(decision)) return res.status(400).json({ error: 'invalid_decision' });
-    const approval = await decideApproval(req, req.params.id, decision as 'approve' | 'reject', input.note ? String(input.note) : undefined);
-    res.json({ approval });
+    if (process.env.NODE_ENV === 'production' && !principal.tier2_token) {
+      return res.status(503).json({ error: 'user_identity_required', detail: 'HITL decisions must carry the caller\'s Tier-2 identity, not the service credential.' });
+    }
+    const approval = await getApproval(req, req.params.id);
+    if (!approvalRoleAllowed(approval, principal.role)) {
+      return res.status(403).json({ error: 'approval_role_required', detail: 'Your role is not listed as an approver for this request.' });
+    }
+    res.json({ approval: await decideApproval(req, req.params.id, decision as 'approve' | 'reject', input.note ? String(input.note) : undefined) });
   } catch (error) { next(error); }
 });
 
@@ -2348,7 +2533,15 @@ function installGenericCrud(prefix: string, key: GenericKey, options: GenericOpt
   app.post(prefix, async (req, res, next) => { try { res.status(201).json(view(await genericWrite(req, key, genericBody(req)))); } catch (error) { next(error); } });
   app.put(`${prefix}/:id`, async (req, res, next) => {
     if (isReserved(req.params.id)) return next();
-    try { res.json(view(await genericUpdate(req, key, req.params.id, genericBody(req)))); } catch (error) { next(error); }
+    try {
+      // Record-level authorization: a scoped-out row reads as missing, so a
+      // technician cannot modify another technician's work order.
+      if (options.rowAllowed) {
+        const current = await genericGet(req, key, req.params.id);
+        if (!options.rowAllowed(req, current)) return res.status(404).json({ error: 'not_found', product: PRODUCT });
+      }
+      res.json(view(await genericUpdate(req, key, req.params.id, genericBody(req))));
+    } catch (error) { next(error); }
   });
 }
 
@@ -2379,6 +2572,22 @@ function maintenanceRowAllowed(req: Request, row: Record<string, unknown>): bool
   return identities.has(String(row.assigned_to || row.technician || '').toLowerCase());
 }
 
+/**
+ * Record-level HITL authorization: an approver only sees/decides approvals
+ * whose approverRoles include their role. Admin retains the explicit bypass;
+ * an approval without roles is restricted to admin/manager.
+ */
+function approvalRoleAllowed(approval: ApprovalRecord, role: string): boolean {
+  if (role === 'admin') return true;
+  const roles = Array.isArray(approval.approverRoles) ? approval.approverRoles.map(String) : [];
+  if (roles.length === 0) return role === 'admin' || role === 'manager';
+  const current = role.toLowerCase();
+  return roles.some((candidate) => {
+    const value = candidate.toLowerCase();
+    return value === current || (current === 'manager' && value.endsWith('-manager'));
+  });
+}
+
 // Specific routes are registered before the generic :id route, and the generic
 // route also skips the reserved names. This prevents /upcoming and /asset/...
 // from being parsed as a work-order id.
@@ -2406,6 +2615,7 @@ app.get('/v1/maintenance/asset/:assetId', async (req, res, next) => {
 app.post('/v1/maintenance/:id/approval', async (req, res, next) => {
   try {
     const workOrder = await genericGet(req, 'maintenance', req.params.id);
+    if (!maintenanceRowAllowed(req, workOrder)) return res.status(404).json({ error: 'not_found', product: PRODUCT });
     const actor = hitlActor(req);
     const approval = await createApproval(req, {
       title: `Maintenance approval: ${String(workOrder.title || workOrder.id || req.params.id)}`,
@@ -2423,6 +2633,8 @@ for (const action of ['assign', 'start', 'complete', 'cancel', 'approve', 'rejec
   app.post(`/v1/maintenance/:id/${action}`, async (req, res, next) => {
     try {
       const body = Object.keys(genericBody(req)).length > 0 ? genericBody(req) : Object.fromEntries(Object.entries(req.query).map(([key, value]) => [key, String(value)]));
+      const current = await genericGet(req, 'maintenance', req.params.id);
+      if (!maintenanceRowAllowed(req, current)) return res.status(404).json({ error: 'not_found', product: PRODUCT });
       if (action === 'approve' || action === 'reject') {
         const approvalId = String(body.approval_id || body.approvalId || '');
         if (hitlRequired() || approvalId) {
@@ -2707,12 +2919,19 @@ app.post('/v1/alerts/:id/acknowledge', async (req, res, next) => {
           await client.records.create(maintenanceDataset.id, maintenanceFromAlert(alert), { id: maintenanceId, publish: false });
         } catch (error) {
           if (!(error instanceof CapabilitiesError) || (error.status !== 409 && error.status !== 400)) throw error;
+          // A tolerated conflict must still resolve to a real record: only link
+          // an id that actually exists instead of a failed create.
+          const winner = (await listAllRecords(client, maintenanceDataset.id))
+            .find((record) => String(record.data.source_alert_id || '') === String(alert.id));
+          maintenanceId = winner ? String(winner.id) : '';
         }
       }
-      updated = await genericUpdate(req, 'alerts', req.params.id, {
-        maintenance_id: maintenanceId,
-        maintenance_created_at: new Date().toISOString(),
-      });
+      if (maintenanceId) {
+        updated = await genericUpdate(req, 'alerts', req.params.id, {
+          maintenance_id: maintenanceId,
+          maintenance_created_at: new Date().toISOString(),
+        });
+      }
     }
     res.json(updated);
   } catch (error) { next(error); }
@@ -3394,6 +3613,57 @@ const publicReportRateLimit = rateLimit({
   max: Math.max(1, Number(process.env.PUBLIC_RATE_LIMIT || 40)),
 });
 
+// Anonymous reads are cheap but unbounded full scans are not: a bounded
+// per-IP budget keeps a scraper from amplifying every request into thousands
+// of upstream Tier-2 calls.
+const publicReadRateLimit = rateLimit({
+  name: 'public-read',
+  windowMs: Math.max(1000, Number(process.env.PUBLIC_READ_RATE_WINDOW_MS || process.env.PUBLIC_RATE_WINDOW_MS || 600_000)),
+  max: Math.max(1, Number(process.env.PUBLIC_READ_RATE_LIMIT || 300)),
+});
+
+/**
+ * Server-side visibility predicate for public Tier-2 queries. Publication,
+ * lifecycle and caller-supplied narrowing are all applied upstream so one
+ * request issues one bounded Tier-2 call instead of downloading the whole
+ * dataset and paging a truncated array.
+ */
+function publicWhere(query: Record<string, unknown>, fields: string[], excludeInactive: boolean): Record<string, unknown> {
+  const conditions: unknown[] = [
+    { or: [{ public_visible: true }, { public_visible: { exists: false } }] },
+    { or: [{ deleted_at: { exists: false } }] },
+  ];
+  if (excludeInactive) {
+    conditions.push({
+      or: [
+        { status: { exists: false } },
+        { status: { nin: ['decommissioned', 'deleted', 'purged', 'retired', 'rejected', 'canceled', 'cancelled', 'archived'] } },
+      ],
+    });
+    conditions.push({
+      or: [
+        { lifecycle_stage: { exists: false } },
+        { lifecycle_stage: { nin: ['decommissioned', 'deleted', 'retired'] } },
+      ],
+    });
+  }
+  for (const field of fields) {
+    const value = String(query[field] ?? '').trim();
+    if (value) conditions.push({ [field]: value });
+  }
+  return { and: conditions };
+}
+
+/** Return an already-paginated Tier-2 page. `total` is the upstream total so a
+ * client paging a large dataset sees the real count instead of a silently
+ * truncated one. */
+function sendPublicPage(res: Response, values: unknown[], total: number): void {
+  res.setHeader('x-total-count', String(Math.max(total, values.length)));
+  res.setHeader('x-scan-truncated', 'false');
+  res.setHeader('cache-control', 'public, max-age=60, stale-while-revalidate=300');
+  res.json(values);
+}
+
 async function enforceTurnstile(req: Request, res: Response): Promise<boolean> {
   const result = await verifyTurnstile(req);
   if (result.ok) return true;
@@ -3412,6 +3682,19 @@ app.post('/v1/public/files', publicReportRateLimit, uploadRaw, async (req, res, 
     if (!bytes || bytes.length === 0) return res.status(400).json({ error: 'binary_body_required' });
     const filename = decodeFilenameHeader(req);
     if (!filename) return res.status(400).json({ error: 'x_file_name_required' });
+    // Follow-up uploads for an existing report must present the report edit
+    // capability; the file is stamped with the report id so a later append can
+    // prove the photo was uploaded for that same report.
+    const reportId = String(req.header('x-report-id') || '').trim();
+    const reportToken = String(req.header('x-report-edit-token') || '').trim();
+    if (reportId || reportToken) {
+      if (!reportId || !reportToken) {
+        return res.status(403).json({ error: 'report_edit_token_required', detail: 'A report id and edit token are required together.' });
+      }
+      if (!verifyReportEditToken(reportToken, reportId)) {
+        return res.status(403).json({ error: 'report_edit_token_invalid', detail: 'The report edit token is invalid or expired.' });
+      }
+    }
     const contentType = String(req.header('content-type') || '').split(';')[0].trim();
     const saved = await uploadFileBytes(req, {
       filename,
@@ -3420,6 +3703,7 @@ app.post('/v1/public/files', publicReportRateLimit, uploadRaw, async (req, res, 
       owner: 'anonymous',
       public: true,
       entityType: 'incident',
+      ...(reportId ? { reportId } : {}),
       allowlist: IMAGE_MIME_TYPES,
       maxBytes: fileMaxBytesFor('photo'),
       ...(req.header('x-checksum-sha256') ? { checksumSha256: String(req.header('x-checksum-sha256')) } : {}),
@@ -3442,16 +3726,24 @@ app.get('/v1/public/files/:id/content', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-app.get('/v1/public/assets', async (req, res, next) => {
+app.get('/v1/public/assets', publicReadRateLimit, async (req, res, next) => {
   try {
     const client = capabilitiesFromRequest(req);
     const dataset = await ensureDataset(client, DATASETS.assets);
     const includeInactive = ['true', '1'].includes(String(req.query.include_inactive || '').toLowerCase());
-    const rows = (await listAllRecords(client, dataset.id))
-      .map((record) => record.data)
+    const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
+    const offset = Math.max(Number(req.query.offset ?? req.query.skip) || 0, 0);
+    const page = await queryRecords(
+      client,
+      dataset.id,
+      publicWhere(req.query as Record<string, unknown>, ['status', 'feature_type', 'feature_code', 'asset_code', 'category'], !includeInactive),
+      { limit, offset },
+    );
+    const values = page.items
+      .map((record) => assetView(record))
       .filter((asset) => assetIsPublic(asset, { includeInactive }))
       .map(publicAssetView);
-    sendPage(res, rows, req);
+    sendPublicPage(res, values, page.total);
   } catch (error) { next(error); }
 });
 
@@ -3500,15 +3792,22 @@ app.get('/v1/public/assets/:code', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-app.get('/v1/public/incidents', async (req, res, next) => {
+app.get('/v1/public/incidents', publicReadRateLimit, async (req, res, next) => {
   try {
     const client = capabilitiesFromRequest(req);
     const dataset = await ensureDataset(client, DATASETS.incidents);
-    const rows = (await listAllRecords(client, dataset.id))
-      .map((record) => record.data)
+    const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
+    const offset = Math.max(Number(req.query.offset ?? req.query.skip) || 0, 0);
+    const page = await queryRecords(
+      client,
+      dataset.id,
+      publicWhere(req.query as Record<string, unknown>, ['status', 'severity', 'category', 'asset_id', 'incident_number'], true),
+      { limit, offset, orderBy: { field: 'reported_at', direction: 'desc' } },
+    );
+    const values = page.items
       .filter(incidentIsPubliclyVisible)
       .map(publicIncidentView);
-    sendPage(res, rows, req);
+    sendPublicPage(res, values, page.total);
   } catch (error) { next(error); }
 });
 
@@ -3523,9 +3822,9 @@ app.post('/v1/public/incidents', publicReportRateLimit, async (req, res, next) =
     const photoValues: unknown[] = Array.isArray(body.photos)
       ? body.photos
       : (Array.isArray(body.file_ids) ? body.file_ids : (body.file_id ? [body.file_id] : []));
-    if (photoValues.length > 10) return res.status(413).json({ error: 'too_many_photos', max: 10 });
+    if (photoValues.length > MAX_PUBLIC_INCIDENT_PHOTOS) return res.status(413).json({ error: 'too_many_photos', max: MAX_PUBLIC_INCIDENT_PHOTOS });
     const photos = photoValues.length
-      ? (await resolvePhotos(req, photoValues, { publicUrl: true })).map((entry) => entry.url)
+      ? await resolvePublicReportPhotos(req, photoValues)
       : [];
     // Reporter contact details are written only to the private sidecar; the
     // public projection record never contains them.
@@ -3557,26 +3856,64 @@ app.post('/v1/public/incidents', publicReportRateLimit, async (req, res, next) =
       sourceVersion: '1.0.0',
     };
     const published = toPublishedIncident(incident);
+    // Sidecar first for atomicity: a private-data failure must abort before a
+    // public record exists, and a public failure removes the orphan sidecar.
     // Anonymous reports stay out of the open-data publication. Even if a
     // Tier-2 defect republished the record, it contains no contact PII.
-    await client.records.create(dataset.id, published, { id: incidentId, publish: false });
     await writeIncidentInternal(req, incidentId, incident);
+    try {
+      await client.records.create(dataset.id, published, { id: incidentId, publish: false });
+    } catch (error) {
+      await restoreIncidentInternal(req, incidentId, null);
+      throw error;
+    }
     await notifyOperators(req, 'incident_reported', `New citizen report: ${String(published.title || incidentId)}`, String(published.description || ''), String(published.severity || '') === 'critical' ? 'critical' : 'info', 'incident', incidentId).catch((error) => console.warn('[synapsecity] operator_notification_failed', (error as Error).message));
-    res.status(201).json(publicIncidentView({ id: incidentId, data: published }));
+    // A short-lived edit capability is returned once to the creator. It is
+    // never part of the public read projection.
+    const editCapability = issueReportEditToken(incidentId);
+    res.status(201).json({
+      ...publicIncidentView({ id: incidentId, data: published }),
+      edit_token: editCapability.token,
+      edit_token_expires_at: editCapability.expiresAt,
+    });
   } catch (error) { next(error); }
 });
 
 app.post('/v1/public/incidents/:incidentId/photos', publicReportRateLimit, async (req, res, next) => {
   try {
+    if (!(await enforceTurnstile(req, res))) return;
     const body = privateInput(req);
     const photoValues: unknown[] = Array.isArray(body.photos)
       ? body.photos
       : (Array.isArray(body.file_ids) ? body.file_ids : (body.file_id ? [body.file_id] : []));
     if (photoValues.length === 0) return res.status(400).json({ error: 'photos_required', detail: 'Send file ids returned by POST /v1/public/files.' });
-    const photos = (await resolvePhotos(req, photoValues, { publicUrl: true })).map((entry) => entry.url);
+    // Inline binary is rejected on input shape alone, before any capability
+    // check, so a data URL can never enter an incident record.
+    for (const value of photoValues) {
+      const reference = typeof value === 'string'
+        ? value
+        : String((value as Record<string, unknown>).file_id || (value as Record<string, unknown>).fileId || (value as Record<string, unknown>).file_url || (value as Record<string, unknown>).url || (value as Record<string, unknown>).photo || '');
+      if (isDataUrl(reference)) {
+        return res.status(415).json({ error: 'data_url_not_supported' });
+      }
+    }
+    // Missing capability is rejected before any Tier-2 lookup: the incident
+    // id alone is not a capability.
+    const editToken = String(req.header('x-report-edit-token') || body.edit_token || body.report_edit_token || '').trim();
+    if (!editToken) {
+      return res.status(403).json({ error: 'report_edit_token_required', detail: 'The report edit token is required to append photos.' });
+    }
     const existing = await findPublicIncident(req, String(req.params.incidentId));
     if (!existing || !incidentIsPubliclyVisible(existing)) return res.status(404).json({ error: 'incident_not_found' });
+    const incidentId = String(existing.id || req.params.incidentId);
+    if (!verifyReportEditToken(editToken, incidentId) && !verifyReportEditToken(editToken, String(req.params.incidentId))) {
+      return res.status(403).json({ error: 'report_edit_token_invalid', detail: 'The report edit token is invalid or expired.' });
+    }
     const current = Array.isArray(existing.photos) ? existing.photos.map(String) : [];
+    if (current.length + photoValues.length > MAX_PUBLIC_INCIDENT_PHOTOS) {
+      return res.status(413).json({ error: 'too_many_photos', max: MAX_PUBLIC_INCIDENT_PHOTOS, detail: `At most ${MAX_PUBLIC_INCIDENT_PHOTOS} photos may be attached to one report.` });
+    }
+    const photos = await resolvePublicReportPhotos(req, photoValues, incidentId);
     const updated = await updateIncident(req, String(req.params.incidentId), { photos: [...current, ...photos] });
     res.json(publicIncidentView(updated));
   } catch (error) { next(error); }

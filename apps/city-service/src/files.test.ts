@@ -220,6 +220,31 @@ test('create + proxy upload + complete + presign flows use the files capability'
   assert.equal(presign.status, 501, 'the filesystem backend reports presign_unsupported');
 });
 
+test('a non-owner cannot overwrite or delete a public file, and overwrites keep the upload allowlist', async () => {
+  const uploaded = await request('/v1/files/upload', rawUpload('POST', '/v1/files/upload', PNG, {
+    'content-type': 'image/png', 'x-file-name': 'public-lamp.png', 'x-file-visibility': 'public',
+  }, adminToken));
+  assert.equal(uploaded.status, 201, JSON.stringify(uploaded.body));
+  const fileId = String(uploaded.body.id);
+  const technician = tokenFor('technician', 'tech-public');
+
+  const stolen = await request(`/v1/files/${fileId}/content`, rawUpload('PUT', `/v1/files/${fileId}/content`, PNG, {
+    'content-type': 'image/png', 'x-file-name': 'public-lamp.png',
+  }, technician));
+  assert.equal(stolen.status, 404, 'a non-owner technician must not overwrite a public file');
+
+  const html = await request(`/v1/files/${fileId}/content`, rawUpload('PUT', `/v1/files/${fileId}/content`, Buffer.from('<script>alert(1)</script>'), {
+    'content-type': 'text/html', 'x-file-name': 'public-lamp.png',
+  }, adminToken));
+  assert.equal(html.status, 415, 'overwriting a public photo with HTML must be rejected like an upload');
+
+  const destroyed = await request(`/v1/files/${fileId}`, json('DELETE', undefined, technician));
+  assert.equal(destroyed.status, 404, 'a non-owner technician must not delete a public file');
+
+  const presigned = await request(`/v1/files/${fileId}/presign`, json('POST', { method: 'PUT' }, technician));
+  assert.equal(presigned.status, 403, 'a non-owner technician must not mint a write URL for a public file');
+});
+
 test('deleting a file removes the object and its City metadata', async () => {
   const uploaded = await request('/v1/files/upload', rawUpload('POST', '/v1/files/upload', PNG, {
     'content-type': 'image/png', 'x-file-name': 'delete-me.png',

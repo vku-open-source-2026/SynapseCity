@@ -23,6 +23,19 @@ before(async () => {
     const body = Buffer.concat(chunks);
     res.setHeader('content-type', 'application/json');
     if ((req.url || '').startsWith('/v1/assets')) res.setHeader('x-total-count', '3');
+    if ((req.url || '').startsWith('/v1/public/incidents')) {
+      // Bot-check and checksum metadata must survive the public edge.
+      res.setHeader('x-checksum-sha256', 'b'.repeat(64));
+      res.setHeader('x-content-sha256', 'c'.repeat(64));
+      res.end(JSON.stringify({
+        service: 'fake-city-service',
+        path: req.url,
+        turnstile: req.headers['cf-turnstile-response'] || null,
+        reportId: req.headers['x-report-id'] || null,
+        reportEditToken: req.headers['x-report-edit-token'] || null,
+      }));
+      return;
+    }
     if ((req.url || '').startsWith('/v1/files/upload')) {
       res.end(JSON.stringify({
         service: 'fake-city-service',
@@ -158,7 +171,7 @@ test('path normalization and ownership checks are shared by the middleware', () 
   assert.equal(exported.normalizeV1Path('/v1/%61ssets/1'), '/v1/assets/1');
   assert.equal(exported.canonicalV1Path('/%76%31/Assets/AbC-1'), '/v1/Assets/AbC-1');
 
-  for (const owned of ['/v1/city', '/v1/auth/login', '/v1/assets', '/v1/assets/1', '/v1/preventive-maintenance', '/v1/public/assets', '/v1/public/incidents', '/v1/ai', '/v1/ASSETS/']) {
+  for (const owned of ['/v1/city', '/v1/auth/login', '/v1/assets', '/v1/assets/1', '/v1/preventive-maintenance', '/v1/hitl/approvals', '/v1/public/assets', '/v1/public/incidents', '/v1/ai', '/v1/ASSETS/']) {
     assert.equal(exported.isOwnedV1Path(owned), true, `${owned} must be owned by SynapseCity`);
   }
   for (const foreign of ['/v1/emergency', '/v1/hazards/recent', '/v1/sos', '/v1/unknown', '/v1/public/unknown']) {
@@ -167,7 +180,7 @@ test('path normalization and ownership checks are shared by the middleware', () 
   for (const anonymous of ['/v1/public/assets', '/v1/public/incidents/1', '/v1/auth/login', '/v1/city', '/v1/map/config', '/v1/map/tiles/1/2/3.png', '/v1/ai/status', '/v1/ai/chat']) {
     assert.equal(exported.isPublicV1Path(anonymous), true, `${anonymous} must stay anonymous`);
   }
-  for (const operator of ['/v1/assets', '/v1/users', '/v1/reports/1/download', '/v1/ai/decision']) {
+  for (const operator of ['/v1/assets', '/v1/users', '/v1/hitl/approvals', '/v1/reports/1/download', '/v1/ai/decision']) {
     assert.equal(exported.isPublicV1Path(operator), false, `${operator} must require a session`);
   }
 });
@@ -235,6 +248,26 @@ test('pagination headers survive the public edge', async () => {
   const response = await fetch(`${baseUrl}/v1/assets?limit=1`, { headers: { authorization: 'Bearer session' } });
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('x-total-count'), '3');
+});
+
+test('turnstile and checksum headers survive the gateway', async () => {
+  const response = await fetch(`${baseUrl}/v1/public/incidents`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'cf-turnstile-response': 'token-123',
+      'x-report-id': 'report-1',
+      'x-report-edit-token': 'edit-1',
+    },
+    body: '{}',
+  });
+  assert.equal(response.status, 200);
+  const body = await response.json() as Record<string, unknown>;
+  assert.equal(body.turnstile, 'token-123', 'the bot-check token must reach the City service');
+  assert.equal(body.reportId, 'report-1');
+  assert.equal(body.reportEditToken, 'edit-1');
+  assert.equal(response.headers.get('x-checksum-sha256'), 'b'.repeat(64), 'checksum metadata must survive the public edge');
+  assert.equal(response.headers.get('x-content-sha256'), 'c'.repeat(64));
 });
 
 test('CORS advertises PUT and DELETE for the City API', async () => {

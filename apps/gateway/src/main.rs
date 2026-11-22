@@ -32,6 +32,7 @@ const OWNED_V1_PREFIXES: &[&str] = &[
     "/v1/incidents",
     "/v1/maintenance",
     "/v1/preventive-maintenance",
+    "/v1/hitl",
     "/v1/iot",
     "/v1/alerts",
     "/v1/budgets",
@@ -736,6 +737,7 @@ mod tests {
             "/v1/assets",
             "/v1/assets/1",
             "/v1/preventive-maintenance",
+            "/v1/hitl/approvals",
             "/v1/public/assets",
             "/v1/public/incidents",
             "/v1/ai",
@@ -779,6 +781,7 @@ mod tests {
         for operator in &[
             "/v1/assets",
             "/v1/users",
+            "/v1/hitl/approvals",
             "/v1/reports/1/download",
             "/v1/ai/decision",
         ] {

@@ -279,7 +279,8 @@ operator action requires a valid session and then returns `404`.
 | --- | --- | --- | --- | --- | --- |
 | `assets:read` / `assets:write` | ✓ / ✓ | ✓ / ✓ | ✓ / – | ✓ / – | – / – |
 | `incidents:read` / `incidents:write` / `incidents:verify` | ✓ / ✓ / ✓ | ✓ / ✓ / ✓ | ✓ / – / – | ✓ / – / – | – / – / – |
-| `maintenance:read` / `maintenance:write` | ✓ / ✓ | ✓ / ✓ | ✓ / ✓ | – / – | – / – |
+| `maintenance:read` / `maintenance:write` / `maintenance:approve` | ✓ / ✓ / ✓ | ✓ / ✓ / ✓ | ✓ / ✓ / – | – / – / – | – / – / – |
+| `approvals:read` / `approvals:decide` | ✓ / ✓ | ✓ / ✓ | – / – | – / – | – / – |
 | `iot:read` / `iot:write` | ✓ / ✓ | ✓ / ✓ | ✓ / – | – / – | – / – |
 | `alerts:read` / `alerts:write` | ✓ / ✓ | ✓ / ✓ | ✓ / – | – / – | – / – |
 | `budgets:read` / `budgets:write` / `budgets:approve` | ✓ / ✓ / ✓ | ✓ / ✓ / ✓ | – / – / – | – / – / – | – / – / – |

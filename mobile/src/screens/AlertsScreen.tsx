@@ -132,6 +132,7 @@ export function AlertsScreen({
           ) : null}
         </>
       ) : (
+        <>
         <Card tone="cyan" style={styles.loginCard}>
           <View style={styles.loginIcon}>
             <Ionicons name="open-outline" size={24} color={colors.cyan} />
@@ -163,6 +164,7 @@ export function AlertsScreen({
             onPress={() => navigate({ name: 'incident', params: { reference: lookup.trim() } })}
           />
         </Card>
+        </>
       )}
 
       {tab === 'public' ? (

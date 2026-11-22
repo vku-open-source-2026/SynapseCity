@@ -162,7 +162,8 @@ export function normalizeRole(value: unknown, fallback: SessionRole = 'citizen')
 export type Permission =
   | 'assets:read' | 'assets:write'
   | 'incidents:read' | 'incidents:write' | 'incidents:verify'
-  | 'maintenance:read' | 'maintenance:write'
+  | 'maintenance:read' | 'maintenance:write' | 'maintenance:approve'
+  | 'approvals:read' | 'approvals:decide'
   | 'iot:read' | 'iot:write'
   | 'alerts:read' | 'alerts:write'
   | 'budgets:read' | 'budgets:write' | 'budgets:approve'
@@ -179,6 +180,8 @@ const ROLE_PERMISSIONS: Record<SessionRole, readonly string[]> = {
     'assets:read', 'assets:write',
     'incidents:read', 'incidents:write', 'incidents:verify',
     'maintenance:read', 'maintenance:write',
+    'maintenance:approve',
+    'approvals:read', 'approvals:decide',
     'iot:read', 'iot:write',
     'alerts:read', 'alerts:write',
     'budgets:read', 'budgets:write', 'budgets:approve',
@@ -344,4 +347,49 @@ export function containsPassword(body: Record<string, unknown>): boolean {
 
 export function newSessionId(): string {
   return randomUUID();
+}
+
+/** Lifetime of the capability issued to an anonymous reporter. It authorizes
+ * appending photos to that one report and nothing else. */
+export const REPORT_EDIT_TTL_SECONDS = 24 * 60 * 60;
+
+interface ReportEditClaims {
+  incident_id: string;
+  exp: number;
+  typ: 'incident_edit';
+}
+
+function reportEditPayload(incidentId: string, exp: number): string {
+  return Buffer.from(JSON.stringify({ incident_id: incidentId, exp, typ: 'incident_edit' } satisfies ReportEditClaims), 'utf8').toString('base64url');
+}
+
+/** Issue a short-lived signed capability for the anonymous report creator.
+ * The incident id alone is not a capability: every append must present this
+ * token and only files uploaded for the same report are accepted. */
+export function issueReportEditToken(incidentId: string): { token: string; expiresAt: number } {
+  const exp = Math.floor(Date.now() / 1000) + REPORT_EDIT_TTL_SECONDS;
+  const payload = reportEditPayload(incidentId, exp);
+  return { token: `${payload}.${signature(payload)}`, expiresAt: exp };
+}
+
+export function verifyReportEditToken(token: string, incidentId: string): boolean {
+  const separator = token.lastIndexOf('.');
+  if (separator <= 0) return false;
+  const payload = token.slice(0, separator);
+  const provided = token.slice(separator + 1);
+  const expected = signature(payload);
+  const providedBuffer = Buffer.from(provided);
+  const expectedBuffer = Buffer.from(expected);
+  if (providedBuffer.length !== expectedBuffer.length) return false;
+  if (!timingSafeEqual(providedBuffer, expectedBuffer)) return false;
+  let claims: ReportEditClaims;
+  try {
+    claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as ReportEditClaims;
+  } catch {
+    return false;
+  }
+  return claims.typ === 'incident_edit'
+    && claims.incident_id === incidentId
+    && Number.isFinite(claims.exp)
+    && claims.exp > Math.floor(Date.now() / 1000);
 }
