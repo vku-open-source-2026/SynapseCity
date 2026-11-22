@@ -107,6 +107,7 @@ test('public assets exclude deleted, decommissioned and non-public records', asy
   const list = await request('/v1/public/assets');
   assert.equal(list.status, 200);
   assert.equal(list.headers.get('x-total-count'), '1');
+  assert.equal(list.headers.get('x-scan-truncated'), 'false');
   assert.deepEqual((list.body as Array<{ asset_code: string }>).map((asset) => asset.asset_code), ['ACTIVE-1']);
 
   // A retired asset is hidden from the default list but remains addressable by
@@ -131,6 +132,7 @@ test('the public map can request the complete inventory including retired assets
   const list = await request('/v1/public/assets?include_inactive=true');
   assert.equal(list.status, 200);
   assert.equal(list.headers.get('x-total-count'), '2');
+  assert.equal(list.headers.get('x-scan-truncated'), 'false');
   assert.deepEqual(
     (list.body as Array<{ asset_code: string }>).map((asset) => asset.asset_code).sort(),
     ['ACTIVE-1', 'OLD-1'],
@@ -214,11 +216,21 @@ test('citizen reports keep contact data in the private sidecar and publish:false
 test('public incident list excludes non-public and deleted records', async () => {
   const list = await request('/v1/public/incidents');
   assert.equal(list.status, 200);
+  assert.equal(list.headers.get('x-scan-truncated'), 'false');
   const ids = (list.body as Array<Record<string, unknown>>).map((incident) => incident.id);
   assert.equal(ids.includes('inc-private'), false);
   assert.equal(ids.includes('inc-deleted'), false);
   assert.equal((await request('/v1/public/incidents/inc-private')).status, 404);
   assert.equal((await request('/v1/public/incidents/inc-deleted')).status, 404);
+});
+
+test('a non-public incident update is withheld from publication', async () => {
+  const admin = adminToken;
+  const updated = await request('/v1/incidents/inc-private', json('PATCH', { severity: 'high' }, admin));
+  assert.equal(updated.status, 200);
+  const lastUpdate = [...tier2.updateRequests].reverse().find((entry) => entry.datasetId === 'city-incidents');
+  assert.ok(lastUpdate, 'the incident update must reach Tier-2');
+  assert.equal(lastUpdate.publish, false, 'a public_visible:false incident must never be published');
 });
 
 test('the public maintenance summary exposes aggregates only', async () => {

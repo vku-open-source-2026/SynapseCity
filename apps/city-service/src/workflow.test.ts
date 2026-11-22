@@ -96,6 +96,45 @@ before(async () => {
         const offset = Number(url.searchParams.get('offset') || 0);
         return send(res, 200, { items: items.slice(offset, offset + limit), total: items.length, limit, offset });
       }
+      if (parts.length === 6 && parts[4] === 'records' && parts[5] === 'query' && req.method === 'POST') {
+        const input = (body || {}) as { where?: unknown; orderBy?: unknown; limit?: number; offset?: number };
+        const where = input.where as any;
+        const matches = (data: Record<string, unknown>, node: any): boolean => {
+          if (!node || typeof node !== 'object') return true;
+          if (Array.isArray(node.and)) return node.and.every((entry: any) => matches(data, entry));
+          if (Array.isArray(node.or)) return node.or.some((entry: any) => matches(data, entry));
+          for (const [key, expected] of Object.entries(node)) {
+            const actual = (data as Record<string, unknown>)[key];
+            if (expected && typeof expected === 'object' && !Array.isArray(expected)) {
+              for (const [op, value] of Object.entries(expected as Record<string, unknown>)) {
+                if (op === 'exists') { if ((actual !== undefined) !== Boolean(value)) return false; continue; }
+                if (op === 'nin') { if (Array.isArray(value) && value.map(String).includes(String(actual ?? ''))) return false; continue; }
+                if (op === 'in') { if (!(Array.isArray(value) && value.map(String).includes(String(actual ?? '')))) return false; continue; }
+                if (String(actual ?? '') !== String(value ?? '')) return false;
+              }
+            } else if (String(actual ?? '') !== String(expected ?? '')) {
+              return false;
+            }
+          }
+          return true;
+        };
+        const filtered = Array.from(recordsFor(datasetId).entries())
+          .map(([id, data]) => ({ id, data }))
+          .filter(({ data }) => matches(data as Record<string, unknown>, where));
+        const orderBy = typeof input.orderBy === 'string' ? input.orderBy : '';
+        const [orderField, orderDirection] = orderBy.split(':');
+        const ordered = orderField
+          ? [...filtered].sort((a, b) => {
+            const left = String((a.data as Record<string, unknown>)[orderField] ?? '');
+            const right = String((b.data as Record<string, unknown>)[orderField] ?? '');
+            if (left === right) return 0;
+            return (left < right ? -1 : 1) * (orderDirection === 'desc' ? -1 : 1);
+          })
+          : filtered;
+        const limit = Math.min(Math.max(Number(input.limit) || 100, 1), 1000);
+        const offset = Math.max(Number(input.offset) || 0, 0);
+        return send(res, 200, { items: ordered.slice(offset, offset + limit), total: ordered.length, limit, offset });
+      }
       if (parts.length === 6 && parts[4] === 'records' && parts[5] === 'bulk' && req.method === 'POST') {
         const input = (body || {}) as { records?: Array<{ id?: string; data?: Record<string, unknown> }> };
         const created: Array<{ id: string; data: Record<string, unknown> }> = [];
@@ -344,12 +383,44 @@ test('anonymous public reporting creates a retrievable incident and accepts phot
   const lookup = await request(`/v1/public/incidents/${encodeURIComponent(number)}`);
   assert.equal(lookup.status, 200);
   assert.equal(lookup.body.title, 'Pothole on Main Street');
+  // The report edit capability is returned once to the creator and never
+  // appears in the public read projection.
+  assert.equal(typeof created.body.edit_token, 'string');
+  assert.equal(lookup.body.edit_token, undefined);
 
-  const photos = await request(`/v1/public/incidents/${created.body.id}/photos`, json('POST', {
+  // The incident id alone is not a capability: anonymous appends without the
+  // edit token are rejected before any Tier-2 lookup.
+  const denied = await request(`/v1/public/incidents/${created.body.id}/photos`, json('POST', {
     photos: ['https://files.synapsedx.sbs/incidents/photo-1.png'],
-  }));
+  }), { anonymous: true });
+  assert.equal(denied.status, 403);
+  assert.equal(denied.body.error, 'report_edit_token_required');
+
+  // External URLs are rejected even with a valid token: anonymous reports
+  // accept City public file ids only.
+  const external = await request(`/v1/public/incidents/${created.body.id}/photos`, json('POST', {
+    photos: ['https://files.synapsedx.sbs/incidents/photo-1.png'],
+    edit_token: created.body.edit_token,
+  }), { anonymous: true });
+  assert.equal(external.status, 400);
+  assert.equal(external.body.error, 'public_photo_file_id_required');
+
+  // A follow-up upload stamps the file with the report it belongs to (the
+  // X-Report-Id + edit-token upload path); the append then accepts it.
+  seed('city-files', 'photo-file-1', {
+    id: 'photo-file-1', filename: 'pothole.png', contentType: 'image/png', size: 12,
+    checksumSha256: '0'.repeat(64), owner: 'anonymous', public: true,
+    report_id: created.body.id,
+    created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+    source: 'synapsecity', storage: 'tier2-files',
+  });
+  const photos = await request(`/v1/public/incidents/${created.body.id}/photos`, json('POST', {
+    file_ids: ['photo-file-1'],
+    edit_token: created.body.edit_token,
+  }), { anonymous: true });
   assert.equal(photos.status, 200);
   assert.equal(photos.body.photos.length, 1);
+  assert.match(photos.body.photos[0], /\/v1\/public\/files\/photo-file-1\/content$/);
 
   const list = await request('/v1/public/incidents');
   assert.equal(list.status, 200);

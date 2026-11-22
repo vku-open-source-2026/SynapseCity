@@ -340,6 +340,27 @@ test('a resolved incident notifies the assignee', async () => {
   assert.ok((notifications.body as Array<Record<string, unknown>>).some((entry) => entry.type === 'incident_resolved'));
 });
 
+test('extreme numeric and multibyte inputs are rejected safely, never panic', async () => {
+  const extreme = await request('/v1/preventive-maintenance', json('POST', { asset_id: 'asset-1', cycle_days: 1e30 }, adminToken));
+  assert.equal(extreme.status, 400);
+  assert.equal(extreme.body.error, 'cycle_days_out_of_range');
+
+  const negative = await request('/v1/preventive-maintenance', json('POST', { asset_id: 'asset-1', cycle_days: -5 }, adminToken));
+  assert.equal(negative.status, 400);
+
+  const valid = await request('/v1/preventive-maintenance', json('POST', { asset_id: 'asset-1', cycle_days: 30 }, adminToken));
+  assert.equal(valid.status, 201);
+  assert.equal(valid.body.cycle_days, 30);
+
+  // A multibyte id must not split a UTF-8 code point when deriving the code.
+  const multibyte = await request('/v1/reports', json('POST', {
+    id: 'abcdefg😀', report_type: 'incident_summary', format: 'json',
+  }, adminToken));
+  assert.equal(multibyte.status, 201);
+  assert.match(String(multibyte.body.report_code), /^RPT-/);
+  assert.equal(multibyte.body.report_code.includes('�'), false);
+});
+
 test('reports generate real CSV/JSON bytes and reject unsupported formats', async () => {
   const created = await request('/v1/reports', json('POST', {
     report_type: 'incident_summary', format: 'csv',

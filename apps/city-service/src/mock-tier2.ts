@@ -45,6 +45,7 @@ export interface MockTier2 {
   datasets: Map<string, Record<string, unknown>>;
   records: Map<string, Map<string, Record<string, unknown>>>;
   createRequests: Array<{ datasetId: string; id?: string; publish?: boolean; data: Record<string, unknown> }>;
+  updateRequests: Array<{ datasetId: string; id: string; publish?: boolean; data: Record<string, unknown> }>;
   writes: MockTier2Write[];
   files: Map<string, MockFile>;
   notifications: {
@@ -155,6 +156,7 @@ export async function startMockTier2(): Promise<MockTier2> {
   const datasets = new Map<string, Record<string, unknown>>();
   const records = new Map<string, Map<string, Record<string, unknown>>>();
   const createRequests: MockTier2['createRequests'] = [];
+  const updateRequests: MockTier2['updateRequests'] = [];
   const writes: MockTier2Write[] = [];
   const ai = { available: false, reply: 'Asset ASSET-1 is in good condition.' };
   const files = new Map<string, MockFile>();
@@ -525,9 +527,10 @@ export async function startMockTier2(): Promise<MockTier2> {
       }
       if (parts.length === 6 && parts[4] === 'records' && req.method === 'PATCH') {
         const recordId = decodeURIComponent(parts[5]);
-        const input = (body || {}) as { data?: Record<string, unknown> };
+        const input = (body || {}) as { data?: Record<string, unknown>; publish?: boolean };
         const data = { ...(input.data || {}), id: recordId };
         recordsFor(datasetId).set(recordId, data);
+        updateRequests.push({ datasetId, id: recordId, publish: input.publish, data });
         return send(res, 200, { id: recordId, data });
       }
       if (parts.length === 6 && parts[4] === 'records' && req.method === 'DELETE') {
@@ -562,6 +565,7 @@ export async function startMockTier2(): Promise<MockTier2> {
     datasets,
     records,
     createRequests,
+    updateRequests,
     writes,
     files,
     notifications,
