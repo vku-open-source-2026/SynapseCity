@@ -914,7 +914,7 @@ app.get('/v1/city', (_req, res) => res.json({
   capabilities: capabilityStatus(),
   authorization: {
     operatorNamespaces: 'require a signed City session',
-    anonymousNamespaces: ['/health', '/ready', '/v1/city', '/v1/auth/*', '/v1/public/*', '/v1/map/*'],
+    anonymousNamespaces: ['/health', '/ready', '/v1/city', '/v1/auth/*', '/v1/public/*', '/v1/map/*', '/v1/ai/status', '/v1/ai/chat'],
     permissionMatrix: '/v1/city?include=permissions, or README "Authorization matrix"',
   },
 }));
@@ -979,6 +979,9 @@ function operatorPermission(method: string, rawPath: string): Permission | 'auth
   if (within(path, '/v1/geofences')) return read ? 'geofences:read' : 'geofences:write';
   if (within(path, '/v1/geo')) return 'geo:read';
   if (within(path, '/v1/ingest')) return 'ingest:write';
+  // Honest note: /v1/ai/status + /v1/ai/chat are anonymous (public map widget,
+  // per-IP public-ai budget) and return early in isAnonymousV1Path, so this
+  // ai:use arm only applies to future operator-only /v1/ai routes.
   if (within(path, '/v1/ai')) return 'ai:use';
   // Unknown operator path: still authenticate, then the /v1 fallback answers 404.
   return 'authenticated';
@@ -2113,6 +2116,8 @@ app.get('/v1/incidents', async (req, res, next) => {
 
 app.post('/v1/incidents', async (req, res, next) => {
   try {
+    const hit = idempotencyReplay(req);
+    if (hit) return res.status(201).json(hit);
     const client = capabilitiesFromRequest(req);
     const dataset = await ensureDataset(client, DATASETS.incidents);
     const body = privateInput(req);
@@ -2158,7 +2163,9 @@ app.post('/v1/incidents', async (req, res, next) => {
       await restoreIncidentInternal(req, incidentId, null);
       throw error;
     }
-    res.status(201).json(incidentView(mergeIncidentInternal(created, toInternalIncident(incident))));
+    const out = incidentView(mergeIncidentInternal(created, toInternalIncident(incident)));
+    idempotencyRemember(req, out);
+    res.status(201).json(out);
   } catch (error) { next(error); }
 });
 
@@ -2530,7 +2537,19 @@ function installGenericCrud(prefix: string, key: GenericKey, options: GenericOpt
       res.json(view(row));
     } catch (error) { next(error); }
   });
-  app.post(prefix, async (req, res, next) => { try { res.status(201).json(view(await genericWrite(req, key, genericBody(req)))); } catch (error) { next(error); } });
+  app.post(prefix, async (req, res, next) => { try {
+    // Idempotent maintenance creates (see IDEMPOTENCY_TTL_MS): retries with
+    // the same Idempotency-Key replay the stored record.
+    if (prefix === '/v1/maintenance') {
+      const hit = idempotencyReplay(req);
+      if (hit) return res.status(201).json(view(hit as Record<string, unknown>));
+      const created = await genericWrite(req, key, genericBody(req));
+      const out = view(created);
+      idempotencyRemember(req, out);
+      return res.status(201).json(out);
+    }
+    res.status(201).json(view(await genericWrite(req, key, genericBody(req))));
+  } catch (error) { next(error); } });
   app.put(`${prefix}/:id`, async (req, res, next) => {
     if (isReserved(req.params.id)) return next();
     try {
@@ -2555,7 +2574,9 @@ function installGenericCrud(prefix: string, key: GenericKey, options: GenericOpt
  */
 function maintenanceScope(req: Request, rows: Record<string, unknown>[]): Record<string, unknown>[] {
   const principal = (req as AuthedRequest).session || sessionFromRequest(req);
-  if (!principal || principal.role === 'admin' || principal.role === 'manager' || principal.role === 'volunteer') return rows;
+  // Volunteer has no maintenance:read permission (403 at the authz gate), so
+  // no volunteer branch belongs here: admin/manager see everything.
+  if (!principal || principal.role === 'admin' || principal.role === 'manager') return rows;
   const identities = new Set([principal.sub, principal.username].map((value) => String(value).toLowerCase()));
   const requested = String(req.query.assigned_to || '').toLowerCase();
   return rows.filter((row) => {
@@ -2567,7 +2588,8 @@ function maintenanceScope(req: Request, rows: Record<string, unknown>[]): Record
 
 function maintenanceRowAllowed(req: Request, row: Record<string, unknown>): boolean {
   const principal = (req as AuthedRequest).session || sessionFromRequest(req);
-  if (!principal || principal.role === 'admin' || principal.role === 'manager' || principal.role === 'volunteer') return true;
+  // No volunteer arm: volunteers lack maintenance:read and are rejected earlier.
+  if (!principal || principal.role === 'admin' || principal.role === 'manager') return true;
   const identities = new Set([principal.sub, principal.username].map((value) => String(value).toLowerCase()));
   return identities.has(String(row.assigned_to || row.technician || '').toLowerCase());
 }
@@ -2777,7 +2799,7 @@ app.get('/v1/iot/sensors/:id/readings', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 app.post('/v1/iot/sensors/:id/data', async (req, res, next) => { try { res.status(201).json(await genericWrite(req, 'sensorData', { ...genericBody(req), sensor_id: req.params.id })); } catch (error) { next(error); } });
-app.post('/v1/iot/sensors/batch-ingest', async (req, res, next) => { try { const values: Record<string, unknown>[] = Array.isArray(req.body) ? req.body : (Array.isArray(req.body?.readings) ? req.body.readings : []); res.status(201).json(await Promise.all(values.map((row) => genericWrite(req, 'sensorData', row)))); } catch (error) { next(error); } });
+app.post('/v1/iot/sensors/batch-ingest', async (req, res, next) => { try { const hit = idempotencyReplay(req); if (hit) return res.status(201).json(hit); const values: Record<string, unknown>[] = Array.isArray(req.body) ? req.body : (Array.isArray(req.body?.readings) ? req.body.readings : []); const out = await Promise.all(values.map((row) => genericWrite(req, 'sensorData', row))); idempotencyRemember(req, out); res.status(201).json(out); } catch (error) { next(error); } });
 app.get('/v1/iot/sensors/:id/status', async (req, res, next) => {
   try {
     const sensor = await genericGet(req, 'sensors', req.params.id);
@@ -2952,7 +2974,7 @@ for (const action of ['resolve', 'dismiss']) {
 installGenericCrud('/v1/budgets', 'budgets');
 for (const action of ['submit', 'approve']) app.post(`/v1/budgets/:id/${action}`, async (req, res, next) => { try { res.json(await genericUpdate(req, 'budgets', req.params.id, { status: action === 'submit' ? 'submitted' : 'approved' })); } catch (error) { next(error); } });
 app.get('/v1/budgets/:id/transactions', async (req, res, next) => { try { res.json((await genericList(req, 'transactions')).filter((row) => String(row.budget_id || '') === req.params.id)); } catch (error) { next(error); } });
-app.post('/v1/budgets/:id/transactions', async (req, res, next) => { try { res.status(201).json(await genericWrite(req, 'transactions', { ...genericBody(req), budget_id: req.params.id })); } catch (error) { next(error); } });
+app.post('/v1/budgets/:id/transactions', async (req, res, next) => { try { const hit = idempotencyReplay(req); if (hit) return res.status(201).json(hit); const out = await genericWrite(req, 'transactions', { ...genericBody(req), budget_id: req.params.id }); idempotencyRemember(req, out); res.status(201).json(out); } catch (error) { next(error); } });
 app.post('/v1/budgets/transactions/:id/approval', async (req, res, next) => {
   try {
     const transaction = await genericGet(req, 'transactions', req.params.id);
@@ -3622,6 +3644,37 @@ const publicReadRateLimit = rateLimit({
   max: Math.max(1, Number(process.env.PUBLIC_READ_RATE_LIMIT || 300)),
 });
 
+// Server-side Idempotency-Key cache (in-memory, 24h). Tier-2 has no native
+// upsert, so retried creates (operator incidents, maintenance, budget
+// transactions, iot batch, public reports) replay the stored 201 body instead
+// of duplicating records. Follow-up: Tier-2 idempotent create/upsert.
+const IDEMPOTENCY_TTL_MS = 24 * 3600 * 1000;
+const idempotencyCache = new Map<string, { body: unknown; expires: number }>();
+
+function idempotencyKeyOf(req: Request): string | null {
+  const raw = String(req.header('idempotency-key') || req.header('x-idempotency-key') || '').trim();
+  return raw && raw.length <= 256 ? raw : null;
+}
+
+function idempotencyReplay(req: Request): unknown | null {
+  const key = idempotencyKeyOf(req);
+  if (!key) return null;
+  const entry = idempotencyCache.get(key);
+  if (!entry) return null;
+  if (entry.expires <= Date.now()) { idempotencyCache.delete(key); return null; }
+  return entry.body;
+}
+
+function idempotencyRemember(req: Request, body: unknown): void {
+  const key = idempotencyKeyOf(req);
+  if (!key) return;
+  if (idempotencyCache.size >= 10_000) {
+    const oldest = idempotencyCache.keys().next();
+    if (!oldest.done) idempotencyCache.delete(oldest.value);
+  }
+  idempotencyCache.set(key, { body, expires: Date.now() + IDEMPOTENCY_TTL_MS });
+}
+
 /**
  * Server-side visibility predicate for public Tier-2 queries. Publication,
  * lifecycle and caller-supplied narrowing are all applied upstream so one
@@ -3654,9 +3707,11 @@ function publicWhere(query: Record<string, unknown>, fields: string[], excludeIn
   return { and: conditions };
 }
 
-/** Return an already-paginated Tier-2 page. `total` is the upstream total so a
- * client paging a large dataset sees the real count instead of a silently
- * truncated one. */
+/** Return an already-paginated Tier-2 page. `total` is the upstream pre-filter
+ * total; the local public-visibility redaction can only shrink a page, so the
+ * header keeps the upstream total and callers page until an empty page
+ * (a post-filter count would understate the remainder whenever redaction
+ * drops rows). */
 function sendPublicPage(res: Response, values: unknown[], total: number): void {
   res.setHeader('x-total-count', String(Math.max(total, values.length)));
   res.setHeader('x-scan-truncated', 'false');
@@ -3814,11 +3869,19 @@ app.get('/v1/public/incidents', publicReadRateLimit, async (req, res, next) => {
 app.post('/v1/public/incidents', publicReportRateLimit, async (req, res, next) => {
   try {
     if (!(await enforceTurnstile(req, res))) return;
+    const idempotencyHit = idempotencyReplay(req);
+    if (idempotencyHit) return res.status(201).json(idempotencyHit);
     const client = capabilitiesFromRequest(req);
     const dataset = await ensureDataset(client, DATASETS.incidents);
     const body = privateInput(req);
     const incidentId = randomUUID();
     const number = incidentNumber();
+    // Abuse guard: bound citizen input before any Tier-2 write (mirrors the
+    // Rust service; caps match the mobile/web forms).
+    const title = requiredString(body, 'title');
+    if (title.length > 140) return res.status(400).json({ error: 'title_too_long', detail: 'title must be at most 140 characters' });
+    const description = requiredString(body, 'description');
+    if (description.length > 2000) return res.status(400).json({ error: 'description_too_long', detail: 'description must be at most 2000 characters' });
     const photoValues: unknown[] = Array.isArray(body.photos)
       ? body.photos
       : (Array.isArray(body.file_ids) ? body.file_ids : (body.file_id ? [body.file_id] : []));
@@ -3833,8 +3896,8 @@ app.post('/v1/public/incidents', publicReportRateLimit, async (req, res, next) =
       incidentId,
       incident_number: number,
       incident_code: number,
-      title: requiredString(body, 'title'),
-      description: requiredString(body, 'description'),
+      title,
+      description,
       category: String(body.category || 'other'),
       severity: String(body.severity || 'medium'),
       status: 'reported',
@@ -3871,11 +3934,13 @@ app.post('/v1/public/incidents', publicReportRateLimit, async (req, res, next) =
     // A short-lived edit capability is returned once to the creator. It is
     // never part of the public read projection.
     const editCapability = issueReportEditToken(incidentId);
-    res.status(201).json({
+    const responseBody = {
       ...publicIncidentView({ id: incidentId, data: published }),
       edit_token: editCapability.token,
       edit_token_expires_at: editCapability.expiresAt,
-    });
+    };
+    idempotencyRemember(req, responseBody);
+    res.status(201).json(responseBody);
   } catch (error) { next(error); }
 });
 
@@ -3940,6 +4005,29 @@ const publicAiRateLimit = rateLimit({
   name: 'public-ai',
   windowMs: Math.max(1000, Number(process.env.PUBLIC_AI_RATE_WINDOW_MS || 60_000)),
   max: Math.max(1, Number(process.env.PUBLIC_AI_RATE_LIMIT || 20)),
+});
+
+// Operator-sensitive writes (budgets approve, HITL decide, users) share a
+// per-IP abuse budget in addition to session+permission checks. Tier-2 still
+// enforces its own approval/auth limits; this only bounds edge amplification.
+const operatorSensitiveRateLimit = rateLimit({
+  name: 'operator-sensitive',
+  windowMs: Math.max(1000, Number(process.env.OPERATOR_RATE_WINDOW_MS || 60_000)),
+  max: Math.max(1, Number(process.env.OPERATOR_RATE_LIMIT || 120)),
+});
+
+function isOperatorSensitive(pathname: string): boolean {
+  const path = normalizedPath(pathname);
+  return within(path, '/v1/hitl')
+    || within(path, '/v1/users')
+    || (within(path, '/v1/budgets') && path.includes('approv'))
+    || (within(path, '/v1/incidents') && path.includes('approv'))
+    || (within(path, '/v1/maintenance') && path.includes('approv'));
+}
+
+app.use('/v1', (req, res, next) => {
+  if (!isOperatorSensitive(req.originalUrl)) return next();
+  return operatorSensitiveRateLimit(req, res, next);
 });
 
 // AI is answered by the Tier-2 capability. When the deployment/provider does

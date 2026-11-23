@@ -148,7 +148,7 @@ export function scoreAssetRisk(input: {
   const recommendations: string[] = [];
   if (score >= 55) recommendations.push('Schedule an inspection within 7 days.');
   if (maintenanceRisk >= 50) recommendations.push('Create a prioritized work order for the overdue maintenance.');
-  if (sensorRisk >= 50) recommendations.push('Check the sensor reading and dispatch a technician if confirmed.');
+  if (sensorRisk >= 50) recommendations.push('Check the sensor reading and assign a technician if confirmed.');
   if (!recommendations.length) recommendations.push('Continue routine monitoring; no immediate action required.');
 
   return {

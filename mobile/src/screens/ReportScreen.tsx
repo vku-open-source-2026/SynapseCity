@@ -37,6 +37,10 @@ export function ReportScreen({ location, navigate, onBack, initialAssetCode }: R
   const [address, setAddress] = useState('');
   const [category, setCategory] = useState('damage');
   const [severity, setSeverity] = useState<Severity>('medium');
+  // TODO(mobile-turnstile): wire a native Turnstile challenge (e.g. WebView)
+  // and pass its token below; until then reports rely on the server-side
+  // Turnstile check when REQUIRE_TURNSTILE=true.
+  const [turnstileToken] = useState<string | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<PublicIncident | null>(null);
@@ -63,24 +67,29 @@ export function ReportScreen({ location, navigate, onBack, initialAssetCode }: R
     setSubmitting(true);
     setError(null);
     try {
-      const incident = await cityApi.createPublicIncident({
-        title: title.trim(),
-        description: description.trim(),
-        category,
-        severity,
-        ...(asset ? { asset_id: asset.id || asset.asset_code } : {}),
-        location: {
-          address: address.trim() || asset?.location?.address || 'Vị trí hiện tại',
-          coordinates: {
-            latitude: location.latitude,
-            longitude: location.longitude,
-          },
-          geometry: {
-            type: 'Point',
-            coordinates: [location.longitude, location.latitude],
+      const incident = await cityApi.createPublicIncident(
+        {
+          title: title.trim(),
+          description: description.trim(),
+          category,
+          severity,
+          ...(asset ? { asset_id: asset.id || asset.asset_code } : {}),
+          location: {
+            address: address.trim() || asset?.location?.address || 'Vị trí hiện tại',
+            coordinates: {
+              latitude: location.latitude,
+              longitude: location.longitude,
+            },
+            geometry: {
+              type: 'Point',
+              coordinates: [location.longitude, location.latitude],
+            },
           },
         },
-      });
+        turnstileToken ? { turnstileToken } : undefined,
+      );
+      // The response carries a one-time edit_token for photo appends
+      // (cityApi.appendPublicIncidentPhotos); keep it with the created record.
       setCreated(incident);
     } catch (submitError) {
       setError(errorMessage(submitError));

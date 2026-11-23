@@ -80,6 +80,7 @@ GET  /v1/city
 *    /v1/assets        *    /v1/incidents
 *    /v1/maintenance   *    /v1/iot
 *    /v1/preventive-maintenance
+*    /v1/files         *    /v1/hitl
 *    /v1/auth
 *    /v1/alerts        *    /v1/budgets
 *    /v1/reports       *    /v1/notifications
@@ -139,8 +140,10 @@ Tier 3 is **public presentation only** (2026-11-14 workspace contract). Keep:
 Retired work surfaces redirect to `https://synapsedx.sbs/workspace`:
 `/login`, `/register`, `/workspace/**`, `/admin/**`, `/technician/**`. They
 return `308` from `apps/console/nginx.conf` and `infra/nginx/`, and the root
-route redirects client-side. Route modules are redirect stubs/notices — never
-mount a local dashboard, login form or technician portal again.
+route redirects client-side. Retired route modules exist only as redirect
+stubs (immediate client-side redirect to the DX workspace) or static
+retirement notices — never mount a local dashboard, login form or technician
+portal again.
 Every `/v1/auth/*` path answers `410 workspace_moved`; there is no legacy
 session surface. DX owns login and sessions.
 

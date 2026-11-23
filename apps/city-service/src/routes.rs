@@ -178,6 +178,10 @@ fn operator_permission(method: &str, path: &str) -> &'static str {
         return "ingest:write";
     }
     if path.starts_with("/v1/ai") {
+        // Honest note: /v1/ai/status and /v1/ai/chat are anonymous by design
+        // (public map widget, per-IP public-ai budget) and never reach this
+        // permission check via is_anonymous(). "ai:use" only applies if a
+        // future operator-only /v1/ai route is added.
         return "ai:use";
     }
     "authenticated"
@@ -187,10 +191,11 @@ fn rate_limit(
     state: &AppState,
     name: &str,
     headers: &HeaderMap,
+    peer: Option<std::net::SocketAddr>,
     max: u32,
     window: Duration,
 ) -> Result<(), ApiError> {
-    if let Some(retry) = state.limiter.check(name, headers, window, max) {
+    if let Some(retry) = state.limiter.check(name, headers, peer, window, max) {
         return Err(ApiError::new(
             StatusCode::TOO_MANY_REQUESTS,
             "rate_limited",
@@ -201,9 +206,37 @@ fn rate_limit(
     Ok(())
 }
 
+fn is_operator_sensitive(path: &str) -> bool {
+    // At least: budgets approve, HITL decide, and the users operator surface.
+    // Cost/maintenance approvals are covered too so approval spam cannot
+    // amplify into Tier-2. This is a per-IP abuse budget, not a Tier-2
+    // replacement: Tier-2 still enforces its own approval/auth limits.
+    path.starts_with("/v1/hitl")
+        || path.starts_with("/v1/users")
+        || (path.starts_with("/v1/budgets") && path.contains("approv"))
+        || (path.starts_with("/v1/incidents") && path.contains("approv"))
+        || (path.starts_with("/v1/maintenance") && path.contains("approv"))
+}
+
+/// Server-side Idempotency-Key handling. Tier-2 has no native upsert, so a
+/// retried create (incidents, maintenance, budget transactions, iot batch)
+/// would duplicate records. When the caller sends `Idempotency-Key` (or
+/// `X-Idempotency-Key`), the first response is cached in-memory for 24h and
+/// replays return the stored body with 201 instead of creating again.
+/// Follow-up: move this to a Tier-2 idempotent create/upsert when available.
+fn idempotency_replay(ctx: &Ctx<'_>) -> Option<(String, Response)> {
+    let key = crate::state::idempotency_key(ctx.headers)?;
+    crate::state::idempotency_lookup(ctx.state, &key).map(|value| (key, web::created(value)))
+}
+
+fn idempotency_remember(ctx: &Ctx<'_>, key: &str, value: &Value) {
+    crate::state::idempotency_store(ctx.state, key, value.clone());
+}
+
 pub async fn dispatch(State(state): State<AppState>, req: Request) -> ApiResult<Response> {
     let method = method_name(req.method());
     let headers = req.headers().clone();
+    let peer = crate::state::peer_addr(&req);
     let uri = req.uri().clone();
     let path = uri.path().to_string();
     let lower_path = path.to_ascii_lowercase();
@@ -221,6 +254,7 @@ pub async fn dispatch(State(state): State<AppState>, req: Request) -> ApiResult<
             &state,
             "auth",
             &headers,
+            peer,
             state.config.auth_rate_limit,
             Duration::from_millis(state.config.auth_rate_window_ms),
         )?;
@@ -232,6 +266,7 @@ pub async fn dispatch(State(state): State<AppState>, req: Request) -> ApiResult<
                 &state,
                 "public-read",
                 &headers,
+                peer,
                 state.config.public_read_rate_limit,
                 Duration::from_secs(60),
             )?;
@@ -240,6 +275,7 @@ pub async fn dispatch(State(state): State<AppState>, req: Request) -> ApiResult<
                 &state,
                 "public-report",
                 &headers,
+                peer,
                 state.config.public_rate_limit,
                 Duration::from_millis(state.config.public_rate_window_ms),
             )?;
@@ -250,8 +286,19 @@ pub async fn dispatch(State(state): State<AppState>, req: Request) -> ApiResult<
             &state,
             "public-ai",
             &headers,
+            peer,
             state.config.public_ai_rate_limit,
             Duration::from_secs(60),
+        )?;
+    }
+    if is_operator_sensitive(&path) {
+        rate_limit(
+            &state,
+            "operator-sensitive",
+            &headers,
+            peer,
+            state.config.operator_rate_limit,
+            Duration::from_millis(state.config.operator_rate_window_ms),
         )?;
     }
 
@@ -766,11 +813,25 @@ async fn generic_get(ctx: &Ctx<'_>, key: DatasetKey, id: &str) -> ApiResult<Resp
 }
 
 async fn generic_create(ctx: &Ctx<'_>, key: DatasetKey) -> ApiResult<Response> {
+    // Idempotent maintenance creates: retries with the same Idempotency-Key
+    // replay the stored record instead of creating a duplicate work order.
+    let replay_key = (key == DatasetKey::Maintenance)
+        .then(|| crate::state::idempotency_key(ctx.headers))
+        .flatten();
+    if let Some(ref key) = replay_key {
+        if let Some(cached) = crate::state::idempotency_lookup(ctx.state, key) {
+            return Ok(web::created(cached));
+        }
+    }
     let spec = tier2::spec_for(key);
     let opts = ctx.opts();
     let input = web::private_input(ctx.body);
     let row = tier2::create(ctx.client(), &opts, spec, input, None).await?;
-    Ok(web::created(Value::Object(row)))
+    let value = Value::Object(row);
+    if let Some(key) = replay_key {
+        idempotency_remember(ctx, &key, &value);
+    }
+    Ok(web::created(value))
 }
 
 async fn generic_update(ctx: &Ctx<'_>, key: DatasetKey, id: &str) -> ApiResult<Response> {
@@ -1001,6 +1062,12 @@ fn city_metadata(ctx: &Ctx<'_>) -> Value {
         ],
         "datasets": tier2::DATASETS.iter().map(|spec| spec.id).collect::<Vec<_>>(),
         "dependency": ctx.config().tier2_url,
+        "authorization": {
+            "operatorNamespaces": "require a signed City session",
+            "anonymousNamespaces": ["/health", "/ready", "/v1/city", "/v1/auth/*", "/v1/public/*", "/v1/map/*", "/v1/ai/status", "/v1/ai/chat"],
+            "publicAiRateLimitPerMinute": ctx.config().public_ai_rate_limit,
+            "permissionMatrix": "README Authorization matrix",
+        },
         "capabilities": {
             "datasets": { "status": "available", "transport": "synapsedx" },
             "records": { "status": "available", "transport": "synapsedx" },
@@ -2732,6 +2799,10 @@ async fn incidents_list(ctx: &Ctx<'_>) -> ApiResult<Response> {
 }
 
 async fn incidents_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
+    if let Some((_, replay)) = idempotency_replay(ctx) {
+        return Ok(replay);
+    }
+    let replay_key = crate::state::idempotency_key(ctx.headers);
     let body = web::private_input(ctx.body);
     let incident_id =
         web::string_field(&body, "incidentId").unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
@@ -2839,9 +2910,14 @@ async fn incidents_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
         }
     };
     let internal = domain::incidents::to_internal_incident(&incident);
-    Ok(web::created(Value::Object(incident_view(
-        &domain::incidents::merge_incident_internal(&created, internal.as_ref()),
-    ))))
+    let value = Value::Object(incident_view(&domain::incidents::merge_incident_internal(
+        &created,
+        internal.as_ref(),
+    )));
+    if let Some(key) = replay_key {
+        idempotency_remember(ctx, &key, &value);
+    }
+    Ok(web::created(value))
 }
 
 async fn incidents_get(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
@@ -3365,9 +3441,10 @@ fn maintenance_scope(ctx: &Ctx<'_>, rows: Vec<Map<String, Value>>) -> Vec<Map<St
     let Some(principal) = ctx.principal() else {
         return Vec::new();
     };
-    if [auth::ROLE_ADMIN, auth::ROLE_MANAGER, auth::ROLE_VOLUNTEER]
-        .contains(&principal.role.as_str())
-    {
+    // Volunteer has no maintenance:read permission (403 at the authz gate), so
+    // no volunteer branch belongs here: admin/manager see everything, others
+    // only their own assignments.
+    if [auth::ROLE_ADMIN, auth::ROLE_MANAGER].contains(&principal.role.as_str()) {
         return rows;
     }
     let identities: HashSet<String> = [
@@ -3393,9 +3470,9 @@ fn maintenance_row_allowed(ctx: &Ctx<'_>, row: &Map<String, Value>) -> bool {
     let Some(principal) = ctx.principal() else {
         return false;
     };
-    if [auth::ROLE_ADMIN, auth::ROLE_MANAGER, auth::ROLE_VOLUNTEER]
-        .contains(&principal.role.as_str())
-    {
+    // No volunteer arm: volunteers lack maintenance:read and are rejected with
+    // 403 before this check.
+    if [auth::ROLE_ADMIN, auth::ROLE_MANAGER].contains(&principal.role.as_str()) {
         return true;
     }
     let identities: HashSet<String> = [
@@ -3715,6 +3792,10 @@ async fn iot_write(ctx: &Ctx<'_>, sensor_id: &str) -> ApiResult<Response> {
 }
 
 async fn iot_batch(ctx: &Ctx<'_>) -> ApiResult<Response> {
+    if let Some((_, replay)) = idempotency_replay(ctx) {
+        return Ok(replay);
+    }
+    let replay_key = crate::state::idempotency_key(ctx.headers);
     let values: Vec<Value> = ctx
         .body
         .get("readings")
@@ -3730,7 +3811,11 @@ async fn iot_batch(ctx: &Ctx<'_>) -> ApiResult<Response> {
             ));
         }
     }
-    Ok(web::created(Value::Array(created)))
+    let value = Value::Array(created);
+    if let Some(key) = replay_key {
+        idempotency_remember(ctx, &key, &value);
+    }
+    Ok(web::created(value))
 }
 
 async fn iot_status(ctx: &Ctx<'_>, sensor_id: &str) -> ApiResult<Response> {
@@ -4051,11 +4136,19 @@ async fn budget_transactions(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
 }
 
 async fn budget_transaction_create(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
+    if let Some((_, replay)) = idempotency_replay(ctx) {
+        return Ok(replay);
+    }
+    let replay_key = crate::state::idempotency_key(ctx.headers);
     let mut body = web::private_input(ctx.body);
     body.insert("budget_id".into(), json!(id));
     let opts = ctx.opts();
     let row = tier2::create(ctx.client(), &opts, tier2::TRANSACTIONS, body, None).await?;
-    Ok(web::created(Value::Object(row)))
+    let value = Value::Object(row);
+    if let Some(key) = replay_key {
+        idempotency_remember(ctx, &key, &value);
+    }
+    Ok(web::created(value))
 }
 
 async fn budget_transaction_approval(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
@@ -5696,6 +5789,9 @@ async fn public_assets(ctx: &Ctx<'_>) -> ApiResult<Response> {
     let opts = ctx.opts();
     let (rows, total) =
         tier2::query_records(ctx.client(), &opts, ASSETS, filter, limit, offset, None).await?;
+    // Local redaction (asset_is_public) can only shrink the page; x-total-count
+    // stays the upstream pre-filter total (see send_page_with_total) so
+    // clients page until an empty page instead of stopping early.
     let values: Vec<Value> = rows
         .into_iter()
         .map(|row| asset_view(&row))
@@ -5755,7 +5851,7 @@ async fn public_asset_aux(ctx: &Ctx<'_>, code: &str, kind: &str) -> ApiResult<Re
                 .unwrap_or(false)
         })
         .collect();
-    let completed: Vec<&Map<String, Value>> = orders
+    let mut completed: Vec<&Map<String, Value>> = orders
         .iter()
         .filter(|order| {
             order
@@ -5765,6 +5861,21 @@ async fn public_asset_aux(ctx: &Ctx<'_>, code: &str, kind: &str) -> ApiResult<Re
                 .unwrap_or(false)
         })
         .collect();
+    // Single sort by completion date (descending) so last_* reflects the most
+    // recent completed order, matching the TS reference server.
+    completed.sort_by(|left, right| {
+        let left = left
+            .get("completed_at")
+            .or_else(|| left.get("scheduled_date"))
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        let right = right
+            .get("completed_at")
+            .or_else(|| right.get("scheduled_date"))
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        right.cmp(left)
+    });
     Ok(web::json_response(json!({
         "asset_code": asset.get("asset_code").or_else(|| asset.get("id")),
         "work_order_count": orders.len(),
@@ -5804,6 +5915,7 @@ async fn public_incidents(ctx: &Ctx<'_>) -> ApiResult<Response> {
         .filter(|row| domain::incidents::incident_is_publicly_visible(row))
         .map(|row| Value::Object(domain::incidents::to_public_incident_view(&row)))
         .collect();
+    // x-total-count stays the upstream pre-filter total (see send_page_with_total).
     Ok(web::send_page_with_total(values, total, false, true))
 }
 
@@ -5987,10 +6099,30 @@ async fn resolve_public_report_photos(
 }
 
 async fn public_incident_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
+    if let Some((_, replay)) = idempotency_replay(ctx) {
+        return Ok(replay);
+    }
+    let replay_key = crate::state::idempotency_key(ctx.headers);
     enforce_turnstile(ctx).await?;
     let body = web::private_input(ctx.body);
     let incident_id = uuid::Uuid::new_v4().to_string();
     let number = incident_number();
+    // Abuse guard: bound citizen input before any Tier-2 write. Caps mirror
+    // the mobile/web forms (title 140, description 2000).
+    let title = web::required_string(&body, "title")?;
+    if title.chars().count() > 140 {
+        return Err(ApiError::bad_request(
+            "title_too_long",
+            "title must be at most 140 characters",
+        ));
+    }
+    let description = web::required_string(&body, "description")?;
+    if description.chars().count() > 2000 {
+        return Err(ApiError::bad_request(
+            "description_too_long",
+            "description must be at most 2000 characters",
+        ));
+    }
     let photo_values: Vec<Value> = body
         .get("photos")
         .and_then(Value::as_array)
@@ -6014,11 +6146,8 @@ async fn public_incident_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
     incident.insert("incidentId".into(), json!(incident_id));
     incident.insert("incident_number".into(), json!(number));
     incident.insert("incident_code".into(), json!(number));
-    incident.insert("title".into(), json!(web::required_string(&body, "title")?));
-    incident.insert(
-        "description".into(),
-        json!(web::required_string(&body, "description")?),
-    );
+    incident.insert("title".into(), json!(title));
+    incident.insert("description".into(), json!(description));
     incident.insert(
         "category".into(),
         json!(web::string_field(&body, "category").unwrap_or_else(|| "other".into())),
@@ -6122,7 +6251,11 @@ async fn public_incident_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
     let (edit_token, expires_at) = auth::issue_report_edit_token(ctx.config(), &incident_id);
     response.insert("edit_token".into(), json!(edit_token));
     response.insert("edit_token_expires_at".into(), json!(expires_at));
-    Ok(web::created(Value::Object(response)))
+    let value = Value::Object(response);
+    if let Some(key) = replay_key {
+        idempotency_remember(ctx, &key, &value);
+    }
+    Ok(web::created(value))
 }
 
 async fn public_incident_photos(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
@@ -6341,10 +6474,13 @@ async fn resolve_photos(
 // ---------------------------------------------------------------------------
 
 fn approver_roles(ctx: &Ctx<'_>, action: &str) -> Vec<String> {
+    // City-only approval actions. There is no EOP/dispatch vocabulary in this
+    // product; unknown actions fall back to the restrictive manager-only arm.
     match action {
-        "eop.approve" => ctx.config().eop_approver_roles.clone(),
+        "city.cost.approve" => ctx.config().cost_approver_roles.clone(),
+        "budget.transaction.approve" => ctx.config().budget_approver_roles.clone(),
         "maintenance.approve" => ctx.config().maintenance_approver_roles.clone(),
-        _ => ctx.config().dispatch_approver_roles.clone(),
+        _ => vec![auth::ROLE_MANAGER.to_string()],
     }
 }
 

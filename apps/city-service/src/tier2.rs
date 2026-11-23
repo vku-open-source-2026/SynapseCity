@@ -2,8 +2,6 @@
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 //! Tier-2 data access for the City domain service.
 
-use std::sync::Arc;
-
 use axum::http::HeaderMap;
 use chrono::Utc;
 use serde_json::{json, Map, Value};
@@ -185,6 +183,27 @@ pub const DATASETS: [DatasetSpec; 15] = [
     GEOFENCES,
     INGEST,
 ];
+
+/// Product-boundary invariant (mirrors the TS reference server startup guard
+/// in `src/server.ts`): SynapseCity may only ever touch `city-*` datasets and
+/// registers them with the `PDDL-1.0` data license. Fail fast at startup so a
+/// `sos-*` or otherwise mis-prefixed dataset can never reach Tier-2.
+pub fn validate_dataset_boundary() -> Result<(), String> {
+    if LICENSE != "PDDL-1.0" {
+        return Err(format!(
+            "SynapseCity data license must be PDDL-1.0, got {LICENSE}"
+        ));
+    }
+    for spec in DATASETS.iter() {
+        if !spec.id.starts_with("city-") {
+            return Err(format!(
+                "SynapseCity dataset must use the city- prefix: {}",
+                spec.id
+            ));
+        }
+    }
+    Ok(())
+}
 
 pub fn spec_for(key: DatasetKey) -> DatasetSpec {
     match key {
@@ -701,17 +720,6 @@ pub fn requested_version(
     }
 }
 
-pub fn client_for(
-    config: &Config,
-    headers: &HeaderMap,
-    session: Option<&SessionPrincipal>,
-) -> (Arc<Client>, RequestOptions) {
-    let client = config
-        .tier2_client()
-        .expect("Tier-2 client configuration was validated at startup");
-    (Arc::new(client), request_options(config, headers, session))
-}
-
 pub fn actor_of(session: Option<&SessionPrincipal>) -> String {
     session
         .map(|claims| claims.username.clone())
@@ -720,7 +728,10 @@ pub fn actor_of(session: Option<&SessionPrincipal>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{ensure_dataset, request_options, request_options_from, ASSETS};
+    use super::{
+        ensure_dataset, request_options, request_options_from, validate_dataset_boundary, ASSETS,
+        DATASETS, LICENSE,
+    };
     use serde_json::json;
     use synapsedx::{Client, Credentials, RecordListQuery, RequestOptions};
     use wiremock::matchers::{header, method, path, query_param};
@@ -975,6 +986,19 @@ mod tests {
             .unwrap();
         assert!(page.items.is_empty());
         assert_eq!(page.total, 0);
+    }
+
+    #[test]
+    fn dataset_boundary_guard_requires_city_prefix_and_pddl_license() {
+        assert_eq!(LICENSE, "PDDL-1.0");
+        for spec in DATASETS.iter() {
+            assert!(
+                spec.id.starts_with("city-"),
+                "SynapseCity dataset must use the city- prefix: {}",
+                spec.id
+            );
+        }
+        validate_dataset_boundary().expect("dataset boundary guard");
     }
 
     /// Read-only diagnostic. Run only with explicit dev credentials:

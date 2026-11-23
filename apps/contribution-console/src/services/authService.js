@@ -24,11 +24,6 @@ const AuthService = {
         localStorage.removeItem('refresh_token');
     },
 
-    getCurrentUser: () => {
-        const token = localStorage.getItem('access_token');
-        return token ? { username: 'admin' } : null; // Simple check
-    },
-
     isAuthenticated: () => {
         return !!localStorage.getItem('access_token');
     }

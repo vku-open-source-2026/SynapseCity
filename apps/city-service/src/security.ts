@@ -36,9 +36,11 @@ function clientKey(req: Request): string {
   const forwarded = req.header('x-forwarded-for');
   // The edge nginx appends the real peer address ($proxy_add_x_forwarded_for),
   // so the LAST entry is the trusted one; the first is client-controlled.
+  // The gateway injects the TCP peer when the header is absent, so the service
+  // keys on the caller instead of a shared bucket.
   const address = forwarded
     ? forwarded.split(',').map((part) => part.trim()).filter(Boolean).pop()
-    : req.ip;
+    : (req.header('x-real-ip')?.trim() || req.ip);
   return address || 'unknown';
 }
 

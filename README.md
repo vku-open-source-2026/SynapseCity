@@ -251,6 +251,7 @@ GET  /health, /ready
 GET  /v1/city
 *    /v1/assets          *    /v1/incidents
 *    /v1/maintenance     *    /v1/preventive-maintenance
+*    /v1/files           *    /v1/hitl
 *    /v1/iot             *    /v1/alerts
 *    /v1/budgets         *    /v1/reports
 *    /v1/notifications   *    /v1/users
@@ -295,7 +296,9 @@ operator action requires a valid session and then returns `404`.
 `/v1/users/me` requires a session but no additional permission. A technician
 only sees work orders assigned to their own principal. Anonymous surfaces are
 `/health`, `/ready`, `/metrics` (optional token), `/v1/city`, `/v1/auth/*`
-(which returns `410`), `/v1/public/*` and `/v1/map/*`.
+(which returns `410`), `/v1/public/*`, `/v1/map/*` and the anonymous assistant
+routes `/v1/ai/status` + `/v1/ai/chat` (public map widget; shared `public-ai`
+per-IP budget, default 20/min via `PUBLIC_AI_RATE_LIMIT`).
 
 `/v1/users` requires a Bearer session and never accepts, stores or returns
 password fields.
@@ -351,8 +354,20 @@ a silent fallback (`CITY_GEO_FALLBACK_VIETMAP=true` opts into one).
 
 ### Abuse controls and observability
 
-`/v1/auth/*` and anonymous reporting are rate limited (`429` with
-`Retry-After`). When `TURNSTILE_SECRET_KEY` is configured, the Turnstile token
+`/v1/auth/*`, anonymous reporting, public reads, the anonymous assistant
+and operator-sensitive writes (budgets approve, HITL decide, users) are rate
+limited (`429` with `Retry-After`): public reports default to
+40/10min, public reads to 300/min, `/v1/ai/*` to 20/min (`PUBLIC_AI_RATE_LIMIT`)
+and operator-sensitive paths to 120/min (`OPERATOR_RATE_LIMIT`). The gateway
+injects the TCP peer into `x-forwarded-for` when the header is absent, and the
+service keys limiters on the last forwarded entry (falling back to the socket
+peer, never a shared bucket).
+Retried creates for operator incidents, maintenance, budget transactions,
+IoT batch ingest and public reports may send `Idempotency-Key` (or
+`X-Idempotency-Key`); the service replays the stored `201` body for 24h
+instead of duplicating the record. Tier-2 has no native upsert, so this is a
+process-local safety net; the follow-up is a Tier-2 idempotent create/upsert.
+When `TURNSTILE_SECRET_KEY` is configured, the Turnstile token
 sent in `CF-Turnstile-Response` is verified server-side; `REQUIRE_TURNSTILE=true`
 fails closed when the secret is missing. `/health` and `/ready` report
 per-capability state (datasets/records, files, AI, notifications, identity,

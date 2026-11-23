@@ -87,6 +87,9 @@ GET  /v1/city
 *    /v1/assets
 *    /v1/incidents
 *    /v1/maintenance
+*    /v1/preventive-maintenance
+*    /v1/files
+*    /v1/hitl
 *    /v1/iot
 *    /v1/alerts
 *    /v1/budgets
@@ -129,7 +132,11 @@ Anonymous requests return `401`; a session without the permission returns
 `403`. Technicians only see their own work orders. The gateway additionally
 rejects an operator request without an `Authorization` header before proxying.
 Only `/health`, `/ready`, `/metrics` (optional token), `/v1/city`, `/v1/auth/*`,
-`/v1/public/*` and `/v1/map/*` are anonymous.
+`/v1/public/*`, `/v1/map/*` and the anonymous assistant routes
+`/v1/ai/status` + `/v1/ai/chat` are anonymous. The assistant stays anonymous
+because the public map widget calls it without operator credentials; both
+routes share the `public-ai` per-IP budget (default 20/min,
+`PUBLIC_AI_RATE_LIMIT` / `PUBLIC_AI_RATE_WINDOW_MS`).
 
 ## Dataset ownership
 

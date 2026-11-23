@@ -64,40 +64,53 @@ const getFeatureCount = (value: unknown): number | null => {
   return Array.isArray(maybeFeatures) ? maybeFeatures.length : null;
 };
 
-// API definitions for interactive testing
+// Public-only API definitions for interactive testing. The widget runs on the
+// public map without operator credentials, so it must never document or call a
+// private operator namespace (e.g. /v1/assets, /v1/iot, /v1/incidents). Only
+// the anonymous assistant route and the public projections below are listed.
 const API_DEFINITIONS: Record<string, ApiCardData> = {
-  '/v1/assets': {
-    endpoint: '/v1/assets',
-    method: 'GET',
-    description: 'Lấy danh sách tài sản (nội bộ)',
+  '/v1/ai/chat': {
+    endpoint: '/v1/ai/chat',
+    method: 'POST',
+    description: 'Hỏi trợ lý AI (công khai, giới hạn 20/phút)',
     params: [
-      { name: 'skip', type: 'number', description: 'Số bản ghi bỏ qua', default: 0, required: false },
+      { name: 'message', type: 'string', description: 'Câu hỏi cho trợ lý AI', default: '', required: true },
+    ]
+  },
+  '/v1/public/assets': {
+    endpoint: '/v1/public/assets',
+    method: 'GET',
+    description: 'Lấy danh sách tài sản công khai',
+    params: [
       { name: 'limit', type: 'number', description: 'Số bản ghi tối đa', default: 50, required: false },
+      { name: 'offset', type: 'number', description: 'Số bản ghi bỏ qua', default: 0, required: false },
       { name: 'feature_type', type: 'string', description: 'Lọc theo loại', default: '', required: false },
     ]
   },
-  '/v1/iot/sensors': {
-    endpoint: '/v1/iot/sensors',
+  '/v1/public/incidents': {
+    endpoint: '/v1/public/incidents',
     method: 'GET',
-    description: 'Lấy danh sách cảm biến IoT',
+    description: 'Lấy danh sách sự cố công khai',
     params: [
-      { name: 'skip', type: 'number', description: 'Số bản ghi bỏ qua', default: 0, required: false },
       { name: 'limit', type: 'number', description: 'Số bản ghi tối đa', default: 50, required: false },
-      { name: 'sensor_type', type: 'string', description: 'Loại cảm biến', default: '', required: false },
-      { name: 'status', type: 'string', description: 'Trạng thái (online/offline)', default: '', required: false },
-    ]
-  },
-  '/v1/incidents': {
-    endpoint: '/v1/incidents',
-    method: 'GET',
-    description: 'Lấy danh sách sự cố hạ tầng',
-    params: [
-      { name: 'skip', type: 'number', description: 'Số bản ghi bỏ qua', default: 0, required: false },
-      { name: 'limit', type: 'number', description: 'Số bản ghi tối đa', default: 50, required: false },
-      { name: 'status', type: 'string', description: 'Trạng thái (open/in_progress/resolved)', default: '', required: false },
+      { name: 'offset', type: 'number', description: 'Số bản ghi bỏ qua', default: 0, required: false },
+      { name: 'status', type: 'string', description: 'Trạng thái (reported/resolved)', default: '', required: false },
       { name: 'severity', type: 'string', description: 'Mức độ (low/medium/high/critical)', default: '', required: false },
     ]
   },
+};
+
+// Allow-list for interactive cards: public projections, the public map config
+// and the anonymous assistant route only. Anything else is refused so the
+// widget can never render a "try it" card for a private operator namespace.
+const isPublicApiEndpoint = (endpoint: string): boolean => {
+  const path = endpoint.split('?')[0];
+  return path === '/v1/ai/chat'
+    || path === '/v1/ai/status'
+    || path.startsWith('/v1/public/')
+    || path === '/v1/public/assets'
+    || path === '/v1/public/incidents'
+    || path.startsWith('/v1/map/');
 };
 
 // The assistant talks to the City service, which proxies the Tier-2
@@ -137,11 +150,20 @@ function ApiCard({ apiData, onClose, initialResult }: {
   };
 
   const callApi = async () => {
+    // Public-only tester: refuse private operator namespaces even if the
+    // assistant returns one in an api_card block.
+    if (!isPublicApiEndpoint(apiData.endpoint)) {
+      setError('Chỉ hỗ trợ thử nghiệm các API công khai (/v1/public/*, /v1/ai/chat).');
+      return;
+    }
     setIsLoading(true);
     setError(null);
     setResult(null);
 
     try {
+      // Anonymous fetch is intentional: every endpoint listed above is
+      // anonymous (public projections + anonymous assistant). No
+      // Authorization header is ever attached here.
       const url = buildUrl();
       const response = await fetch(url, {
         method: apiData.method,
@@ -316,11 +338,11 @@ interface AIChatWidgetProps {
 const welcomeFor = (status: AiStatus): string => {
   switch (status) {
     case 'ready':
-      return 'Xin chào! Tôi là trợ lý AI của SynapseCity. Bạn có thể hỏi về dữ liệu tài sản, cảm biến và sự cố hạ tầng của bạn.';
+      return 'Xin chào! Tôi là trợ lý AI của SynapseCity. Bạn có thể hỏi về tài sản công khai và sự cố công khai trên bản đồ.';
     case 'degraded':
       return 'Xin chào! Trợ lý AI đang ở chế độ suy giảm hiệu năng (upstream không ổn định). Bạn vẫn có thể thử đặt câu hỏi.';
     case 'unavailable':
-      return 'Trợ lý AI chưa khả dụng: dịch vụ suy luận chưa sẵn sàng hoặc chưa được cấu hình. Bạn vẫn có thể dùng công cụ kiểm thử API bên dưới và xem dữ liệu tài sản trực tiếp.';
+      return 'Trợ lý AI chưa khả dụng: dịch vụ suy luận chưa sẵn sàng hoặc chưa được cấu hình. Bạn vẫn có thể xem dữ liệu công khai trực tiếp trên bản đồ.';
     default:
       return 'Đang kiểm tra kết nối tới trợ lý AI…';
   }
@@ -478,7 +500,8 @@ export default function AIChatWidget({
     } : null;
 
     try {
-      // Authenticated via the shared axios client (Bearer). City proxies the
+      // Anonymous by design: the public map widget calls /v1/ai/chat without
+      // operator credentials (shared per-IP 20/min budget). City proxies the
       // Tier-2 AI capability; upstream failures surface as typed 503s.
       const response = await httpClient.post('/ai/chat', {
         message: userMessage.content,
@@ -538,19 +561,37 @@ export default function AIChatWidget({
           const lang = match[1] || 'text';
           const code = match[2].trim();
 
-          // Handle api_card special block - parse and show interactive card
+          // Handle api_card special block - parse and show interactive card.
+          // Only public endpoints are renderable; a private operator endpoint
+          // from the assistant is shown as text instead of a "try it" card.
           if (lang === 'api_card') {
             try {
               const apiCardData = JSON.parse(code) as ApiCardPayload;
               // Extract endpoint from the api_card data
               const endpoint = typeof apiCardData.endpoint === 'string' ? apiCardData.endpoint : '';
 
+              if (endpoint && !isPublicApiEndpoint(endpoint)) {
+                return (
+                  <div key={idx} className="my-2 text-xs text-slate-500">
+                    Trợ lý đề xuất API nội bộ ({endpoint}); không khả dụng trên bản đồ công khai.
+                  </div>
+                );
+              }
               // Find matching API definition or create from response
               let matchedApi = Object.values(API_DEFINITIONS).find(
                 api => endpoint.includes(api.endpoint) || api.endpoint.includes(endpoint)
               );
 
               if (!matchedApi && endpoint) {
+                // Only build dynamic cards for public endpoints; private ones
+                // were already refused above.
+                if (!isPublicApiEndpoint(endpoint)) {
+                  return (
+                    <div key={idx} className="my-2 text-xs text-slate-500">
+                      Trợ lý đề xuất API nội bộ ({endpoint}); không khả dụng trên bản đồ công khai.
+                    </div>
+                  );
+                }
                 // Create dynamic API card from response data
                 const params: ApiParam[] = [];
                 if (apiCardData.params) {
@@ -733,9 +774,8 @@ export default function AIChatWidget({
           {/* Quick API Buttons */}
           <div className="px-3 py-2 border-b border-blue-100 bg-blue-50/50 flex gap-2 overflow-x-auto">
             {[
-              { label: '📦 Tài sản', query: 'assets' },
-              { label: '📡 Cảm biến', query: 'sensors' },
-              { label: '🚨 Sự cố', query: 'incidents' },
+              { label: '📦 Tài sản công khai', query: 'public assets' },
+              { label: '🚨 Sự cố công khai', query: 'public incidents' },
             ].map(btn => (
               <button
                 key={btn.query}
@@ -794,7 +834,7 @@ export default function AIChatWidget({
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-                placeholder='Hỏi về API hoặc gõ "test api"...'
+                placeholder='Hỏi về tài sản/sự cố công khai...'
                 className="flex-1 bg-blue-50 text-slate-700 rounded-xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400 border border-blue-200 placeholder-slate-400"
                 disabled={isLoading}
               />
@@ -807,7 +847,7 @@ export default function AIChatWidget({
               </button>
             </div>
             <p className="text-xs text-slate-400 mt-2 text-center">
-              SynapseCity AI • Truy vấn dữ liệu & kiểm thử API
+              SynapseCity AI • Hỏi đáp công khai (không gọi API nội bộ)
             </p>
           </div>
         </div>

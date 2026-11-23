@@ -98,6 +98,23 @@ never granted, the widget uses the Đà Nẵng centre and says so.
 - map config/tile template;
 - City gateway returns `404 not_found` for SOS namespaces.
 
+## Public reporting (anonymous)
+
+`POST /v1/public/incidents` accepts an optional `CF-Turnstile-Response` header
+(`cityApi.createPublicIncident(input, { turnstileToken })`). The response
+carries a one-time `edit_token` (+ `edit_token_expires_at`); photo appends use
+`cityApi.uploadPublicPhoto(bytes, filename, contentType, { reportId, editToken,
+turnstileToken })` then
+`cityApi.appendPublicIncidentPhotos(incidentId, fileIds, editToken, turnstileToken)`,
+mirroring the web console (`publicApi.createAnonymousIncident` /
+`publicApi.uploadPhotos`). Photos must be City public file ids for the same
+report and cap at 10 total.
+
+> TODO(mobile-turnstile): the native app has no Turnstile widget yet, so
+> `turnstileToken` is currently `undefined`. Wire a native challenge (e.g.
+> WebView) and thread its token through `createPublicIncident` and the photo
+> flow; the server still enforces Turnstile when `REQUIRE_TURNSTILE=true`.
+
 ## Verification
 
 ```bash

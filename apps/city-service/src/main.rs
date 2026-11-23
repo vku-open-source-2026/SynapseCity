@@ -76,6 +76,12 @@ async fn main() {
 
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::from_env()?;
+    crate::tier2::validate_dataset_boundary().map_err(|detail| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("dataset boundary guard: {detail}"),
+        )
+    })?;
     let client = config.tier2_client()?;
     let state = AppState::new(config.clone(), client);
     tracing::info!(

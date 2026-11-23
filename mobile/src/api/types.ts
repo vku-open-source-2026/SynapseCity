@@ -94,6 +94,9 @@ export interface PublicIncident {
   acknowledged_at?: string;
   comments?: IncidentComment[];
   photos?: string[];
+  /** One-time capability for appending photos; never part of the public read projection. */
+  edit_token?: string;
+  edit_token_expires_at?: string;
 }
 
 export interface CreateIncidentInput {

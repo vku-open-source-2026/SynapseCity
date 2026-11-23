@@ -29,12 +29,16 @@ pub struct Config {
     pub approval_sla_minutes: u64,
     pub required_approvals: u32,
     pub maintenance_approver_roles: Vec<String>,
-    pub eop_approver_roles: Vec<String>,
-    pub dispatch_approver_roles: Vec<String>,
+    pub cost_approver_roles: Vec<String>,
+    pub budget_approver_roles: Vec<String>,
     pub public_rate_limit: u32,
     pub public_read_rate_limit: u32,
     pub public_ai_rate_limit: u32,
     pub auth_rate_limit: u32,
+    pub operator_rate_limit: u32,
+    /// Fixed-window length for the operator-sensitive limiter (budgets approve,
+    /// HITL decide, users), in milliseconds (OPERATOR_RATE_WINDOW_MS).
+    pub operator_rate_window_ms: u64,
     /// Fixed-window length for the retired-auth-namespace limiter, in
     /// milliseconds (AUTH_RATE_WINDOW_MS; default 300_000).
     pub auth_rate_window_ms: u64,
@@ -260,23 +264,20 @@ impl Config {
                 "CITY_MAINTENANCE_APPROVER_ROLES",
                 "operations-manager,asset-manager",
             ),
-            eop_approver_roles: env_list(
-                "CITY_EOP_APPROVER_ROLES",
-                "operations-manager,duty-manager",
-            ),
-            dispatch_approver_roles: env_list(
-                "CITY_DISPATCH_APPROVER_ROLES",
-                "operations-manager,duty-manager",
-            ),
+            cost_approver_roles: env_list("CITY_COST_APPROVER_ROLES", "finance,manager"),
+            budget_approver_roles: env_list("CITY_BUDGET_APPROVER_ROLES", "finance,manager"),
             public_rate_limit: env_u32("PUBLIC_RATE_LIMIT", 40),
             public_read_rate_limit: env_u32("PUBLIC_READ_RATE_LIMIT", 300),
             public_ai_rate_limit: env_u32("PUBLIC_AI_RATE_LIMIT", 20),
             auth_rate_limit: env_u32("AUTH_RATE_LIMIT", 30),
+            operator_rate_limit: env_u32("OPERATOR_RATE_LIMIT", 120),
             // The window knobs are honored by the production build (they used
             // to be documented but silently ignored): 1s..24h sanity bounds.
             auth_rate_window_ms: env_u64("AUTH_RATE_WINDOW_MS", 300_000)
                 .clamp(1_000, 86_400_000),
             public_rate_window_ms: env_u64("PUBLIC_RATE_WINDOW_MS", 600_000)
+                .clamp(1_000, 86_400_000),
+            operator_rate_window_ms: env_u64("OPERATOR_RATE_WINDOW_MS", 60_000)
                 .clamp(1_000, 86_400_000),
             require_turnstile: env_bool("REQUIRE_TURNSTILE"),
             metrics_token: env("METRICS_TOKEN").filter(|value| !value.is_empty()),
@@ -325,12 +326,14 @@ impl Config {
             approval_sla_minutes: 15,
             required_approvals: 1,
             maintenance_approver_roles: vec!["asset-manager".into()],
-            eop_approver_roles: vec!["duty-manager".into()],
-            dispatch_approver_roles: vec!["duty-manager".into()],
+            cost_approver_roles: vec!["manager".into()],
+            budget_approver_roles: vec!["manager".into()],
             public_rate_limit: 1_000,
             public_read_rate_limit: 1_000,
             public_ai_rate_limit: 1_000,
             auth_rate_limit: 1_000,
+            operator_rate_limit: 1_000,
+            operator_rate_window_ms: 60_000,
             auth_rate_window_ms: 300_000,
             public_rate_window_ms: 600_000,
             require_turnstile: false,

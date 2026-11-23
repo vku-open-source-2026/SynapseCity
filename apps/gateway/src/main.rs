@@ -6,7 +6,7 @@
 //! and SPA traffic to the console.
 
 use axum::body::Body;
-use axum::extract::{Request, State};
+use axum::extract::{ConnectInfo, Request, State};
 use axum::http::header::HeaderValue;
 use axum::http::{Method, StatusCode};
 use axum::middleware::{self, Next};
@@ -475,8 +475,30 @@ async fn proxy_to_city(
     }
     upstream_req = upstream_req.header("x-correlation-id", corr_id);
 
-    if let Some(fwd) = req.headers().get("x-forwarded-for") {
-        upstream_req = upstream_req.header("x-forwarded-for", fwd);
+    // The City rate limiter keys on the caller, not the gateway. The public
+    // edge appends the TCP peer to x-forwarded-for; if an upstream proxy has
+    // not done so (direct gateway calls, tests), inject the peer address here
+    // so the service never falls back to a shared "unknown" bucket.
+    let peer_ip = req
+        .extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .map(|info| info.0.ip().to_string());
+    match (req.headers().get("x-forwarded-for"), peer_ip) {
+        (Some(existing), Some(peer)) => {
+            let mut combined = existing.to_str().unwrap_or("").to_string();
+            if !combined.is_empty() {
+                combined.push_str(", ");
+            }
+            combined.push_str(&peer);
+            upstream_req = upstream_req.header("x-forwarded-for", combined);
+        }
+        (Some(existing), None) => {
+            upstream_req = upstream_req.header("x-forwarded-for", existing);
+        }
+        (None, Some(peer)) => {
+            upstream_req = upstream_req.header("x-forwarded-for", peer);
+        }
+        (None, None) => {}
     }
 
     let is_body_method = method != Method::GET && method != Method::HEAD;
@@ -689,7 +711,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         console_url
     );
     let listener = TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
 
     Ok(())
 }

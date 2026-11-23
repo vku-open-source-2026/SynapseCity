@@ -130,8 +130,12 @@ pub fn send_page(
 }
 
 /// Return an already paginated Tier-2 page. `total` is the upstream dataset
-/// total, so a client paging beyond the local scan window still sees the real
-/// count instead of a silently truncated one.
+/// total (pre-filter): the service applies a final local redaction pass
+/// (public visibility, lifecycle) that can only shrink a page, never grow it.
+/// `x-total-count` therefore stays the upstream total so clients paging a
+/// large dataset do not stop early; callers must page until an empty page.
+/// (Post-filter page length would understate the remaining dataset whenever
+/// redaction drops rows from a page.)
 pub fn send_page_with_total(
     items: Vec<Value>,
     total: i64,

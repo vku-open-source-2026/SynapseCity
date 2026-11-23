@@ -350,7 +350,7 @@ pub fn score_asset_risk(input: ScoreAssetRiskInput) -> AssetRiskResult {
     }
     if sensor_risk >= 50.0 {
         recommendations
-            .push("Check the sensor reading and dispatch a technician if confirmed.".to_string());
+            .push("Check the sensor reading and assign a technician if confirmed.".to_string());
     }
     if recommendations.is_empty() {
         recommendations

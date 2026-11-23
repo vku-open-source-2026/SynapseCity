@@ -55,10 +55,11 @@ apiClient.interceptors.response.use(
                 return apiClient(originalRequest);
 
             } catch (refreshError) {
-                // If refresh fails, logout user
+                // If refresh fails, logout user and send them to the DX
+                // workspace (owner of login/sessions), not a local /admin login.
                 localStorage.removeItem('access_token');
                 localStorage.removeItem('refresh_token');
-                window.location.href = '/admin'; // Redirect to login
+                window.location.href = 'https://synapsedx.sbs/workspace'; // Redirect to DX workspace login
                 return Promise.reject(refreshError);
             }
         }

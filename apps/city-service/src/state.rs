@@ -8,6 +8,9 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use axum::http::HeaderMap;
+use std::net::SocketAddr;
+
+use axum::extract::ConnectInfo;
 use synapsedx::Client;
 
 use crate::config::Config;
@@ -91,8 +94,15 @@ impl RateLimiter {
         }
     }
 
-    pub fn check(&self, name: &str, headers: &HeaderMap, window: Duration, max: u32) -> Option<u64> {
-        let key = format!("{name}:{}", client_key(headers));
+    pub fn check(
+        &self,
+        name: &str,
+        headers: &HeaderMap,
+        peer: Option<SocketAddr>,
+        window: Duration,
+        max: u32,
+    ) -> Option<u64> {
+        let key = format!("{name}:{}", client_key(headers, peer));
         let now = Instant::now();
         let mut buckets = self.buckets.lock().unwrap_or_else(|poison| poison.into_inner());
         match buckets.get_mut(&key) {
@@ -114,13 +124,40 @@ impl RateLimiter {
     }
 }
 
-pub fn client_key(headers: &HeaderMap) -> String {
+/// Per-caller key for rate limiting. The public edge (gateway + nginx) appends
+/// the TCP peer to `x-forwarded-for`, so the LAST entry is the trusted one.
+/// When the header is absent (direct service calls, tests) fall back to the
+/// socket peer address instead of lumping every caller into "unknown".
+pub fn client_key(headers: &HeaderMap, peer: Option<SocketAddr>) -> String {
     let forwarded = headers
         .get("x-forwarded-for")
         .and_then(|value| value.to_str().ok())
         .map(|value| value.rsplit(',').next().unwrap_or(value).trim().to_string())
         .filter(|value| !value.is_empty());
-    forwarded.unwrap_or_else(|| "unknown".into())
+    if let Some(address) = forwarded {
+        return address;
+    }
+    if let Some(peer) = peer {
+        return peer.ip().to_string();
+    }
+    // Last resort for in-process tests without a peer; never a production path
+    // because axum always provides the socket address.
+    if let Some(real) = headers
+        .get("x-real-ip")
+        .and_then(|value| value.to_str().ok())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        return real.to_string();
+    }
+    "unknown".into()
+}
+
+/// Extract the TCP peer address injected by `into_make_service_with_connect_info`.
+pub fn peer_addr(req: &axum::extract::Request) -> Option<SocketAddr> {
+    req.extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .map(|info| info.0)
 }
 
 #[derive(Clone)]
@@ -130,6 +167,7 @@ pub struct AppState {
     pub metrics: Arc<Metrics>,
     pub limiter: Arc<RateLimiter>,
     pub ai_status_cache: Arc<Mutex<Option<(Instant, serde_json::Value)>>>,
+    pub idempotency: Arc<Mutex<HashMap<String, (serde_json::Value, Instant)>>>,
 }
 
 impl AppState {
@@ -140,6 +178,55 @@ impl AppState {
             metrics: Arc::new(Metrics::new()),
             limiter: Arc::new(RateLimiter::new()),
             ai_status_cache: Arc::new(Mutex::new(None)),
+            idempotency: Arc::new(Mutex::new(HashMap::new())),
         }
     }
+}
+
+/// In-memory Idempotency-Key cache (24h TTL) for Tier-3 writes. Tier-2 has no
+/// native upsert, so retries of incidents/maintenance/budget/iot-batch creates
+/// would otherwise duplicate records. This is a process-local safety net, not
+/// a replacement database; follow-up is a Tier-2 idempotent create/upsert
+/// (see README "Abuse controls"). Entries expire after 24h and the map is
+/// bounded to 10k entries.
+pub const IDEMPOTENCY_TTL: Duration = Duration::from_secs(24 * 3600);
+
+pub fn idempotency_key(headers: &HeaderMap) -> Option<String> {
+    headers
+        .get("idempotency-key")
+        .or_else(|| headers.get("x-idempotency-key"))
+        .and_then(|value| value.to_str().ok())
+        .map(str::trim)
+        .filter(|value| !value.is_empty() && value.len() <= 256)
+        .map(str::to_string)
+}
+
+pub fn idempotency_lookup(state: &AppState, key: &str) -> Option<serde_json::Value> {
+    let mut cache = state
+        .idempotency
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    let now = Instant::now();
+    cache.retain(|_, (_, expires)| *expires > now);
+    cache.get(key).map(|(value, _)| value.clone())
+}
+
+pub fn idempotency_store(state: &AppState, key: &str, value: serde_json::Value) {
+    let mut cache = state
+        .idempotency
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    let now = Instant::now();
+    cache.retain(|_, (_, expires)| *expires > now);
+    if cache.len() >= 10_000 {
+        // Evict an arbitrary expired-or-oldest entry to stay bounded.
+        if let Some(oldest) = cache
+            .iter()
+            .min_by_key(|(_, (_, expires))| *expires)
+            .map(|(key, _)| key.clone())
+        {
+            cache.remove(&oldest);
+        }
+    }
+    cache.insert(key.to_string(), (value, now + IDEMPOTENCY_TTL));
 }
