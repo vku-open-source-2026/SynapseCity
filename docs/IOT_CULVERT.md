@@ -117,6 +117,11 @@ arduino-cli upload -p COMx --fqbn esp32:esp32:esp32 .\CONG_NC_001_WL_esp32_water
 Serial monitor at 115200 baud prints WiFi/MQTT state and each publish. The
 board needs 2.4 GHz WiFi; 5 GHz-only SSIDs will not associate.
 
+**This board's CP2102 only wires EN/RTS, not GPIO0/DTR**, so auto-reset does
+not enter download mode (`boot:0x13`). Hold **BOOT**, tap **RST/EN** once, then
+release **BOOT**; `scripts/flash-when-bootloader.ps1` waits for that state and
+writes the four images with esptool (`--before no-reset --after hard-reset`).
+
 Wiring (JSN-SR04T, 4-pin module): VCC 5V, GND, TRIG → GPIO12, ECHO → GPIO13.
 Mount the probe on the culvert cover pointing down; set `CULVERT_DEPTH_CM` to
 the distance from the probe face to the dry culvert floor.
