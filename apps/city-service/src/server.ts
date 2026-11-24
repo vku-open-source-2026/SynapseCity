@@ -2806,6 +2806,8 @@ app.get('/v1/iot/sensors/:id/readings', async (req, res, next) => {
 });
 app.post('/v1/iot/sensors/:id/data', async (req, res, next) => { try { res.status(201).json(await genericWrite(req, 'sensorData', { ...genericBody(req), sensor_id: req.params.id })); } catch (error) { next(error); } });
 app.post('/v1/iot/sensors/batch-ingest', async (req, res, next) => { try { const hit = idempotencyReplay(req); if (hit) return res.status(201).json(hit); const values: Record<string, unknown>[] = Array.isArray(req.body) ? req.body : (Array.isArray(req.body?.readings) ? req.body.readings : []); const out = await Promise.all(values.map((row) => genericWrite(req, 'sensorData', row))); idempotencyRemember(req, out); res.status(201).json(out); } catch (error) { next(error); } });
+// Legacy Express reference lane only. Production renders /firmware in the Rust
+// service (src/iot_firmware.rs) and exposes /v1/public/iot/firmware.
 app.post('/v1/iot/sensors/:id/firmware', async (req, res, next) => {
   try {
     const sensor = await genericGet(req, 'sensors', req.params.id);

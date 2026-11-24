@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
-// TS behavioural reference for src/iot_firmware.rs (Rust ships in production).
+// Legacy TypeScript behavioural reference. The deployed Rust service
+// (src/iot_firmware.rs) renders the MQTT + MOCK_MODE sketch and the public
+// /v1/public/iot endpoints; keep this file only for the legacy Express lane.
 
 export const MCUS = [
   { id: 'esp32', label: 'ESP32 DevKit V1 (khuyên dùng)', board: 'esp32:esp32:esp32' },
