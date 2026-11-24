@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2026 VKU.VIC
 # The CP2102 on this board only wires EN/RTS, not GPIO0/DTR, so auto-reset
-# cannot enter download mode. This watcher waits for the user to hold BOOT and
-# tap RST, then writes the four ESP32 images directly with esptool.
+# cannot enter download mode. Hold BOOT, tap RST/EN, release BOOT; this loop
+# attempts the real write (not a probe) so the first connection uploads.
 $ErrorActionPreference = 'Continue'
 $log = Join-Path $env:TEMP 'synapse-sync\bootloader-flash.log'
 New-Item -ItemType Directory -Force (Split-Path $log) | Out-Null
@@ -16,27 +16,22 @@ $bootapp = Join-Path $env:LOCALAPPDATA 'Arduino15\packages\esp32\hardware\esp32\
 foreach ($file in @($esptool,$bootloader,$partitions,$app,$bootapp)) {
     if (-not (Test-Path $file)) { Log "missing: $file"; exit 2 }
 }
-Log 'bootloader watcher started; waiting for manual BOOT+RST'
+Log 'bootloader write loop started; waiting for BOOT+RST'
 $deadline = (Get-Date).AddMinutes(30)
-$connected = $false
+$attempt = 0
 while ((Get-Date) -lt $deadline) {
-    $probe = & $esptool --port COM3 --before no-reset --after no-reset chip-id 2>&1 | Out-String
-    if ($probe -match 'Chip is') {
-        Log 'chip connected in download mode'
-        $connected = $true
-        break
-    }
-    Start-Sleep -Seconds 2
-}
-if (-not $connected) { Log 'timeout: no download-mode connection'; exit 3 }
-for ($attempt = 1; $attempt -le 3; $attempt++) {
+    $attempt += 1
     Log "write attempt $attempt"
-    & $esptool --port COM3 --before no-reset --after hard-reset write-flash -z --flash-mode keep --flash-freq keep --flash-size keep `
-        0x1000 $bootloader 0x8000 $partitions 0xe000 $bootapp 0x10000 $app *>> $log
+    $out = & $esptool --port COM3 --connect-attempts 1 --before no-reset --after hard-reset write-flash -z `
+        --flash-mode keep --flash-freq keep --flash-size keep `
+        0x1000 $bootloader 0x8000 $partitions 0xe000 $bootapp 0x10000 $app 2>&1 | Out-String
     $code = $LASTEXITCODE
+    if ($out -match 'Chip is') {
+        Log (($out -split "`n" | Select-String -Pattern 'Chip is|Wrote |Hash of data verified|Hard resetting' | ForEach-Object { $_.Line.Trim() }) -join ' | ')
+    }
     Log "write exit=$code"
     if ($code -eq 0) { Log 'UPLOAD_OK'; exit 0 }
     Start-Sleep -Seconds 2
 }
-Log 'UPLOAD_FAILED'
-exit 1
+Log 'UPLOAD_TIMEOUT'
+exit 3
