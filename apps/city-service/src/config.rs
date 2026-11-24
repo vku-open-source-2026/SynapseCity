@@ -47,6 +47,9 @@ pub struct Config {
     pub public_rate_window_ms: u64,
     pub require_turnstile: bool,
     pub metrics_token: Option<String>,
+    /// Opt-in public telemetry allowlist (record ids). Empty means the public
+    /// IoT live endpoints return no data. Only these sensors are projected.
+    pub public_iot_sensors: Vec<String>,
 }
 
 fn env(name: &str) -> Option<String> {
@@ -281,6 +284,7 @@ impl Config {
                 .clamp(1_000, 86_400_000),
             require_turnstile: env_bool("REQUIRE_TURNSTILE"),
             metrics_token: env("METRICS_TOKEN").filter(|value| !value.is_empty()),
+            public_iot_sensors: env_list("PUBLIC_IOT_SENSORS", ""),
         })
     }
 
@@ -338,6 +342,7 @@ impl Config {
             public_rate_window_ms: 600_000,
             require_turnstile: false,
             metrics_token: None,
+            public_iot_sensors: Vec::new(),
         }
     }
 }

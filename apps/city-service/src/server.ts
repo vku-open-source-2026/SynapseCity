@@ -2768,6 +2768,12 @@ function sensorStatus(sensor: Record<string, unknown>, latestReading?: Record<st
 
 installGenericCrud('/v1/iot/sensors', 'sensors');
 app.delete('/v1/iot/sensors/:id', async (req, res, next) => { try { await genericUpdate(req, 'sensors', req.params.id, { status: 'inactive', deleted_at: new Date().toISOString() }); res.status(204).end(); } catch (error) { next(error); } });
+app.get('/v1/iot/catalog', async (_req, res, next) => {
+  try {
+    const { catalogJson } = await import('./iot-catalog');
+    res.json(catalogJson());
+  } catch (error) { next(error); }
+});
 
 app.get('/v1/iot/sensors/:id/data', async (req, res, next) => {
   try {
@@ -2800,6 +2806,36 @@ app.get('/v1/iot/sensors/:id/readings', async (req, res, next) => {
 });
 app.post('/v1/iot/sensors/:id/data', async (req, res, next) => { try { res.status(201).json(await genericWrite(req, 'sensorData', { ...genericBody(req), sensor_id: req.params.id })); } catch (error) { next(error); } });
 app.post('/v1/iot/sensors/batch-ingest', async (req, res, next) => { try { const hit = idempotencyReplay(req); if (hit) return res.status(201).json(hit); const values: Record<string, unknown>[] = Array.isArray(req.body) ? req.body : (Array.isArray(req.body?.readings) ? req.body.readings : []); const out = await Promise.all(values.map((row) => genericWrite(req, 'sensorData', row))); idempotencyRemember(req, out); res.status(201).json(out); } catch (error) { next(error); } });
+app.post('/v1/iot/sensors/:id/firmware', async (req, res, next) => {
+  try {
+    const sensor = await genericGet(req, 'sensors', req.params.id);
+    const { firmwareIno } = await import('./iot-catalog');
+    const body = (req.body || {}) as Record<string, unknown>;
+    const apiKey = String(body.api_key || '').trim();
+    if (!apiKey) return res.status(400).json({ error: { code: 'api_key_required', message: 'paste a device-scoped X-API-Key into api_key' } });
+    const out = firmwareIno(sensor, {
+      mcu: String(body.mcu || 'esp32'), sensor: String(body.sensor || sensor.sensor_type || 'water_level_jsn'),
+      wifiSsid: String(body.wifi_ssid || 'CitySensorAP'), wifiPass: String(body.wifi_pass || ''),
+      baseUrl: String(body.base_url || 'https://synapsecity.sbs'), apiKey,
+      intervalSeconds: Number(body.interval_seconds || 60),
+    });
+    res.json({ sensor_id: req.params.id, ...out, warning: 'API key embedded in firmware; use device-scoped key.' });
+  } catch (error) { next(error); }
+});
+app.post('/v1/iot/sensors/:id/mock', async (req, res, next) => {
+  try {
+    const count = Math.min(Math.max(Number((req.body || {}).count || 24), 1), 200);
+    const min = Number((req.body || {}).min ?? 50); const max = Number((req.body || {}).max ?? 250);
+    const lo = Math.min(min, max); const hi = Math.max(min, max);
+    const out: Array<Record<string, unknown>> = [];
+    for (let i = 0; i < count; i += 1) {
+      const phase = (i / count) * Math.PI * 2; const wave = (Math.sin(phase) * 0.5 + 0.5);
+      const value = Math.round((lo + (hi - lo) * wave) * 100) / 100;
+      out.push(await genericWrite(req, 'sensorData', { sensor_id: req.params.id, value, timestamp: new Date(Date.now() - ((count - 1 - i) * 300_000)).toISOString(), metadata: { source: 'mock' } }));
+    }
+    res.status(201).json({ sensor_id: req.params.id, ingested: out.length, readings: out });
+  } catch (error) { next(error); }
+});
 app.get('/v1/iot/sensors/:id/status', async (req, res, next) => {
   try {
     const sensor = await genericGet(req, 'sensors', req.params.id);

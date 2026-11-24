@@ -55,6 +55,59 @@ services:
       synapsecity:
         aliases: [synapsecity-console]
 
+  # IoT edge: MQTT broker for ESP32 devices + stateless bridge.
+  # Devices: mosquitto_pub -h <host> -t city/sensors/<id>/data -m '{"value":12.3}'
+  # Bridge forwards via public Tier-2 telemetry ingest -> Tier-1 Stream.
+  mqtt:
+    image: eclipse-mosquitto:2.0
+    restart: unless-stopped
+    volumes:
+      - ./infra/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    expose: ["1883"]
+    ports:
+      # ESP32 ngoài mạng publish vào đây; override bằng MQTT_HOST_PORT
+      # vd: MQTT_HOST_PORT=0.0.0.0:1883 (public) hoặc 127.0.0.1:1883 (loopback).
+      - "${MQTT_HOST_PORT:-0.0.0.0:1883}:1883"
+    networks: [synapsecity]
+  iot-bridge:
+    image: ghcr.io/${SYNAPSECITY_IMAGE_OWNER:-vku-open-source-2026}/synapsecity-iot-bridge:${SYNAPSECITY_VERSION:-latest}
+    build:
+      context: ./apps/iot-bridge
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      MQTT_URL: mqtt://mqtt:1883
+      MQTT_TOPIC: city/sensors/+/data
+      SYNAPSEDX_BASE_URL: https://synapsedx.sbs
+      SYNAPSEDX_API_KEY: ${SYNAPSEDX_API_KEY:-}
+      SYNAPSEDX_TOKEN: ${SYNAPSEDX_TOKEN:-}
+      TELEMETRY_DATASET: city-iot-readings
+      SENSOR_DATASET: city-iot-sensors
+      UPDATE_SENSORS: ${IOT_BRIDGE_UPDATE_SENSORS:-true}
+    depends_on: [mqtt]
+    networks: [synapsecity]
+
+  # Virtual ESP32: keeps the culvert dashboard live when no board is attached.
+  # Disable with IOT_MOCK_ENABLED=false (compose profile "mock" is enabled by
+  # default for the production demo).
+  iot-mock:
+    image: ghcr.io/${SYNAPSECITY_IMAGE_OWNER:-vku-open-source-2026}/synapsecity-iot-mock:${SYNAPSECITY_VERSION:-latest}
+    build:
+      context: ./apps/iot-mock
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      MQTT_URL: mqtt://mqtt:1883
+      MOCK_SENSOR_ID: ${MOCK_SENSOR_ID:-cong-nc-001-wl}
+      MOCK_SENSOR_CODE: ${MOCK_SENSOR_CODE:-CONG-NC-001-WL}
+      MOCK_TOPIC: ${MOCK_TOPIC:-}
+      MOCK_INTERVAL_MS: ${MOCK_INTERVAL_MS:-15000}
+      MOCK_MODE: ${MOCK_MODE:-culvert}
+      MOCK_DEPTH_CM: ${MOCK_DEPTH_CM:-220}
+    depends_on: [mqtt]
+    networks: [synapsecity]
+
+
   # Contribution portal (contribution.synapsecity.sbs). Migrated from the
   # OpenInfra reference implementation; OpenInfra is not a deployment source.
   contribution-service:

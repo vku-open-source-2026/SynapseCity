@@ -1,0 +1,14 @@
+{
+  "name": "@synapsecity/iot-mock",
+  "version": "1.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "description": "Virtual ESP32 publisher for the SynapseCity water-culvert demo",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "mqtt": "^5.10.1"
+  }
+}

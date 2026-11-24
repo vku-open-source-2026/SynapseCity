@@ -491,6 +491,7 @@ pub async fn dispatch(State(state): State<AppState>, req: Request) -> ApiResult<
         }
         ("GET", ["v1", "iot", "sensors"]) => generic_list(&ctx, DatasetKey::Sensors).await,
         ("POST", ["v1", "iot", "sensors"]) => generic_create(&ctx, DatasetKey::Sensors).await,
+        ("GET", ["v1", "iot", "catalog"]) => Ok(web::json_response(crate::iot_firmware::catalog_json())),
         ("GET", ["v1", "iot", "sensors", id]) => generic_get(&ctx, DatasetKey::Sensors, id).await,
         ("PUT", ["v1", "iot", "sensors", id]) => {
             generic_update(&ctx, DatasetKey::Sensors, id).await
@@ -502,6 +503,8 @@ pub async fn dispatch(State(state): State<AppState>, req: Request) -> ApiResult<
         ("POST", ["v1", "iot", "sensors", "batch-ingest"]) => iot_batch(&ctx).await,
         ("GET", ["v1", "iot", "sensors", id, "status"]) => iot_status(&ctx, id).await,
         ("GET", ["v1", "iot", "sensors", id, "statistics"]) => iot_statistics(&ctx, id).await,
+        ("POST", ["v1", "iot", "sensors", id, "firmware"]) => iot_firmware(&ctx, id).await,
+        ("POST", ["v1", "iot", "sensors", id, "mock"]) => iot_mock(&ctx, id).await,
         ("GET", ["v1", "iot", "assets", asset_id, "iot-data"]) => iot_asset(&ctx, asset_id).await,
         ("GET", ["v1", "alerts"]) => generic_list(&ctx, DatasetKey::Alerts).await,
         ("POST", ["v1", "alerts"]) => alerts_create(&ctx).await,
@@ -571,6 +574,12 @@ pub async fn dispatch(State(state): State<AppState>, req: Request) -> ApiResult<
         ("POST", ["v1", "geo", "coverage"]) => geo_coverage(&ctx).await,
         ("POST", ["v1", "ingest", "csv"]) => ingest_csv(&ctx).await,
         ("GET", ["v1", "public", "files", id, "content"]) => files_content(&ctx, id, true).await,
+        ("GET", ["v1", "public", "iot", "catalog"]) => {
+            Ok(web::json_response(crate::iot_firmware::catalog_json()))
+        }
+        ("POST", ["v1", "public", "iot", "firmware"]) => iot_public_firmware(&ctx).await,
+        ("GET", ["v1", "public", "iot", "sensors"]) => public_iot_sensor_list(&ctx).await,
+        ("GET", ["v1", "public", "iot", "readings"]) => public_iot_readings(&ctx).await,
         ("GET", ["v1", "public", "assets"]) => public_assets(&ctx).await,
         ("GET", ["v1", "public", "assets", code, "qr-code"]) => {
             public_asset_aux(&ctx, code, "qr").await
@@ -3842,6 +3851,352 @@ async fn iot_status(ctx: &Ctx<'_>, sensor_id: &str) -> ApiResult<Response> {
             .unwrap_or(Value::Null),
     );
     Ok(web::json_response(Value::Object(view)))
+}
+
+struct FirmwareOptions {
+    mcu: String,
+    sensor_kind: String,
+    wifi_ssid: String,
+    wifi_pass: String,
+    mqtt_host: String,
+    mqtt_port: u16,
+    interval: u64,
+    mock_fallback: bool,
+    culvert_depth_cm: f64,
+}
+
+fn body_string(body: &Map<String, Value>, key: &str, fallback: &str) -> String {
+    body.get(key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(fallback)
+        .to_string()
+}
+
+fn firmware_options(body: &Map<String, Value>, default_sensor: &str) -> ApiResult<FirmwareOptions> {
+    let mcu = body_string(body, "mcu", "esp32");
+    if !crate::iot_firmware::MCUS.iter().any(|m| m.id == mcu) {
+        return Err(ApiError::bad_request(
+            "invalid_mcu",
+            "mcu must be one of esp32|esp32-s3|esp32-c3|esp8266",
+        ));
+    }
+    let requested = body_string(body, "sensor", "");
+    let sensor_kind = if requested.is_empty() {
+        body_string(body, "sensor_type", default_sensor)
+    } else {
+        requested
+    };
+    if !crate::iot_firmware::SENSORS.iter().any(|s| s.id == sensor_kind) {
+        return Err(ApiError::bad_request(
+            "invalid_sensor",
+            "unknown sensor id; see GET /v1/public/iot/catalog",
+        ));
+    }
+    let wifi_ssid = body_string(body, "wifi_ssid", "CitySensorAP");
+    let wifi_pass = body
+        .get("wifi_pass")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+    if wifi_ssid.len() > 64 || wifi_pass.len() > 64 {
+        return Err(ApiError::bad_request(
+            "invalid_wifi",
+            "wifi_ssid/wifi_pass max 64 chars",
+        ));
+    }
+    // MQTT is the device path: the public broker fans out through iot-bridge to
+    // Tier-2 telemetry. No service key is ever embedded in firmware.
+    let mqtt_host = body_string(body, "mqtt_host", "synapsecity.sbs");
+    if mqtt_host.len() > 128
+        || !mqtt_host
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
+    {
+        return Err(ApiError::bad_request(
+            "invalid_mqtt_host",
+            "mqtt_host must be a hostname or IP address (no scheme, path or port)",
+        ));
+    }
+    let mqtt_port = body
+        .get("mqtt_port")
+        .and_then(Value::as_u64)
+        .unwrap_or(1883);
+    if !(1..=65535).contains(&mqtt_port) {
+        return Err(ApiError::bad_request(
+            "invalid_mqtt_port",
+            "mqtt_port must be 1..65535",
+        ));
+    }
+    let interval = body
+        .get("interval_seconds")
+        .and_then(Value::as_u64)
+        .unwrap_or(30)
+        .clamp(5, 3600);
+    let mock_fallback = body
+        .get("mock_fallback")
+        .and_then(Value::as_bool)
+        .unwrap_or(true);
+    let culvert_depth_cm = body
+        .get("culvert_depth_cm")
+        .and_then(Value::as_f64)
+        .unwrap_or(220.0)
+        .clamp(20.0, 1000.0);
+    Ok(FirmwareOptions {
+        mcu,
+        sensor_kind,
+        wifi_ssid,
+        wifi_pass,
+        mqtt_host,
+        mqtt_port: mqtt_port as u16,
+        interval,
+        mock_fallback,
+        culvert_depth_cm,
+    })
+}
+
+fn firmware_response(
+    sensor_id: &str,
+    sensor_code: &str,
+    sensor: &Map<String, Value>,
+    opts: FirmwareOptions,
+    catalog_path: &str,
+) -> Value {
+    let (filename, code) = crate::iot_firmware::firmware_ino(
+        sensor_id,
+        sensor_code,
+        sensor,
+        &opts.mcu,
+        &opts.sensor_kind,
+        &opts.wifi_ssid,
+        &opts.wifi_pass,
+        &opts.mqtt_host,
+        opts.mqtt_port,
+        opts.interval,
+        opts.mock_fallback,
+        opts.culvert_depth_cm,
+    );
+    let asset_type = sensor
+        .get("feature_type")
+        .and_then(Value::as_str)
+        .unwrap_or("infrastructure")
+        .to_string();
+    let suggestions: Vec<Value> = crate::iot_firmware::suggest_for_asset(&asset_type, &opts.sensor_kind)
+        .iter()
+        .map(|s| json!({"id": s.id, "label": s.label, "unit": s.unit}))
+        .collect();
+    json!({
+        "sensor_id": sensor_id,
+        "sensor_code": sensor_code,
+        "filename": filename,
+        "language": "arduino",
+        "mcu": opts.mcu,
+        "sensor": opts.sensor_kind,
+        "interval_seconds": opts.interval,
+        "code": code,
+        "catalog": catalog_path,
+        "suggestions": suggestions,
+        "mqtt": {
+            "host": opts.mqtt_host,
+            "port": opts.mqtt_port,
+            "topic": format!("city/sensors/{sensor_id}/data"),
+            "note": "iot-bridge forwards MQTT -> Tier-2 telemetry ingest -> Tier-1 Stream",
+        },
+        "mock_mode": opts.mock_fallback,
+        "warning": "Firmware chứa WiFi password do bạn nhập. Không commit file .ino hoặc chia sẻ công khai.",
+    })
+}
+
+async fn iot_firmware(ctx: &Ctx<'_>, sensor_id: &str) -> ApiResult<Response> {
+    let opts = ctx.opts();
+    let sensor = tier2::get(ctx.client(), &opts, tier2::SENSORS, sensor_id).await?;
+    let default_sensor = sensor
+        .get("sensor_type")
+        .and_then(Value::as_str)
+        .unwrap_or("water_level_jsn");
+    let firmware = firmware_options(ctx.body, default_sensor)?;
+    let sensor_code = sensor
+        .get("sensor_code")
+        .and_then(Value::as_str)
+        .unwrap_or(sensor_id);
+    Ok(web::json_response(firmware_response(
+        sensor_id,
+        sensor_code,
+        &sensor,
+        firmware,
+        "/v1/public/iot/catalog",
+    )))
+}
+
+/// Public, data-free firmware renderer for the IoT lab.
+///
+/// It never reads a dataset or a session: the caller supplies the sensor id,
+/// sensor code and sensor type, and receives a deterministic Arduino sketch.
+/// WiFi/MQTT values are echoed back into the sketch, never stored.
+async fn iot_public_firmware(ctx: &Ctx<'_>) -> ApiResult<Response> {
+    let body = ctx.body;
+    let sensor_id = body_string(body, "sensor_id", "sensor-demo");
+    if sensor_id.len() > 128
+        || !sensor_id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | ':' | '@' | '+'))
+    {
+        return Err(ApiError::bad_request(
+            "invalid_sensor_id",
+            "sensor_id must match [A-Za-z0-9_.:@+-]{1,128}",
+        ));
+    }
+    let sensor_code = body_string(body, "sensor_code", &sensor_id);
+    if sensor_code.len() > 128
+        || !sensor_code
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+    {
+        return Err(ApiError::bad_request(
+            "invalid_sensor_code",
+            "sensor_code must match [A-Za-z0-9_.-]{1,128}",
+        ));
+    }
+    let firmware = firmware_options(body, "water_level_jsn")?;
+    let mut sensor = Map::new();
+    if let Some(asset_id) = body.get("asset_id").and_then(Value::as_str).map(str::trim).filter(|v| !v.is_empty()) {
+        if asset_id.len() <= 128
+            && asset_id
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+        {
+            sensor.insert("asset_id".into(), json!(asset_id));
+        }
+    }
+    Ok(web::json_response(firmware_response(
+        &sensor_id,
+        &sensor_code,
+        &sensor,
+        firmware,
+        "/v1/public/iot/catalog",
+    )))
+}
+
+fn public_iot_sensor_view(row: &Map<String, Value>) -> Value {
+    let value = |key: &str| row.get(key).cloned().unwrap_or(Value::Null);
+    json!({
+        "id": value("id"),
+        "sensor_code": value("sensor_code"),
+        "sensor_type": value("sensor_type"),
+        "status": value("status"),
+        "measurement_unit": value("measurement_unit"),
+        "asset_id": value("asset_id"),
+        "last_reading": value("last_reading"),
+        "last_seen": value("last_seen"),
+        "last_reading_at": value("last_reading_at"),
+        "thresholds": value("thresholds"),
+        "location": value("location"),
+    })
+}
+
+/// Public projection limited to `PUBLIC_IOT_SENSORS` (curated open-data feed).
+async fn public_iot_sensor_list(ctx: &Ctx<'_>) -> ApiResult<Response> {
+    let allowed = ctx.config().public_iot_sensors.clone();
+    if allowed.is_empty() {
+        return Ok(web::json_response(json!({"items": [], "total": 0})));
+    }
+    let opts = ctx.opts();
+    let mut items = Vec::new();
+    for sensor_id in &allowed {
+        if let Ok(row) = tier2::get(ctx.client(), &opts, tier2::SENSORS, sensor_id).await {
+            items.push(public_iot_sensor_view(&row));
+        }
+    }
+    Ok(web::json_response(json!({"items": items, "total": items.len()})))
+}
+
+async fn public_iot_readings(ctx: &Ctx<'_>) -> ApiResult<Response> {
+    let allowed = ctx.config().public_iot_sensors.clone();
+    let sensor_id = ctx
+        .query
+        .get("sensor_id")
+        .map(|value| value.trim().to_string())
+        .unwrap_or_default();
+    if sensor_id.is_empty() || !allowed.contains(&sensor_id) {
+        return Err(ApiError::not_found(
+            "sensor_not_public",
+            "this sensor is not in the public telemetry allowlist",
+        ));
+    }
+    let limit = ctx
+        .query
+        .get("limit")
+        .and_then(|value| value.parse::<i64>().ok())
+        .unwrap_or(60)
+        .clamp(1, 200);
+    let hours = ctx
+        .query
+        .get("hours")
+        .and_then(|value| value.parse::<i64>().ok())
+        .unwrap_or(24)
+        .clamp(1, 24 * 30);
+    let since =
+        (Utc::now() - chrono::Duration::hours(hours)).to_rfc3339_opts(SecondsFormat::Millis, true);
+    let opts = ctx.opts();
+    let filter = json!({ "sensor_id": sensor_id, "timestamp": { "gte": since } });
+    let (rows, total) = tier2::query_records(
+        ctx.client(),
+        &opts,
+        tier2::SENSOR_DATA,
+        filter,
+        limit,
+        0,
+        Some("timestamp:desc".into()),
+    )
+    .await?;
+    let readings: Vec<Value> = rows
+        .iter()
+        .map(|row| {
+            json!({
+                "id": row.get("id").cloned().unwrap_or(Value::Null),
+                "sensor_id": row.get("sensor_id").cloned().unwrap_or(Value::Null),
+                "value": row.get("value").cloned().unwrap_or(Value::Null),
+                "timestamp": row.get("timestamp").cloned().unwrap_or(Value::Null),
+                "source": row.get("metadata").and_then(|m| m.get("source")).cloned().unwrap_or(Value::Null),
+            })
+        })
+        .collect();
+    Ok(web::json_response(json!({
+        "sensor_id": sensor_id,
+        "items": readings,
+        "total": total,
+        "hours": hours,
+        "generated_at": Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),
+    })))
+}
+
+async fn iot_mock(ctx: &Ctx<'_>, sensor_id: &str) -> ApiResult<Response> {
+    let opts = ctx.opts();
+    let sensor = tier2::get(ctx.client(), &opts, tier2::SENSORS, sensor_id).await?;
+    let count = ctx.body.get("count").and_then(Value::as_u64).unwrap_or(24).clamp(1, 200) as usize;
+    let min = ctx.body.get("min").and_then(Value::as_f64).unwrap_or(50.0);
+    let max = ctx.body.get("max").and_then(Value::as_f64).unwrap_or(250.0);
+    let (lo, hi) = if min <= max { (min, max) } else { (max, min) };
+    let interval_secs = ctx.body.get("interval_seconds").and_then(Value::as_u64).unwrap_or(300).clamp(10, 86400);
+    let now = Utc::now();
+    let mut created = Vec::with_capacity(count);
+    for i in 0..count {
+        // sine + pseudo-noise để chart demo đẹp, vẫn nằm trong [lo,hi].
+        let phase = (i as f64 / count as f64) * std::f64::consts::TAU;
+        let wave = (phase.sin() * 0.5 + 0.5).clamp(0.0, 1.0);
+        let noise = ((((i as u64).wrapping_mul(2654435761)) % 1000) as f64 / 1000.0 - 0.5) * 0.15;
+        let value = ((lo + (hi - lo) * (wave + noise).clamp(0.0, 1.0)) * 100.0).round() / 100.0;
+        let ts = (now - chrono::Duration::seconds((count - 1 - i) as i64 * interval_secs as i64)).to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+        let mut data = Map::new();
+        data.insert("sensor_id".into(), json!(sensor_id));
+        data.insert("value".into(), json!(value));
+        data.insert("timestamp".into(), json!(ts));
+        data.insert("metadata".into(), json!({"source": "mock", "sensor_code": sensor.get("sensor_code")}));
+        let row = tier2::create(ctx.client(), &opts, tier2::SENSOR_DATA, data, None).await?;
+        created.push(Value::Object(row));
+    }
+    Ok(web::created(json!({"sensor_id": sensor_id, "ingested": created.len(), "readings": created})))
 }
 
 async fn iot_statistics(ctx: &Ctx<'_>, sensor_id: &str) -> ApiResult<Response> {

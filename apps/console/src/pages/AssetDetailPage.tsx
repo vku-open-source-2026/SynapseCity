@@ -240,6 +240,18 @@ const AssetDetailPage: React.FC = () => {
                                         </div>
                                     )}
                                 </div>
+                                {(asset.feature_type === "drain" ||
+                                    /cống|culvert|drain/i.test(
+                                        `${asset.category || ""} ${asset.name || ""}`
+                                    )) && (
+                                    <a
+                                        href="/iot"
+                                        className="mt-4 inline-flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700"
+                                    >
+                                        <Activity size={16} />
+                                        Xem mực nước trực tiếp
+                                    </a>
+                                )}
                             </div>
                             {coordinates && (
                                 <Button

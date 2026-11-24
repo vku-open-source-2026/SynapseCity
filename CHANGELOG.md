@@ -6,6 +6,14 @@ Keep a Changelog format and version tags use Semantic Versioning.
 ## [Unreleased]
 
 ### Added
+- ESP32 water-culvert demo: `city-iot-sensors`/`city-iot-readings` records for
+  `cong-nc-001-wl`, an MQTT `iot-bridge` that refreshes sensor last-read state
+  through a CAS PATCH, a virtual ESP32 (`apps/iot-mock`) with storm surges, and
+  a public IoT Lab at `/iot` with a live chart and the `.ino` generator.
+  Firmware now publishes MQTT (no service key) with NTP timestamps, reconnect
+  logic and `MOCK_MODE`; `GET/POST /v1/public/iot/{catalog,firmware}` are
+  stateless, and `GET /v1/public/iot/{sensors,readings}` are gated by the
+  `PUBLIC_IOT_SENSORS` allowlist. See `docs/IOT_CULVERT.md`.
 - City nearby/bounds/polygon endpoints call the Tier-2 PostGIS spatial
   capability first and fall back to the bounded in-process scan only when the
   capability is unavailable.

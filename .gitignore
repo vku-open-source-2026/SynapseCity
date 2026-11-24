@@ -6,3 +6,6 @@ node_modules/
 *.log
 .tanstack/
 .notes/
+
+# Generated ESP32 sketches contain the WiFi password
+firmware/

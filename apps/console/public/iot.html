@@ -1,0 +1,458 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- SPDX-FileCopyrightText: 2026 VKU.VIC -->
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SynapseCity · IoT Lab · Cống nước thông minh</title>
+  <meta name="description" content="Giám sát mực nước cống thoát nước bằng ESP32, MQTT và SynapseCity IoT." />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <style>
+    :root {
+      --blue: #1d4ed8;
+      --blue-2: #2563eb;
+      --ink: #0f172a;
+      --muted: #64748b;
+      --line: #e2e8f0;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --ok: #059669;
+      --warn: #d97706;
+      --bad: #dc2626;
+      --radius: 18px;
+      color-scheme: light;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 15px/1.55 Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(1100px 500px at 100% -10%, #dbeafe 0%, transparent 60%),
+        radial-gradient(900px 420px at -10% 10%, #e0f2fe 0%, transparent 55%),
+        var(--bg);
+    }
+    a { color: var(--blue); }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 72px; }
+    header.top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 0 22px; }
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: 800; letter-spacing: -0.02em; font-size: 20px; }
+    .brand-mark { width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(135deg, #1d4ed8, #0ea5e9); display: grid; place-items: center; color: #fff; font-size: 17px; }
+    .brand small { display: block; font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+    nav a { font-size: 14px; text-decoration: none; margin-left: 18px; color: #334155; font-weight: 600; }
+    nav a:hover { color: var(--blue); }
+    .hero { display: grid; grid-template-columns: 1.55fr 1fr; gap: 20px; align-items: stretch; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 1px 2px rgba(15,23,42,.04), 0 12px 30px -18px rgba(15,23,42,.25); }
+    .hero-main { padding: 26px 26px 22px; position: relative; overflow: hidden; }
+    .hero-main::after { content: ""; position: absolute; inset: auto -60px -80px auto; width: 260px; height: 260px; border-radius: 50%; background: radial-gradient(circle, rgba(37,99,235,.15), transparent 65%); }
+    .eyebrow { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--blue); font-weight: 800; }
+    h1 { margin: 8px 0 10px; font-size: clamp(26px, 3.5vw, 38px); line-height: 1.12; letter-spacing: -.03em; }
+    .lede { color: #475569; max-width: 62ch; margin: 0 0 18px; }
+    .pills { display: flex; flex-wrap: wrap; gap: 8px; }
+    .pill { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 6px 11px; font-size: 12px; font-weight: 650; color: #334155; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+    .dot.ok { background: var(--ok); box-shadow: 0 0 0 4px rgba(5,150,105,.14); }
+    .dot.warn { background: var(--warn); box-shadow: 0 0 0 4px rgba(217,119,6,.14); }
+    .dot.bad { background: var(--bad); box-shadow: 0 0 0 4px rgba(220,38,38,.14); }
+    .hero-side { padding: 22px; display: flex; flex-direction: column; justify-content: space-between; gap: 16px; }
+    .gauge-label { font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); font-weight: 750; }
+    .gauge-value { font-size: 56px; font-weight: 850; letter-spacing: -.05em; line-height: 1; margin: 6px 0 2px; }
+    .gauge-value small { font-size: 18px; font-weight: 700; color: var(--muted); letter-spacing: 0; }
+    .gauge-meta { color: var(--muted); font-size: 13px; }
+    .meter { height: 12px; border-radius: 999px; background: #e2e8f0; overflow: hidden; margin-top: 14px; }
+    .meter > span { display: block; height: 100%; width: 0%; border-radius: 999px; background: linear-gradient(90deg, #0ea5e9, #2563eb); transition: width .5s ease; }
+    .meter-legend { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 6px; }
+    .grid { display: grid; gap: 20px; margin-top: 20px; }
+    .grid.two { grid-template-columns: 1.55fr 1fr; }
+    .section-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 20px 22px 0; }
+    .section-head h2 { margin: 0; font-size: 17px; letter-spacing: -.01em; }
+    .section-head p { margin: 3px 0 0; font-size: 13px; color: var(--muted); }
+    .chart-wrap { padding: 14px 16px 18px; }
+    #chart { width: 100%; height: 280px; display: block; }
+    .stats { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; padding: 0 22px 20px; }
+    .stat { border: 1px solid var(--line); border-radius: 12px; padding: 11px 12px; background: #fbfdff; }
+    .stat b { display: block; font-size: 18px; letter-spacing: -.02em; }
+    .stat span { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 700; }
+    .list { padding: 8px 12px 14px; }
+    .sensor { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; border-radius: 12px; }
+    .sensor + .sensor { border-top: 1px solid var(--line); }
+    .sensor strong { display: block; font-size: 14px; }
+    .sensor small { color: var(--muted); font-size: 12px; }
+    .sensor .val { text-align: right; }
+    .sensor .val b { font-size: 20px; letter-spacing: -.02em; }
+    .btn { appearance: none; border: 0; border-radius: 10px; padding: 10px 14px; font: inherit; font-weight: 750; cursor: pointer; background: var(--blue); color: #fff; }
+    .btn:hover { background: #1e40af; }
+    .btn.secondary { background: #fff; color: #1e293b; border: 1px solid var(--line); }
+    .btn.secondary:hover { border-color: #94a3b8; }
+    .btn:disabled { opacity: .55; cursor: not-allowed; }
+    form { display: grid; gap: 12px; padding: 18px 22px 24px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    label { font-size: 12px; font-weight: 750; color: #334155; display: grid; gap: 5px; }
+    input, select { width: 100%; border: 1px solid #cbd5e1; border-radius: 10px; padding: 9px 10px; font: inherit; background: #fff; color: var(--ink); }
+    input:focus, select:focus { outline: 2px solid rgba(37,99,235,.25); border-color: var(--blue-2); }
+    .check { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 650; }
+    .check input { width: auto; }
+    .hint { font-size: 12px; color: var(--muted); }
+    .error { color: var(--bad); font-size: 13px; white-space: pre-wrap; }
+    .result { display: none; padding: 0 22px 22px; }
+    .result.show { display: block; }
+    .result-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0 10px; }
+    pre.code { margin: 0; background: #0b1220; color: #dbeafe; border-radius: 12px; padding: 16px; max-height: 460px; overflow: auto; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .arch { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 18px 22px 24px; }
+    .arch .node { border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: #fbfdff; }
+    .arch .node b { display: block; font-size: 13px; }
+    .arch .node span { font-size: 11px; color: var(--muted); }
+    .arch .arrow { display: grid; place-items: center; color: #94a3b8; font-weight: 800; }
+    footer { margin-top: 26px; color: var(--muted); font-size: 12px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    @media (max-width: 900px) {
+      .hero, .grid.two { grid-template-columns: 1fr; }
+      .arch { grid-template-columns: 1fr; }
+      .arch .arrow { transform: rotate(90deg); }
+      nav a { margin-left: 10px; }
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="brand-mark">◈</div>
+      <div>SynapseCity<small>IoT Lab · Open infrastructure</small></div>
+    </div>
+    <nav>
+      <a href="https://synapsecity.sbs/">Trang chủ</a>
+      <a href="https://synapsecity.sbs/map">Bản đồ</a>
+      <a href="https://synapsedx.sbs/workspace?product=city&amp;page=city-iot-network">Workspace</a>
+    </nav>
+  </header>
+
+  <section class="hero">
+    <div class="card hero-main">
+      <div class="eyebrow">Cống thoát nước · Nguyễn Lương Bằng, Đà Nẵng</div>
+      <h1>Cống nước thông minh,<br />dữ liệu mực nước theo thời gian thực.</h1>
+      <p class="lede">
+        ESP32 đọc cảm biến siêu âm chống nước JSN-SR04T, publish MQTT lên
+        <code>synapsecity.sbs:1883</code>, iot-bridge chuyển vào Tier-2 telemetry
+        và workspace City hiển thị. Không có board? Bật mock mode để bắn dữ liệu giả.
+      </p>
+      <div class="pills">
+        <span class="pill"><span class="dot ok" id="pill-dot"></span><span id="pill-status">Đang tải…</span></span>
+        <span class="pill">MQTT · city/sensors/cong-nc-001-wl/data</span>
+        <span class="pill">JSN-SR04T · cm</span>
+        <span class="pill">Cảnh báo ≥ 150 cm · Nguy hiểm ≥ 190 cm</span>
+      </div>
+    </div>
+
+    <aside class="card hero-side">
+      <div>
+        <div class="gauge-label">Mực nước hiện tại</div>
+        <div class="gauge-value"><span id="live-value">—</span> <small>cm</small></div>
+        <div class="gauge-meta" id="live-meta">Chưa có dữ liệu</div>
+        <div class="meter"><span id="live-meter"></span></div>
+        <div class="meter-legend"><span>0 cm</span><span>220 cm (đáy cống)</span></div>
+      </div>
+      <div class="hint" id="refresh-note">Tự động làm mới mỗi 15 giây.</div>
+    </aside>
+  </section>
+
+  <section class="grid two">
+    <div class="card">
+      <div class="section-head">
+        <div>
+          <h2>Mực nước 24 giờ</h2>
+          <p>Nguồn: tier-2 <code>city-iot-readings</code> · sensor <code>cong-nc-001-wl</code></p>
+        </div>
+        <button class="btn secondary" id="refresh">Làm mới</button>
+      </div>
+      <div class="chart-wrap">
+        <svg id="chart" viewBox="0 0 900 300" preserveAspectRatio="none" role="img" aria-label="Biểu đồ mực nước 24 giờ"></svg>
+      </div>
+      <div class="stats">
+        <div class="stat"><b id="stat-last">—</b><span>Cập nhật cuối</span></div>
+        <div class="stat"><b id="stat-avg">—</b><span>Trung bình 24h</span></div>
+        <div class="stat"><b id="stat-max">—</b><span>Cao nhất 24h</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-head">
+        <div>
+          <h2>Cảm biến công khai</h2>
+          <p>Allowlist <code>PUBLIC_IOT_SENSORS</code></p>
+        </div>
+      </div>
+      <div class="list" id="sensor-list">
+        <div class="sensor"><div><strong>Đang tải…</strong><small>city-iot-sensors</small></div></div>
+      </div>
+      <div class="section-head" style="padding-top:0">
+        <div>
+          <h2>Kiến trúc</h2>
+          <p>Thiết bị → edge → capability → sản phẩm</p>
+        </div>
+      </div>
+      <div class="arch">
+        <div class="node"><b>ESP32</b><span>JSN-SR04T / MOCK_MODE</span></div>
+        <div class="arrow">→</div>
+        <div class="node"><b>Mosquitto</b><span>MQTT 1883</span></div>
+        <div class="node" style="grid-column: span 2"><b>iot-bridge</b><span>xác thực service key + batch 1s</span></div>
+        <div class="arrow">→</div>
+        <div class="node"><b>Tier-2</b><span>telemetry ingest + Stream</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" style="margin-top:20px">
+    <div class="section-head">
+      <div>
+        <h2>Gen code .ino → nạp ESP32</h2>
+        <p>Firmware MQTT + mock mode. API công khai không đọc dữ liệu, không lưu WiFi/credentials.</p>
+      </div>
+      <span class="pill" id="fw-pill">arduino-cli</span>
+    </div>
+    <form id="fw-form">
+      <div class="row">
+        <label>Board
+          <select id="mcu">
+            <option value="esp32">ESP32 DevKit V1 (khuyên dùng)</option>
+            <option value="esp32-s3">ESP32-S3</option>
+            <option value="esp32-c3">ESP32-C3</option>
+            <option value="esp8266">ESP8266 NodeMCU</option>
+          </select>
+        </label>
+        <label>Cảm biến
+          <select id="sensor">
+            <option value="water_level_jsn">JSN-SR04T siêu âm chống nước</option>
+            <option value="water_level_float">Phao mực nước</option>
+            <option value="dht22">DHT22</option>
+            <option value="ds18b20">DS18B20</option>
+            <option value="turbidity">Độ đục TSW-20M</option>
+            <option value="ph4502c">pH PH-4502C</option>
+            <option value="rain">Mưa (tipping bucket)</option>
+            <option value="pressure">Áp suất 4-20mA</option>
+            <option value="flow_yfs201">Lưu lượng YF-S201</option>
+            <option value="vibration">Rung SW-420</option>
+            <option value="mq135">MQ-135</option>
+            <option value="soil">Độ ẩm đất</option>
+          </select>
+        </label>
+      </div>
+      <div class="row">
+        <label>Sensor id (record id Tier-2)
+          <input id="sensor-id" value="cong-nc-001-wl" />
+        </label>
+        <label>Sensor code
+          <input id="sensor-code" value="CONG-NC-001-WL" />
+        </label>
+      </div>
+      <div class="row">
+        <label>WiFi SSID
+          <input id="wifi-ssid" placeholder="KMGSAFEHORIFPT" autocomplete="off" />
+        </label>
+        <label>WiFi password
+          <input id="wifi-pass" type="password" placeholder="••••••••" autocomplete="new-password" />
+        </label>
+      </div>
+      <div class="row">
+        <label>MQTT host
+          <input id="mqtt-host" value="synapsecity.sbs" />
+        </label>
+        <label>Chu kỳ gửi (giây)
+          <input id="interval" type="number" min="5" max="3600" value="30" />
+        </label>
+      </div>
+      <div class="row">
+        <label>Độ sâu cống (cm)
+          <input id="depth" type="number" min="20" max="1000" value="220" />
+        </label>
+        <label class="check" style="align-self:end;padding-bottom:9px">
+          <input id="mock" type="checkbox" checked /> Bật MOCK_MODE (không cần cảm biến thật)
+        </label>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn" type="submit" id="generate">Generate .ino</button>
+        <span class="hint" style="align-self:center">Cài thư viện <code>PubSubClient</code> trước khi compile.</span>
+      </div>
+      <div class="error" id="fw-error"></div>
+    </form>
+    <div class="result" id="fw-result">
+      <div class="result-head">
+        <div><b id="fw-name">firmware.ino</b> <span class="hint" id="fw-size"></span></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn secondary" type="button" id="copy">Copy</button>
+          <button class="btn secondary" type="button" id="download">Tải .ino</button>
+        </div>
+      </div>
+      <pre class="code" id="fw-code"></pre>
+    </div>
+  </section>
+
+  <footer>
+    <span>SynapseCity · Apache-2.0 · dữ liệu PDDL-1.0 · VKU.VIC</span>
+    <span><a href="https://synapsecity.sbs/asset/cong-nc-001">Hồ sơ cống</a> · <a href="https://synapsecity.sbs/docs">API docs</a></span>
+  </footer>
+</div>
+
+<script>
+(() => {
+  const SENSOR_ID = 'cong-nc-001-wl';
+  const $ = (id) => document.getElementById(id);
+  const fmt = (value, digits = 1) => Number.isFinite(Number(value)) ? Number(value).toFixed(digits) : '—';
+  let lastCode = '';
+  let lastName = 'firmware.ino';
+  let timer = null;
+
+  function statusOf(value) {
+    if (!Number.isFinite(Number(value))) return { text: 'Chưa có dữ liệu', cls: '' };
+    if (value >= 190) return { text: 'Nguy hiểm · ngập', cls: 'bad' };
+    if (value >= 150) return { text: 'Cảnh báo · nước cao', cls: 'warn' };
+    return { text: 'Bình thường · đang giám sát', cls: 'ok' };
+  }
+
+  function drawChart(readings) {
+    const svg = $('chart');
+    const W = 900, H = 300, padL = 42, padR = 16, padT = 16, padB = 28;
+    const points = readings.slice().reverse().filter((r) => Number.isFinite(Number(r.value)));
+    if (!points.length) {
+      svg.innerHTML = '<text x="450" y="150" text-anchor="middle" fill="#94a3b8" font-size="14">Chưa có reading trong 24 giờ</text>';
+      return;
+    }
+    const maxY = 220;
+    const x = (i) => padL + (i / Math.max(points.length - 1, 1)) * (W - padL - padR);
+    const y = (v) => padT + (1 - Math.min(Math.max(v, 0), maxY) / maxY) * (H - padT - padB);
+    const line = points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join(' ');
+    const area = `${line} L${x(points.length - 1).toFixed(1)},${H - padB} L${x(0).toFixed(1)},${H - padB} Z`;
+    const grid = [0, 55, 110, 165, 220].map((v) =>
+      `<line x1="${padL}" x2="${W - padR}" y1="${y(v)}" y2="${y(v)}" stroke="#e2e8f0" stroke-dasharray="${v === 190 ? '0' : '3 5'}" />
+       <text x="${padL - 8}" y="${y(v) + 4}" text-anchor="end" fill="#94a3b8" font-size="11">${v}</text>`).join('');
+    const threshold = (v, color) =>
+      `<line x1="${padL}" x2="${W - padR}" y1="${y(v)}" y2="${y(v)}" stroke="${color}" stroke-opacity=".55" stroke-dasharray="6 5" />`;
+    const dots = points.map((p, i) => i === points.length - 1
+      ? `<circle cx="${x(i)}" cy="${y(p.value)}" r="5" fill="#1d4ed8" stroke="#fff" stroke-width="2" />`
+      : '').join('');
+    svg.innerHTML = `<defs><linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#2563eb" stop-opacity=".28"/>
+        <stop offset="1" stop-color="#2563eb" stop-opacity="0"/>
+      </linearGradient></defs>
+      ${grid}${threshold(150, '#d97706')}${threshold(190, '#dc2626')}
+      <path d="${area}" fill="url(#fill)"></path>
+      <path d="${line}" fill="none" stroke="#1d4ed8" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></path>
+      ${dots}`;
+  }
+
+  function renderSensor(sensor) {
+    const value = sensor?.last_reading;
+    const st = statusOf(value);
+    $('live-value').textContent = Number.isFinite(Number(value)) ? fmt(value, 0) : '—';
+    $('live-meta').textContent = sensor?.last_seen
+      ? `Cập nhật ${new Date(sensor.last_seen).toLocaleString('vi-VN')} · ${sensor.sensor_code || SENSOR_ID}`
+      : 'Chưa có dữ liệu từ thiết bị';
+    $('live-meter').style.width = `${Math.min(Math.max(Number(value) || 0, 0) / 220 * 100, 100)}%`;
+    $('pill-status').textContent = st.text;
+    $('pill-dot').className = `dot ${st.cls}`;
+  }
+
+  async function load() {
+    try {
+      const [sensorsRes, readingsRes] = await Promise.all([
+        fetch('/v1/public/iot/sensors', { headers: { accept: 'application/json' } }),
+        fetch(`/v1/public/iot/readings?sensor_id=${encodeURIComponent(SENSOR_ID)}&hours=24&limit=160`, { headers: { accept: 'application/json' } }),
+      ]);
+      if (!sensorsRes.ok) throw new Error(`sensors HTTP ${sensorsRes.status}`);
+      if (!readingsRes.ok) throw new Error(`readings HTTP ${readingsRes.status}`);
+      const sensors = await sensorsRes.json();
+      const readings = await readingsRes.json();
+      const sensor = (sensors.items || []).find((item) => item.id === SENSOR_ID) || (sensors.items || [])[0];
+      renderSensor(sensor);
+      const list = $('sensor-list');
+      list.innerHTML = (sensors.items || []).map((item) => `
+        <div class="sensor">
+          <div><strong>${item.sensor_code || item.id}</strong><small>${item.sensor_type || 'sensor'} · ${item.measurement_unit || ''}</small></div>
+          <div class="val"><b>${fmt(item.last_reading, 1)}</b><small>${item.measurement_unit || ''}</small></div>
+        </div>`).join('') || '<div class="sensor"><div><strong>Chưa có sensor công khai</strong><small>PUBLIC_IOT_SENSORS trống</small></div></div>';
+      const items = readings.items || [];
+      drawChart(items);
+      $('stat-last').textContent = items[0]?.timestamp ? new Date(items[0].timestamp).toLocaleTimeString('vi-VN') : '—';
+      const values = items.map((item) => Number(item.value)).filter(Number.isFinite);
+      $('stat-avg').textContent = values.length ? `${fmt(values.reduce((a, b) => a + b, 0) / values.length, 1)} cm` : '—';
+      $('stat-max').textContent = values.length ? `${fmt(Math.max(...values), 1)} cm` : '—';
+      $('refresh-note').textContent = `Tự động làm mới mỗi 15 giây · ${new Date().toLocaleTimeString('vi-VN')}`;
+    } catch (error) {
+      $('pill-status').textContent = 'Mất kết nối API';
+      $('pill-dot').className = 'dot bad';
+      $('live-meta').textContent = String(error.message || error);
+    }
+  }
+
+  $('refresh').addEventListener('click', load);
+
+  $('fw-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    $('fw-error').textContent = '';
+    $('generate').disabled = true;
+    $('fw-pill').textContent = 'Đang sinh…';
+    try {
+      const body = {
+        sensor_id: $('sensor-id').value.trim(),
+        sensor_code: $('sensor-code').value.trim(),
+        asset_id: 'cong-nc-001',
+        sensor: $('sensor').value,
+        mcu: $('mcu').value,
+        wifi_ssid: $('wifi-ssid').value.trim(),
+        wifi_pass: $('wifi-pass').value,
+        mqtt_host: $('mqtt-host').value.trim(),
+        interval_seconds: Number($('interval').value) || 30,
+        culvert_depth_cm: Number($('depth').value) || 220,
+        mock_fallback: $('mock').checked,
+      };
+      if (!body.wifi_ssid) throw new Error('Nhập WiFi SSID mà ESP32 sẽ kết nối.');
+      const response = await fetch('/v1/public/iot/firmware', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.error?.message || payload?.detail || `HTTP ${response.status}`);
+      lastCode = payload.code || '';
+      lastName = payload.filename || 'firmware.ino';
+      $('fw-name').textContent = lastName;
+      $('fw-size').textContent = `${(lastCode.length / 1024).toFixed(1)} KB · ${payload.mqtt?.topic || ''}`;
+      $('fw-code').textContent = lastCode;
+      $('fw-result').classList.add('show');
+      $('fw-pill').textContent = 'Sẵn sàng nạp';
+    } catch (error) {
+      $('fw-error').textContent = String(error.message || error);
+      $('fw-pill').textContent = 'Lỗi';
+    } finally {
+      $('generate').disabled = false;
+    }
+  });
+
+  $('copy').addEventListener('click', async () => {
+    if (!lastCode) return;
+    try {
+      await navigator.clipboard.writeText(lastCode);
+      $('copy').textContent = 'Đã copy';
+      setTimeout(() => { $('copy').textContent = 'Copy'; }, 1600);
+    } catch {
+      $('fw-code').focus();
+    }
+  });
+
+  $('download').addEventListener('click', () => {
+    if (!lastCode) return;
+    const blob = new Blob([lastCode], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = lastName;
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+
+  load();
+  timer = setInterval(load, 15000);
+  window.addEventListener('pagehide', () => clearInterval(timer));
+})();
+</script>
+</body>
+</html>

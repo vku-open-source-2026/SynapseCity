@@ -68,6 +68,30 @@
         "onLoad": "act-readings-metric-load"
       },
       {
+        "id": "culvert-heading",
+        "type": "heading",
+        "title": "Cống nước thông minh · Nguyễn Lương Bằng",
+        "text": "Mực nước cống thoát nước được ESP32 + JSN-SR04T gửi qua MQTT mỗi 30 giây. Mở trang IoT Lab của SynapseCity (đường dẫn /iot) để gen firmware và xem hướng dẫn nạp.",
+        "width": "full"
+      },
+      {
+        "id": "culvert-live",
+        "type": "code",
+        "title": "Cống nước · Live",
+        "width": "full",
+        "code": {
+          "html": "<section class=\"cw\">\n  <div class=\"cw-loading\">Đang tải dữ liệu cống nước…</div>\n</section>\n",
+          "css": ".cw { font: 14px/1.5 system-ui, sans-serif; color: #0f172a; }\n.cw-loading { padding: 28px; border: 1px dashed #cbd5e1; border-radius: 14px; color: #64748b; text-align: center; }\n.cw-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }\n.cw-head h2 { margin: 0; font-size: 20px; letter-spacing: -.02em; }\n.cw-head p { margin: 3px 0 0; color: #64748b; font-size: 12px; }\n.cw-pill { display: inline-flex; align-items: center; gap: 7px; border: 1px solid #e2e8f0; border-radius: 999px; padding: 5px 10px; font-size: 11px; font-weight: 700; white-space: nowrap; }\n.cw-dot { width: 8px; height: 8px; border-radius: 50%; background: #94a3b8; }\n.cw-dot.ok { background: #059669; box-shadow: 0 0 0 3px rgba(5,150,105,.15); }\n.cw-dot.warn { background: #d97706; box-shadow: 0 0 0 3px rgba(217,119,6,.15); }\n.cw-dot.bad { background: #dc2626; box-shadow: 0 0 0 3px rgba(220,38,38,.15); }\n.cw-grid { display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 10px; }\n.cw-card { border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px; background: #fff; }\n.cw-mt { margin-top: 10px; }\n.cw-card .k { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: #64748b; font-weight: 800; }\n.cw-value { font-size: 44px; font-weight: 850; letter-spacing: -.05em; line-height: 1.05; margin: 4px 0 2px; }\n.cw-value span { font-size: 16px; font-weight: 700; color: #64748b; letter-spacing: 0; }\n.cw-card strong { display: block; font-size: 22px; letter-spacing: -.03em; margin-top: 4px; }\n.cw-muted { color: #64748b; font-size: 11px; }\n.cw-track { height: 10px; border-radius: 999px; background: #e2e8f0; overflow: hidden; margin-top: 10px; }\n.cw-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg,#0ea5e9,#2563eb); }\n.cw-fill.warn { background: linear-gradient(90deg,#f59e0b,#d97706); }\n.cw-fill.bad { background: linear-gradient(90deg,#ef4444,#dc2626); }\n.cw-bars { display: flex; align-items: flex-end; gap: 3px; height: 120px; margin-top: 10px; }\n.cw-col { flex: 1; min-width: 2px; height: 100%; display: flex; align-items: flex-end; background: #f1f5f9; border-radius: 4px 4px 0 0; overflow: hidden; }\n.cw-bar { display: block; width: 100%; min-height: 2px; background: linear-gradient(180deg,#60a5fa,#2563eb); border-radius: 4px 4px 0 0; }\n.cw-bar.warn { background: linear-gradient(180deg,#fbbf24,#d97706); }\n.cw-bar.bad { background: linear-gradient(180deg,#f87171,#dc2626); }\n.cw-legend { display: flex; justify-content: space-between; margin-top: 6px; font-size: 10px; color: #94a3b8; }\n.cw-note { margin-top: 12px; padding-top: 10px; border-top: 1px solid #e2e8f0; color: #64748b; font-size: 11px; }\n.cw-err { padding: 16px; border: 1px solid #fecaca; background: #fef2f2; color: #b91c1c; border-radius: 12px; }\n@media (max-width: 720px) { .cw-grid { grid-template-columns: 1fr; } }\n\n/* Sandbox strips style attributes; dynamic geometry uses bounded classes. */\n.h0 { height: 0%; }\n.h1 { height: 1%; }\n.h2 { height: 2%; }\n.h3 { height: 3%; }\n.h4 { height: 4%; }\n.h5 { height: 5%; }\n.h6 { height: 6%; }\n.h7 { height: 7%; }\n.h8 { height: 8%; }\n.h9 { height: 9%; }\n.h10 { height: 10%; }\n.h11 { height: 11%; }\n.h12 { height: 12%; }\n.h13 { height: 13%; }\n.h14 { height: 14%; }\n.h15 { height: 15%; }\n.h16 { height: 16%; }\n.h17 { height: 17%; }\n.h18 { height: 18%; }\n.h19 { height: 19%; }\n.h20 { height: 20%; }\n.h21 { height: 21%; }\n.h22 { height: 22%; }\n.h23 { height: 23%; }\n.h24 { height: 24%; }\n.h25 { height: 25%; }\n.h26 { height: 26%; }\n.h27 { height: 27%; }\n.h28 { height: 28%; }\n.h29 { height: 29%; }\n.h30 { height: 30%; }\n.h31 { height: 31%; }\n.h32 { height: 32%; }\n.h33 { height: 33%; }\n.h34 { height: 34%; }\n.h35 { height: 35%; }\n.h36 { height: 36%; }\n.h37 { height: 37%; }\n.h38 { height: 38%; }\n.h39 { height: 39%; }\n.h40 { height: 40%; }\n.h41 { height: 41%; }\n.h42 { height: 42%; }\n.h43 { height: 43%; }\n.h44 { height: 44%; }\n.h45 { height: 45%; }\n.h46 { height: 46%; }\n.h47 { height: 47%; }\n.h48 { height: 48%; }\n.h49 { height: 49%; }\n.h50 { height: 50%; }\n.h51 { height: 51%; }\n.h52 { height: 52%; }\n.h53 { height: 53%; }\n.h54 { height: 54%; }\n.h55 { height: 55%; }\n.h56 { height: 56%; }\n.h57 { height: 57%; }\n.h58 { height: 58%; }\n.h59 { height: 59%; }\n.h60 { height: 60%; }\n.h61 { height: 61%; }\n.h62 { height: 62%; }\n.h63 { height: 63%; }\n.h64 { height: 64%; }\n.h65 { height: 65%; }\n.h66 { height: 66%; }\n.h67 { height: 67%; }\n.h68 { height: 68%; }\n.h69 { height: 69%; }\n.h70 { height: 70%; }\n.h71 { height: 71%; }\n.h72 { height: 72%; }\n.h73 { height: 73%; }\n.h74 { height: 74%; }\n.h75 { height: 75%; }\n.h76 { height: 76%; }\n.h77 { height: 77%; }\n.h78 { height: 78%; }\n.h79 { height: 79%; }\n.h80 { height: 80%; }\n.h81 { height: 81%; }\n.h82 { height: 82%; }\n.h83 { height: 83%; }\n.h84 { height: 84%; }\n.h85 { height: 85%; }\n.h86 { height: 86%; }\n.h87 { height: 87%; }\n.h88 { height: 88%; }\n.h89 { height: 89%; }\n.h90 { height: 90%; }\n.h91 { height: 91%; }\n.h92 { height: 92%; }\n.h93 { height: 93%; }\n.h94 { height: 94%; }\n.h95 { height: 95%; }\n.h96 { height: 96%; }\n.h97 { height: 97%; }\n.h98 { height: 98%; }\n.h99 { height: 99%; }\n.h100 { height: 100%; }\n.w0 { width: 0%; }\n.w1 { width: 1%; }\n.w2 { width: 2%; }\n.w3 { width: 3%; }\n.w4 { width: 4%; }\n.w5 { width: 5%; }\n.w6 { width: 6%; }\n.w7 { width: 7%; }\n.w8 { width: 8%; }\n.w9 { width: 9%; }\n.w10 { width: 10%; }\n.w11 { width: 11%; }\n.w12 { width: 12%; }\n.w13 { width: 13%; }\n.w14 { width: 14%; }\n.w15 { width: 15%; }\n.w16 { width: 16%; }\n.w17 { width: 17%; }\n.w18 { width: 18%; }\n.w19 { width: 19%; }\n.w20 { width: 20%; }\n.w21 { width: 21%; }\n.w22 { width: 22%; }\n.w23 { width: 23%; }\n.w24 { width: 24%; }\n.w25 { width: 25%; }\n.w26 { width: 26%; }\n.w27 { width: 27%; }\n.w28 { width: 28%; }\n.w29 { width: 29%; }\n.w30 { width: 30%; }\n.w31 { width: 31%; }\n.w32 { width: 32%; }\n.w33 { width: 33%; }\n.w34 { width: 34%; }\n.w35 { width: 35%; }\n.w36 { width: 36%; }\n.w37 { width: 37%; }\n.w38 { width: 38%; }\n.w39 { width: 39%; }\n.w40 { width: 40%; }\n.w41 { width: 41%; }\n.w42 { width: 42%; }\n.w43 { width: 43%; }\n.w44 { width: 44%; }\n.w45 { width: 45%; }\n.w46 { width: 46%; }\n.w47 { width: 47%; }\n.w48 { width: 48%; }\n.w49 { width: 49%; }\n.w50 { width: 50%; }\n.w51 { width: 51%; }\n.w52 { width: 52%; }\n.w53 { width: 53%; }\n.w54 { width: 54%; }\n.w55 { width: 55%; }\n.w56 { width: 56%; }\n.w57 { width: 57%; }\n.w58 { width: 58%; }\n.w59 { width: 59%; }\n.w60 { width: 60%; }\n.w61 { width: 61%; }\n.w62 { width: 62%; }\n.w63 { width: 63%; }\n.w64 { width: 64%; }\n.w65 { width: 65%; }\n.w66 { width: 66%; }\n.w67 { width: 67%; }\n.w68 { width: 68%; }\n.w69 { width: 69%; }\n.w70 { width: 70%; }\n.w71 { width: 71%; }\n.w72 { width: 72%; }\n.w73 { width: 73%; }\n.w74 { width: 74%; }\n.w75 { width: 75%; }\n.w76 { width: 76%; }\n.w77 { width: 77%; }\n.w78 { width: 78%; }\n.w79 { width: 79%; }\n.w80 { width: 80%; }\n.w81 { width: 81%; }\n.w82 { width: 82%; }\n.w83 { width: 83%; }\n.w84 { width: 84%; }\n.w85 { width: 85%; }\n.w86 { width: 86%; }\n.w87 { width: 87%; }\n.w88 { width: 88%; }\n.w89 { width: 89%; }\n.w90 { width: 90%; }\n.w91 { width: 91%; }\n.w92 { width: 92%; }\n.w93 { width: 93%; }\n.w94 { width: 94%; }\n.w95 { width: 95%; }\n.w96 { width: 96%; }\n.w97 { width: 97%; }\n.w98 { width: 98%; }\n.w99 { width: 99%; }\n.w100 { width: 100%; }\n",
+          "javascript": "// SPDX-License-Identifier: Apache-2.0\n// SPDX-FileCopyrightText: 2026 VKU.VIC\n// DX workspace code widget: live water-culvert card.\n// Runs in the isolated worker: studio.query() reads declared data widgets,\n// studio.render() updates sanitized HTML. No network/DOM/storage access.\nconst PREFERRED = 'cong-nc-001-wl';\nconst DEPTH_CM = 220;\n\nconst number = (value) => {\n  const n = Number(value);\n  return Number.isFinite(n) ? n : null;\n};\nconst fmt = (value, digits = 1) => {\n  const n = number(value);\n  return n === null ? '—' : n.toFixed(digits);\n};\nconst time = (iso) => {\n  if (!iso) return '—';\n  const date = new Date(iso);\n  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('vi-VN');\n};\nconst bucket = (value) => Math.round(Math.max(0, Math.min(100, value)));\n\nfunction levelClass(value) {\n  if (value === null) return '';\n  if (value >= 190) return 'bad';\n  if (value >= 150) return 'warn';\n  return '';\n}\n\nfunction levelLabel(value) {\n  if (value === null) return 'Chưa có dữ liệu';\n  if (value >= 190) return 'Nguy hiểm · ngập';\n  if (value >= 150) return 'Cảnh báo · nước cao';\n  return 'Bình thường · đang giám sát';\n}\n\nasync function load() {\n  const sensorPage = await studio.query('iot-table', { limit: 20, search: 'CONG-NC-001' });\n  const sensors = Array.isArray(sensorPage && sensorPage.rows) ? sensorPage.rows : [];\n  const sensor =\n    sensors.find((row) => row.id === PREFERRED) ||\n    sensors.find((row) => row.sensor_type === 'water_level') ||\n    sensors[0] ||\n    null;\n  const sensorId = (sensor && sensor.id) || PREFERRED;\n\n  const readingPage = await studio.query('readings-table', {\n    limit: 100,\n    sortBy: 'timestamp',\n    sortDirection: 'desc',\n  });\n  const rows = (Array.isArray(readingPage && readingPage.rows) ? readingPage.rows : [])\n    .filter((row) => row.sensor_id === sensorId)\n    .map((row) => ({ value: number(row.value), timestamp: row.timestamp, id: row.id }))\n    .filter((row) => row.value !== null)\n    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());\n\n  const values = rows.map((row) => row.value);\n  const last = values.length ? values[values.length - 1] : number(sensor && sensor.last_reading);\n  const avg = values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;\n  const max = values.length ? Math.max(...values) : null;\n  const lastSeen = (rows.length && rows[rows.length - 1].timestamp) || (sensor && sensor.last_seen);\n  const cls = levelClass(last);\n  const width = last === null ? 0 : bucket((last / DEPTH_CM) * 100);\n  const recent = rows.slice(-48);\n  const bars = recent\n    .map((row) => {\n      const height = Math.max(2, bucket((row.value / DEPTH_CM) * 100));\n      return (\n        '<div class=\"cw-col\" title=\"' +\n        fmt(row.value) +\n        ' cm\"><span class=\"cw-bar ' +\n        levelClass(row.value) +\n        ' h' +\n        height +\n        '\"></span></div>'\n      );\n    })\n    .join('');\n\n  studio.render(\n    '<section class=\"cw\">' +\n      '<div class=\"cw-head\">' +\n        '<div><h2>Cống nước · Live</h2>' +\n        '<p>' +\n        (sensor ? (sensor.sensor_code || sensor.id) + ' · ' + (sensor.measurement_unit || 'cm') : PREFERRED) +\n        ' · cập nhật ' +\n        time(lastSeen) +\n        '</p></div>' +\n        '<span class=\"cw-pill\"><span class=\"cw-dot ' +\n        cls +\n        '\"></span>' +\n        levelLabel(last) +\n        '</span>' +\n      '</div>' +\n      '<div class=\"cw-grid\">' +\n        '<div class=\"cw-card\">' +\n          '<div class=\"k\">Mực nước hiện tại</div>' +\n          '<div class=\"cw-value\">' +\n          (last === null ? '—' : last.toFixed(0)) +\n          ' <span>cm</span></div>' +\n          '<div class=\"cw-track\"><div class=\"cw-fill ' +\n          cls +\n          ' w' +\n          width +\n          '\"></div></div>' +\n          '<div class=\"cw-legend\"><span>0 cm</span><span>đáy cống ' +\n          DEPTH_CM +\n          ' cm</span></div>' +\n        '</div>' +\n        '<div class=\"cw-card\"><div class=\"k\">Trung bình 24h</div><strong>' +\n        fmt(avg) +\n        ' cm</strong><div class=\"cw-muted\">' +\n        values.length +\n        ' điểm gần nhất</div></div>' +\n        '<div class=\"cw-card\"><div class=\"k\">Cao nhất 24h</div><strong>' +\n        fmt(max) +\n        ' cm</strong><div class=\"cw-muted\">ngưỡng 150 / 190 cm</div></div>' +\n      '</div>' +\n      '<div class=\"cw-card cw-mt\">' +\n        '<div class=\"k\">48 điểm gần nhất</div>' +\n        '<div class=\"cw-bars\">' +\n        (bars || '<div class=\"cw-muted\">Chưa có reading</div>') +\n        '</div>' +\n        '<div class=\"cw-legend\"><span>cũ</span><span>mới nhất</span></div>' +\n      '</div>' +\n      '<div class=\"cw-note\">Nguồn: Tier-2 <strong>city-iot-readings</strong> · topic <strong>city/sensors/' +\n      sensorId +\n      '/data</strong> · tự làm mới 15 giây.</div>' +\n    '</section>'\n  );\n}\n\nload().catch((error) => {\n  studio.render(\n    '<div class=\"cw-err\">Không tải được dữ liệu cống: ' +\n      String((error && error.message) || error) +\n      '</div>'\n  );\n});\n\nsetInterval(() => {\n  load().catch(() => {});\n}, 15000);\n",
+          "inputs": [
+            "iot-table",
+            "readings-table"
+          ],
+          "actions": [],
+          "height": 560
+        }
+      },
+      {
         "id": "readings-chart",
         "type": "chart",
         "title": "Readings average by sensor",
@@ -399,6 +423,106 @@
         "text": "Required columns: sensor_id, value (number). Optional: timestamp (ISO date), metadata (JSON). Rows are validated per row and created as private SensorReading records; the job summary reports imported, skipped and invalid rows with row numbers."
       },
       {
+        "id": "firmware-generate",
+        "type": "form",
+        "title": "Generate ESP32 firmware (.ino)",
+        "width": "full",
+        "action": "execute",
+        "resource": "iot",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "5992167880202afcd581a2acffd0e87986f656775562da222b728b18d36aa928"
+        },
+        "onSubmit": "act-firmware-generate-submit",
+        "fields": [
+          {
+            "name": "record_id",
+            "type": "text",
+            "label": "Sensor id",
+            "required": true
+          },
+          {
+            "name": "mcu",
+            "type": "text",
+            "label": "MCU (esp32|esp32-s3|esp32-c3|esp8266)",
+            "required": true
+          },
+          {
+            "name": "sensor",
+            "type": "text",
+            "label": "Sensor (water_level_jsn|dht22|ds18b20|turbidity|ph4502c|rain|pressure|flow_yfs201|vibration|mq135|soil)",
+            "required": true
+          },
+          {
+            "name": "wifi_ssid",
+            "type": "text",
+            "label": "WiFi SSID",
+            "required": true
+          },
+          {
+            "name": "wifi_pass",
+            "type": "text",
+            "label": "WiFi password"
+          },
+          {
+            "name": "api_key",
+            "type": "text",
+            "label": "Device API key (iot:write)",
+            "required": true
+          },
+          {
+            "name": "interval_seconds",
+            "type": "number",
+            "label": "Interval seconds",
+            "defaultValue": "60"
+          }
+        ]
+      },
+      {
+        "id": "mock-generate",
+        "type": "form",
+        "title": "Tạo mock data cảm biến",
+        "width": "full",
+        "action": "execute",
+        "resource": "iotReadings",
+        "workflowRef": {
+          "name": "city-workspace-actions",
+          "checksum": "5992167880202afcd581a2acffd0e87986f656775562da222b728b18d36aa928"
+        },
+        "onSubmit": "act-mock-generate-submit",
+        "fields": [
+          {
+            "name": "record_id",
+            "type": "text",
+            "label": "Sensor id",
+            "required": true
+          },
+          {
+            "name": "count",
+            "type": "number",
+            "label": "Số điểm (1..200)",
+            "defaultValue": "48"
+          },
+          {
+            "name": "min",
+            "type": "number",
+            "label": "Giá trị min"
+          },
+          {
+            "name": "max",
+            "type": "number",
+            "label": "Giá trị max"
+          }
+        ]
+      },
+      {
+        "id": "mqtt-help",
+        "type": "markdown",
+        "title": "MQTT → Tier-2 → Stream",
+        "width": "full",
+        "text": "ESP32 publish JSON tới topic city/sensors/{sensor_id}/data qua mosquitto:1883. iot-bridge forward sang POST /v1/capabilities/telemetry/ingest {datasetId: city-iot-readings, readings, source:'mqtt'}; Tier-2 ghi Base + publish Tier-1 Stream. Cống nước → dùng JSN-SR04T chống nước + rain + phao tràn."
+      },
+      {
         "id": "act-workspace-navigation-link1",
         "type": "action",
         "title": "Navigate Overview",
@@ -661,6 +785,16 @@
               "field": "search",
               "source": "event",
               "value": "search"
+            },
+            {
+              "field": "sortBy",
+              "source": "event",
+              "value": "sortBy"
+            },
+            {
+              "field": "sortDirection",
+              "source": "event",
+              "value": "sortDirection"
             }
           ],
           "javascript": "",
@@ -717,6 +851,16 @@
               "field": "search",
               "source": "event",
               "value": "search"
+            },
+            {
+              "field": "sortBy",
+              "source": "event",
+              "value": "sortBy"
+            },
+            {
+              "field": "sortDirection",
+              "source": "event",
+              "value": "sortDirection"
             }
           ],
           "javascript": "",
@@ -1005,6 +1149,100 @@
           "inputs": [],
           "actions": []
         }
+      },
+      {
+        "id": "act-firmware-generate-submit",
+        "type": "action",
+        "title": "Submit Generate ESP32 firmware",
+        "operation": {
+          "kind": "execute",
+          "target": "firmware-generate",
+          "mappings": [
+            {
+              "field": "record_id",
+              "source": "event",
+              "value": "values.record_id",
+              "required": true
+            },
+            {
+              "field": "mcu",
+              "source": "event",
+              "value": "values.mcu",
+              "required": true
+            },
+            {
+              "field": "sensor",
+              "source": "event",
+              "value": "values.sensor",
+              "required": true
+            },
+            {
+              "field": "wifi_ssid",
+              "source": "event",
+              "value": "values.wifi_ssid",
+              "required": true
+            },
+            {
+              "field": "wifi_pass",
+              "source": "event",
+              "value": "values.wifi_pass",
+              "required": false
+            },
+            {
+              "field": "api_key",
+              "source": "event",
+              "value": "values.api_key",
+              "required": true
+            },
+            {
+              "field": "interval_seconds",
+              "source": "event",
+              "value": "values.interval_seconds",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "act-mock-generate-submit",
+        "type": "action",
+        "title": "Submit mock data",
+        "operation": {
+          "kind": "execute",
+          "target": "mock-generate",
+          "mappings": [
+            {
+              "field": "record_id",
+              "source": "event",
+              "value": "values.record_id",
+              "required": true
+            },
+            {
+              "field": "count",
+              "source": "event",
+              "value": "values.count",
+              "required": false
+            },
+            {
+              "field": "min",
+              "source": "event",
+              "value": "values.min",
+              "required": false
+            },
+            {
+              "field": "max",
+              "source": "event",
+              "value": "values.max",
+              "required": false
+            }
+          ],
+          "javascript": "",
+          "inputs": [],
+          "actions": []
+        }
       }
     ]
   },
@@ -1013,5 +1251,5 @@
     "path": "plugins/city-iot-network.plugin.json",
     "revision": "2026-11-15.business"
   },
-  "checksum": "sha256:16f11320c041de4604b240e58554c8d04ea42b919dc044d3072f3dc6ee4385a1"
+  "checksum": "sha256:e695e9c3482f75178b0b8f7259f0cd08a42f3fa0d025fdca2701fcd52d034d1a"
 }

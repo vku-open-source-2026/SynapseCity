@@ -48,6 +48,7 @@ const OWNED_V1_PREFIXES: &[&str] = &[
     "/v1/public/assets",
     "/v1/public/incidents",
     "/v1/public/files",
+    "/v1/public/iot",
 ];
 
 const PUBLIC_V1_PREFIXES: &[&str] = &[
@@ -57,6 +58,7 @@ const PUBLIC_V1_PREFIXES: &[&str] = &[
     "/v1/public/assets",
     "/v1/public/incidents",
     "/v1/public/files",
+    "/v1/public/iot",
 ];
 
 const PUBLIC_AI_PATHS: &[&str] = &["/v1/ai/status", "/v1/ai/chat"];

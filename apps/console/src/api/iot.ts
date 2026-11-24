@@ -9,6 +9,7 @@ import type {
   SensorUpdateRequest,
   SensorReadingIngestRequest,
 } from '../types/iot';
+import type { FirmwareRequest, FirmwareResponse, IoTCatalog, MockRequest } from '../types/iot';
 
 export interface SensorListParams {
   skip?: number;
@@ -77,6 +78,21 @@ export const iotApi = {
 
   getSensorStatistics: async (id: string, params: SensorStatisticsParams): Promise<SensorStatistics> => {
     const response = await httpClient.get<SensorStatistics>(`/iot/sensors/${id}/statistics`, { params });
+    return response.data;
+  },
+
+  getCatalog: async (): Promise<IoTCatalog> => {
+    const response = await httpClient.get<IoTCatalog>('/iot/catalog');
+    return response.data;
+  },
+
+  generateFirmware: async (id: string, req: FirmwareRequest): Promise<FirmwareResponse> => {
+    const response = await httpClient.post<FirmwareResponse>(`/iot/sensors/${id}/firmware`, req);
+    return response.data;
+  },
+
+  mockReadings: async (id: string, req: MockRequest): Promise<{ sensor_id: string; ingested: number }> => {
+    const response = await httpClient.post(`/iot/sensors/${id}/mock`, req);
     return response.data;
   },
 };

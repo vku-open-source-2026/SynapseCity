@@ -7,6 +7,7 @@ mod auth;
 mod config;
 mod domain;
 mod error;
+mod iot_firmware;
 mod routes;
 mod state;
 mod tier2;
