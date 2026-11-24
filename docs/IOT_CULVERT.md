@@ -1,6 +1,6 @@
-# Cống nước thông minh — ESP32 → MQTT → Tier-2 → workspace
+# Cá»‘ng nÆ°á»›c thÃ´ng minh â€” ESP32 â†’ MQTT â†’ Tier-2 â†’ workspace
 
-Production demo of a monitored storm-water culvert (cống thoát nước) in
+Production demo of a monitored storm-water culvert (cá»‘ng thoÃ¡t nÆ°á»›c) in
 Da Nang. The ESP32 publishes water level over MQTT; the Tier-3 `iot-bridge`
 validates and forwards the reading to the Tier-2 telemetry capability. The
 workspace and the public IoT Lab read the same records.
@@ -9,34 +9,34 @@ workspace and the public IoT Lab read the same records.
 
 | Item | Value |
 | --- | --- |
-| Asset | `cong-nc-001` — Cống thoát nước Nguyễn Lương Bằng, Đà Nẵng |
-| Sensor | `cong-nc-001-wl` — `water_level`, unit `cm`, depth 220 cm |
+| Asset | `cong-nc-001` â€” Cá»‘ng thoÃ¡t nÆ°á»›c Nguyá»…n LÆ°Æ¡ng Báº±ng, ÄÃ  Náºµng |
+| Sensor | `cong-nc-001-wl` â€” `water_level`, unit `cm`, depth 220 cm |
 | MQTT topic | `city/sensors/cong-nc-001-wl/data` |
 | MQTT broker | `synapsecity.sbs:1883` (mosquitto, TLS not enabled) |
 | Public lab | https://synapsecity.sbs/iot |
 | Workspace | https://synapsedx.sbs/workspace?product=city&page=city-iot-network |
 | Asset page | https://synapsecity.sbs/asset/cong-nc-001 |
 
-Thresholds: warning `≥ 150 cm`, critical `≥ 190 cm` (sensor `thresholds`,
+Thresholds: warning `â‰¥ 150 cm`, critical `â‰¥ 190 cm` (sensor `thresholds`,
 culvert depth 220 cm).
 
 ## Data path
 
 ```text
 JSN-SR04T / MOCK_MODE
-   │  pulse / generated cm
-ESP32 (WiFi KMGSAFEHORIFPT)
-   │  MQTT publish JSON {value,timestamp?,metadata?}
+   â”‚  pulse / generated cm
+ESP32 (WiFi KMGMSAFEHORIFPT)
+   â”‚  MQTT publish JSON {value,timestamp?,metadata?}
 mosquitto  (compose service "mqtt", host 0.0.0.0:1883)
-   │  topic city/sensors/+/data
+   â”‚  topic city/sensors/+/data
 iot-bridge (apps/iot-bridge)
-   │  batch ≤100, 1 s; PATCH sensor last_reading/last_seen
+   â”‚  batch â‰¤100, 1 s; PATCH sensor last_reading/last_seen
 Tier-2 POST /v1/capabilities/telemetry/ingest
-   │  datasetId=city-iot-readings  source=mqtt
-SynapseOne Base (records) + Stream (topic …-telemetry)
-   │
-   ├─ DX workspace plugin "City IoT network" (code widget + tables)
-   └─ City public projection GET /v1/public/iot/{sensors,readings}
+   â”‚  datasetId=city-iot-readings  source=mqtt
+SynapseOne Base (records) + Stream (topic â€¦-telemetry)
+   â”‚
+   â”œâ”€ DX workspace plugin "City IoT network" (code widget + tables)
+   â””â”€ City public projection GET /v1/public/iot/{sensors,readings}
 ```
 
 The bridge keeps the sensor registry current through a read-merge-CAS PATCH of
@@ -65,8 +65,8 @@ curl -s https://synapsecity.sbs/v1/public/iot/firmware \
     "asset_id":"cong-nc-001",
     "sensor":"water_level_jsn",
     "mcu":"esp32",
-    "wifi_ssid":"KMGSAFEHORIFPT",
-    "wifi_pass":"…",
+    "wifi_ssid":"KMGMSAFEHORIFPT",
+    "wifi_pass":"â€¦",
     "mqtt_host":"synapsecity.sbs",
     "mqtt_port":1883,
     "interval_seconds":30,
@@ -87,9 +87,9 @@ session-scoped operators; it now renders the same MQTT template.
 
 Two independent mock paths:
 
-1. **Device mock** — `#define MOCK_MODE 1` in the generated sketch. It sends
+1. **Device mock** â€” `#define MOCK_MODE 1` in the generated sketch. It sends
    real MQTT publishes from the board, so the full WiFi/broker path is tested.
-2. **Virtual ESP32** — compose service `iot-mock` (`apps/iot-mock`). It
+2. **Virtual ESP32** â€” compose service `iot-mock` (`apps/iot-mock`). It
    publishes a drainage/tide curve every 15 s and occasional storm surges that
    cross the 150/190 cm thresholds. This keeps the public lab and workspace
    alive without hardware.
@@ -101,6 +101,10 @@ docker logs -f synapsecity-iot-mock-1
 ```
 
 ## Flash the ESP32
+
+> âš ï¸ **Náº¿u chip nÃ³ng báº¥t thÆ°á»ng, bá»ng tay hoáº·c cÃ³ mÃ¹i khÃ©t: rÃºt USB ngay.
+> KhÃ´ng cháº¡m tay vÃ o chip, khÃ´ng cáº¯m láº¡i.** Kiá»ƒm tra 5V/GND vÃ  Ä‘Æ°á»ng ECHO
+> trÆ°á»›c khi cáº¥p nguá»“n láº¡i. NÃ³ng kiá»ƒu bá»ng tay khÃ´ng pháº£i tráº¡ng thÃ¡i bÃ¬nh thÆ°á»ng.
 
 Drivers: CP210x (Silicon Labs) or CH340, depending on the DevKit. The CP210x
 package is kept outside the repository in
@@ -122,9 +126,12 @@ not enter download mode (`boot:0x13`). Hold **BOOT**, tap **RST/EN** once, then
 release **BOOT**; `scripts/flash-when-bootloader.ps1` waits for that state and
 writes the four images with esptool (`--before no-reset --after hard-reset`).
 
-Wiring (JSN-SR04T, 4-pin module): VCC 5V, GND, TRIG → GPIO12, ECHO → GPIO13.
-Mount the probe on the culvert cover pointing down; set `CULVERT_DEPTH_CM` to
-the distance from the probe face to the dry culvert floor.
+Wiring (JSN-SR04T, 4-pin module): VCC 5V, GND, TRIG â†’ GPIO18, ECHO â†’ **1kÎ© ná»‘i
+tiáº¿p** â†’ GPIO19, **2kÎ© xuá»‘ng GND**. ÄÃ¢y lÃ  cáº§u phÃ¢n Ã¡p báº¯t buá»™c: ECHO cá»§a
+JSN-SR04T lÃ  5V, GPIO ESP32 chá»‰ chá»‹u 3.3V â€” ná»‘i trá»±c tiáº¿p cÃ³ thá»ƒ lÃ m cháº¿t chip.
+Vá»›i ESP32-S3/C3 dÃ¹ng TRIG=4, ECHO=5. Mount the probe on the culvert cover
+pointing down; set `CULVERT_DEPTH_CM` to the distance from the probe face to the
+dry culvert floor.
 
 ## Configuration
 

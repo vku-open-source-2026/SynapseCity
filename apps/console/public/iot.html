@@ -5,8 +5,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SynapseCity · IoT Lab · Cống nước thông minh</title>
-  <meta name="description" content="Giám sát mực nước cống thoát nước bằng ESP32, MQTT và SynapseCity IoT." />
+  <title>SynapseCity Â· IoT Lab Â· Cá»‘ng nÆ°á»›c thÃ´ng minh</title>
+  <meta name="description" content="GiÃ¡m sÃ¡t má»±c nÆ°á»›c cá»‘ng thoÃ¡t nÆ°á»›c báº±ng ESP32, MQTT vÃ  SynapseCity IoT." />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <style>
     :root {
@@ -116,42 +116,42 @@
 <div class="wrap">
   <header class="top">
     <div class="brand">
-      <div class="brand-mark">◈</div>
-      <div>SynapseCity<small>IoT Lab · Open infrastructure</small></div>
+      <div class="brand-mark">â—ˆ</div>
+      <div>SynapseCity<small>IoT Lab Â· Open infrastructure</small></div>
     </div>
     <nav>
-      <a href="https://synapsecity.sbs/">Trang chủ</a>
-      <a href="https://synapsecity.sbs/map">Bản đồ</a>
+      <a href="https://synapsecity.sbs/">Trang chá»§</a>
+      <a href="https://synapsecity.sbs/map">Báº£n Ä‘á»“</a>
       <a href="https://synapsedx.sbs/workspace?product=city&amp;page=city-iot-network">Workspace</a>
     </nav>
   </header>
 
   <section class="hero">
     <div class="card hero-main">
-      <div class="eyebrow">Cống thoát nước · Nguyễn Lương Bằng, Đà Nẵng</div>
-      <h1>Cống nước thông minh,<br />dữ liệu mực nước theo thời gian thực.</h1>
+      <div class="eyebrow">Cá»‘ng thoÃ¡t nÆ°á»›c Â· Nguyá»…n LÆ°Æ¡ng Báº±ng, ÄÃ  Náºµng</div>
+      <h1>Cá»‘ng nÆ°á»›c thÃ´ng minh,<br />dá»¯ liá»‡u má»±c nÆ°á»›c theo thá»i gian thá»±c.</h1>
       <p class="lede">
-        ESP32 đọc cảm biến siêu âm chống nước JSN-SR04T, publish MQTT lên
-        <code>synapsecity.sbs:1883</code>, iot-bridge chuyển vào Tier-2 telemetry
-        và workspace City hiển thị. Không có board? Bật mock mode để bắn dữ liệu giả.
+        ESP32 Ä‘á»c cáº£m biáº¿n siÃªu Ã¢m chá»‘ng nÆ°á»›c JSN-SR04T, publish MQTT lÃªn
+        <code>synapsecity.sbs:1883</code>, iot-bridge chuyá»ƒn vÃ o Tier-2 telemetry
+        vÃ  workspace City hiá»ƒn thá»‹. KhÃ´ng cÃ³ board? Báº­t mock mode Ä‘á»ƒ báº¯n dá»¯ liá»‡u giáº£.
       </p>
       <div class="pills">
-        <span class="pill"><span class="dot ok" id="pill-dot"></span><span id="pill-status">Đang tải…</span></span>
-        <span class="pill">MQTT · city/sensors/cong-nc-001-wl/data</span>
-        <span class="pill">JSN-SR04T · cm</span>
-        <span class="pill">Cảnh báo ≥ 150 cm · Nguy hiểm ≥ 190 cm</span>
+        <span class="pill"><span class="dot ok" id="pill-dot"></span><span id="pill-status">Äang táº£iâ€¦</span></span>
+        <span class="pill">MQTT Â· city/sensors/cong-nc-001-wl/data</span>
+        <span class="pill">JSN-SR04T Â· cm</span>
+        <span class="pill">Cáº£nh bÃ¡o â‰¥ 150 cm Â· Nguy hiá»ƒm â‰¥ 190 cm</span>
       </div>
     </div>
 
     <aside class="card hero-side">
       <div>
-        <div class="gauge-label">Mực nước hiện tại</div>
-        <div class="gauge-value"><span id="live-value">—</span> <small>cm</small></div>
-        <div class="gauge-meta" id="live-meta">Chưa có dữ liệu</div>
+        <div class="gauge-label">Má»±c nÆ°á»›c hiá»‡n táº¡i</div>
+        <div class="gauge-value"><span id="live-value">â€”</span> <small>cm</small></div>
+        <div class="gauge-meta" id="live-meta">ChÆ°a cÃ³ dá»¯ liá»‡u</div>
         <div class="meter"><span id="live-meter"></span></div>
-        <div class="meter-legend"><span>0 cm</span><span>220 cm (đáy cống)</span></div>
+        <div class="meter-legend"><span>0 cm</span><span>220 cm (Ä‘Ã¡y cá»‘ng)</span></div>
       </div>
-      <div class="hint" id="refresh-note">Tự động làm mới mỗi 15 giây.</div>
+      <div class="hint" id="refresh-note">Tá»± Ä‘á»™ng lÃ m má»›i má»—i 15 giÃ¢y.</div>
     </aside>
   </section>
 
@@ -159,43 +159,43 @@
     <div class="card">
       <div class="section-head">
         <div>
-          <h2>Mực nước 24 giờ</h2>
-          <p>Nguồn: tier-2 <code>city-iot-readings</code> · sensor <code>cong-nc-001-wl</code></p>
+          <h2>Má»±c nÆ°á»›c 24 giá»</h2>
+          <p>Nguá»“n: tier-2 <code>city-iot-readings</code> Â· sensor <code>cong-nc-001-wl</code></p>
         </div>
-        <button class="btn secondary" id="refresh">Làm mới</button>
+        <button class="btn secondary" id="refresh">LÃ m má»›i</button>
       </div>
       <div class="chart-wrap">
-        <svg id="chart" viewBox="0 0 900 300" preserveAspectRatio="none" role="img" aria-label="Biểu đồ mực nước 24 giờ"></svg>
+        <svg id="chart" viewBox="0 0 900 300" preserveAspectRatio="none" role="img" aria-label="Biá»ƒu Ä‘á»“ má»±c nÆ°á»›c 24 giá»"></svg>
       </div>
       <div class="stats">
-        <div class="stat"><b id="stat-last">—</b><span>Cập nhật cuối</span></div>
-        <div class="stat"><b id="stat-avg">—</b><span>Trung bình 24h</span></div>
-        <div class="stat"><b id="stat-max">—</b><span>Cao nhất 24h</span></div>
+        <div class="stat"><b id="stat-last">â€”</b><span>Cáº­p nháº­t cuá»‘i</span></div>
+        <div class="stat"><b id="stat-avg">â€”</b><span>Trung bÃ¬nh 24h</span></div>
+        <div class="stat"><b id="stat-max">â€”</b><span>Cao nháº¥t 24h</span></div>
       </div>
     </div>
 
     <div class="card">
       <div class="section-head">
         <div>
-          <h2>Cảm biến công khai</h2>
+          <h2>Cáº£m biáº¿n cÃ´ng khai</h2>
           <p>Allowlist <code>PUBLIC_IOT_SENSORS</code></p>
         </div>
       </div>
       <div class="list" id="sensor-list">
-        <div class="sensor"><div><strong>Đang tải…</strong><small>city-iot-sensors</small></div></div>
+        <div class="sensor"><div><strong>Äang táº£iâ€¦</strong><small>city-iot-sensors</small></div></div>
       </div>
       <div class="section-head" style="padding-top:0">
         <div>
-          <h2>Kiến trúc</h2>
-          <p>Thiết bị → edge → capability → sản phẩm</p>
+          <h2>Kiáº¿n trÃºc</h2>
+          <p>Thiáº¿t bá»‹ â†’ edge â†’ capability â†’ sáº£n pháº©m</p>
         </div>
       </div>
       <div class="arch">
         <div class="node"><b>ESP32</b><span>JSN-SR04T / MOCK_MODE</span></div>
-        <div class="arrow">→</div>
+        <div class="arrow">â†’</div>
         <div class="node"><b>Mosquitto</b><span>MQTT 1883</span></div>
-        <div class="node" style="grid-column: span 2"><b>iot-bridge</b><span>xác thực service key + batch 1s</span></div>
-        <div class="arrow">→</div>
+        <div class="node" style="grid-column: span 2"><b>iot-bridge</b><span>xÃ¡c thá»±c service key + batch 1s</span></div>
+        <div class="arrow">â†’</div>
         <div class="node"><b>Tier-2</b><span>telemetry ingest + Stream</span></div>
       </div>
     </div>
@@ -204,35 +204,36 @@
   <section class="card" style="margin-top:20px">
     <div class="section-head">
       <div>
-        <h2>Gen code .ino → nạp ESP32</h2>
-        <p>Firmware MQTT + mock mode. API công khai không đọc dữ liệu, không lưu WiFi/credentials.</p>
+        <h2>Gen code .ino â†’ náº¡p ESP32</h2>
+        <p>Firmware MQTT + mock mode. API cÃ´ng khai khÃ´ng Ä‘á»c dá»¯ liá»‡u, khÃ´ng lÆ°u WiFi/credentials.</p>
       </div>
       <span class="pill" id="fw-pill">arduino-cli</span>
     </div>
     <form id="fw-form">
+      <p class="hint" style="color:#b45309">JSN-SR04T ECHO lÃ  5V â€” báº¯t buá»™c cáº§u phÃ¢n Ã¡p 1kÎ© + 2kÎ© trÆ°á»›c GPIO; khÃ´ng ná»‘i trá»±c tiáº¿p.</p>
       <div class="row">
         <label>Board
           <select id="mcu">
-            <option value="esp32">ESP32 DevKit V1 (khuyên dùng)</option>
+            <option value="esp32">ESP32 DevKit V1 (khuyÃªn dÃ¹ng)</option>
             <option value="esp32-s3">ESP32-S3</option>
             <option value="esp32-c3">ESP32-C3</option>
             <option value="esp8266">ESP8266 NodeMCU</option>
           </select>
         </label>
-        <label>Cảm biến
+        <label>Cáº£m biáº¿n
           <select id="sensor">
-            <option value="water_level_jsn">JSN-SR04T siêu âm chống nước</option>
-            <option value="water_level_float">Phao mực nước</option>
+            <option value="water_level_jsn">JSN-SR04T siÃªu Ã¢m chá»‘ng nÆ°á»›c</option>
+            <option value="water_level_float">Phao má»±c nÆ°á»›c</option>
             <option value="dht22">DHT22</option>
             <option value="ds18b20">DS18B20</option>
-            <option value="turbidity">Độ đục TSW-20M</option>
+            <option value="turbidity">Äá»™ Ä‘á»¥c TSW-20M</option>
             <option value="ph4502c">pH PH-4502C</option>
-            <option value="rain">Mưa (tipping bucket)</option>
-            <option value="pressure">Áp suất 4-20mA</option>
-            <option value="flow_yfs201">Lưu lượng YF-S201</option>
+            <option value="rain">MÆ°a (tipping bucket)</option>
+            <option value="pressure">Ãp suáº¥t 4-20mA</option>
+            <option value="flow_yfs201">LÆ°u lÆ°á»£ng YF-S201</option>
             <option value="vibration">Rung SW-420</option>
             <option value="mq135">MQ-135</option>
-            <option value="soil">Độ ẩm đất</option>
+            <option value="soil">Äá»™ áº©m Ä‘áº¥t</option>
           </select>
         </label>
       </div>
@@ -246,31 +247,31 @@
       </div>
       <div class="row">
         <label>WiFi SSID
-          <input id="wifi-ssid" placeholder="KMGSAFEHORIFPT" autocomplete="off" />
+          <input id="wifi-ssid" placeholder="KMGMSAFEHORIFPT" autocomplete="off" />
         </label>
         <label>WiFi password
-          <input id="wifi-pass" type="password" placeholder="••••••••" autocomplete="new-password" />
+          <input id="wifi-pass" type="password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" autocomplete="new-password" />
         </label>
       </div>
       <div class="row">
         <label>MQTT host
           <input id="mqtt-host" value="synapsecity.sbs" />
         </label>
-        <label>Chu kỳ gửi (giây)
+        <label>Chu ká»³ gá»­i (giÃ¢y)
           <input id="interval" type="number" min="5" max="3600" value="30" />
         </label>
       </div>
       <div class="row">
-        <label>Độ sâu cống (cm)
+        <label>Äá»™ sÃ¢u cá»‘ng (cm)
           <input id="depth" type="number" min="20" max="1000" value="220" />
         </label>
         <label class="check" style="align-self:end;padding-bottom:9px">
-          <input id="mock" type="checkbox" checked /> Bật MOCK_MODE (không cần cảm biến thật)
+          <input id="mock" type="checkbox" checked /> Báº­t MOCK_MODE (khÃ´ng cáº§n cáº£m biáº¿n tháº­t)
         </label>
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
         <button class="btn" type="submit" id="generate">Generate .ino</button>
-        <span class="hint" style="align-self:center">Cài thư viện <code>PubSubClient</code> trước khi compile.</span>
+        <span class="hint" style="align-self:center">CÃ i thÆ° viá»‡n <code>PubSubClient</code> trÆ°á»›c khi compile.</span>
       </div>
       <div class="error" id="fw-error"></div>
     </form>
@@ -279,7 +280,7 @@
         <div><b id="fw-name">firmware.ino</b> <span class="hint" id="fw-size"></span></div>
         <div style="display:flex;gap:8px">
           <button class="btn secondary" type="button" id="copy">Copy</button>
-          <button class="btn secondary" type="button" id="download">Tải .ino</button>
+          <button class="btn secondary" type="button" id="download">Táº£i .ino</button>
         </div>
       </div>
       <pre class="code" id="fw-code"></pre>
@@ -287,8 +288,8 @@
   </section>
 
   <footer>
-    <span>SynapseCity · Apache-2.0 · dữ liệu PDDL-1.0 · VKU.VIC</span>
-    <span><a href="https://synapsecity.sbs/asset/cong-nc-001">Hồ sơ cống</a> · <a href="https://synapsecity.sbs/docs">API docs</a></span>
+    <span>SynapseCity Â· Apache-2.0 Â· dá»¯ liá»‡u PDDL-1.0 Â· VKU.VIC</span>
+    <span><a href="https://synapsecity.sbs/asset/cong-nc-001">Há»“ sÆ¡ cá»‘ng</a> Â· <a href="https://synapsecity.sbs/docs">API docs</a></span>
   </footer>
 </div>
 
@@ -296,16 +297,16 @@
 (() => {
   const SENSOR_ID = 'cong-nc-001-wl';
   const $ = (id) => document.getElementById(id);
-  const fmt = (value, digits = 1) => Number.isFinite(Number(value)) ? Number(value).toFixed(digits) : '—';
+  const fmt = (value, digits = 1) => Number.isFinite(Number(value)) ? Number(value).toFixed(digits) : 'â€”';
   let lastCode = '';
   let lastName = 'firmware.ino';
   let timer = null;
 
   function statusOf(value) {
-    if (!Number.isFinite(Number(value))) return { text: 'Chưa có dữ liệu', cls: '' };
-    if (value >= 190) return { text: 'Nguy hiểm · ngập', cls: 'bad' };
-    if (value >= 150) return { text: 'Cảnh báo · nước cao', cls: 'warn' };
-    return { text: 'Bình thường · đang giám sát', cls: 'ok' };
+    if (!Number.isFinite(Number(value))) return { text: 'ChÆ°a cÃ³ dá»¯ liá»‡u', cls: '' };
+    if (value >= 190) return { text: 'Nguy hiá»ƒm Â· ngáº­p', cls: 'bad' };
+    if (value >= 150) return { text: 'Cáº£nh bÃ¡o Â· nÆ°á»›c cao', cls: 'warn' };
+    return { text: 'BÃ¬nh thÆ°á»ng Â· Ä‘ang giÃ¡m sÃ¡t', cls: 'ok' };
   }
 
   function drawChart(readings) {
@@ -313,7 +314,7 @@
     const W = 900, H = 300, padL = 42, padR = 16, padT = 16, padB = 28;
     const points = readings.slice().reverse().filter((r) => Number.isFinite(Number(r.value)));
     if (!points.length) {
-      svg.innerHTML = '<text x="450" y="150" text-anchor="middle" fill="#94a3b8" font-size="14">Chưa có reading trong 24 giờ</text>';
+      svg.innerHTML = '<text x="450" y="150" text-anchor="middle" fill="#94a3b8" font-size="14">ChÆ°a cÃ³ reading trong 24 giá»</text>';
       return;
     }
     const maxY = 220;
@@ -342,10 +343,10 @@
   function renderSensor(sensor) {
     const value = sensor?.last_reading;
     const st = statusOf(value);
-    $('live-value').textContent = Number.isFinite(Number(value)) ? fmt(value, 0) : '—';
+    $('live-value').textContent = Number.isFinite(Number(value)) ? fmt(value, 0) : 'â€”';
     $('live-meta').textContent = sensor?.last_seen
-      ? `Cập nhật ${new Date(sensor.last_seen).toLocaleString('vi-VN')} · ${sensor.sensor_code || SENSOR_ID}`
-      : 'Chưa có dữ liệu từ thiết bị';
+      ? `Cáº­p nháº­t ${new Date(sensor.last_seen).toLocaleString('vi-VN')} Â· ${sensor.sensor_code || SENSOR_ID}`
+      : 'ChÆ°a cÃ³ dá»¯ liá»‡u tá»« thiáº¿t bá»‹';
     $('live-meter').style.width = `${Math.min(Math.max(Number(value) || 0, 0) / 220 * 100, 100)}%`;
     $('pill-status').textContent = st.text;
     $('pill-dot').className = `dot ${st.cls}`;
@@ -366,18 +367,18 @@
       const list = $('sensor-list');
       list.innerHTML = (sensors.items || []).map((item) => `
         <div class="sensor">
-          <div><strong>${item.sensor_code || item.id}</strong><small>${item.sensor_type || 'sensor'} · ${item.measurement_unit || ''}</small></div>
+          <div><strong>${item.sensor_code || item.id}</strong><small>${item.sensor_type || 'sensor'} Â· ${item.measurement_unit || ''}</small></div>
           <div class="val"><b>${fmt(item.last_reading, 1)}</b><small>${item.measurement_unit || ''}</small></div>
-        </div>`).join('') || '<div class="sensor"><div><strong>Chưa có sensor công khai</strong><small>PUBLIC_IOT_SENSORS trống</small></div></div>';
+        </div>`).join('') || '<div class="sensor"><div><strong>ChÆ°a cÃ³ sensor cÃ´ng khai</strong><small>PUBLIC_IOT_SENSORS trá»‘ng</small></div></div>';
       const items = readings.items || [];
       drawChart(items);
-      $('stat-last').textContent = items[0]?.timestamp ? new Date(items[0].timestamp).toLocaleTimeString('vi-VN') : '—';
+      $('stat-last').textContent = items[0]?.timestamp ? new Date(items[0].timestamp).toLocaleTimeString('vi-VN') : 'â€”';
       const values = items.map((item) => Number(item.value)).filter(Number.isFinite);
-      $('stat-avg').textContent = values.length ? `${fmt(values.reduce((a, b) => a + b, 0) / values.length, 1)} cm` : '—';
-      $('stat-max').textContent = values.length ? `${fmt(Math.max(...values), 1)} cm` : '—';
-      $('refresh-note').textContent = `Tự động làm mới mỗi 15 giây · ${new Date().toLocaleTimeString('vi-VN')}`;
+      $('stat-avg').textContent = values.length ? `${fmt(values.reduce((a, b) => a + b, 0) / values.length, 1)} cm` : 'â€”';
+      $('stat-max').textContent = values.length ? `${fmt(Math.max(...values), 1)} cm` : 'â€”';
+      $('refresh-note').textContent = `Tá»± Ä‘á»™ng lÃ m má»›i má»—i 15 giÃ¢y Â· ${new Date().toLocaleTimeString('vi-VN')}`;
     } catch (error) {
-      $('pill-status').textContent = 'Mất kết nối API';
+      $('pill-status').textContent = 'Máº¥t káº¿t ná»‘i API';
       $('pill-dot').className = 'dot bad';
       $('live-meta').textContent = String(error.message || error);
     }
@@ -389,7 +390,7 @@
     event.preventDefault();
     $('fw-error').textContent = '';
     $('generate').disabled = true;
-    $('fw-pill').textContent = 'Đang sinh…';
+    $('fw-pill').textContent = 'Äang sinhâ€¦';
     try {
       const body = {
         sensor_id: $('sensor-id').value.trim(),
@@ -404,7 +405,7 @@
         culvert_depth_cm: Number($('depth').value) || 220,
         mock_fallback: $('mock').checked,
       };
-      if (!body.wifi_ssid) throw new Error('Nhập WiFi SSID mà ESP32 sẽ kết nối.');
+      if (!body.wifi_ssid) throw new Error('Nháº­p WiFi SSID mÃ  ESP32 sáº½ káº¿t ná»‘i.');
       const response = await fetch('/v1/public/iot/firmware', {
         method: 'POST',
         headers: { 'content-type': 'application/json', accept: 'application/json' },
@@ -415,13 +416,13 @@
       lastCode = payload.code || '';
       lastName = payload.filename || 'firmware.ino';
       $('fw-name').textContent = lastName;
-      $('fw-size').textContent = `${(lastCode.length / 1024).toFixed(1)} KB · ${payload.mqtt?.topic || ''}`;
+      $('fw-size').textContent = `${(lastCode.length / 1024).toFixed(1)} KB Â· ${payload.mqtt?.topic || ''}`;
       $('fw-code').textContent = lastCode;
       $('fw-result').classList.add('show');
-      $('fw-pill').textContent = 'Sẵn sàng nạp';
+      $('fw-pill').textContent = 'Sáºµn sÃ ng náº¡p';
     } catch (error) {
       $('fw-error').textContent = String(error.message || error);
-      $('fw-pill').textContent = 'Lỗi';
+      $('fw-pill').textContent = 'Lá»—i';
     } finally {
       $('generate').disabled = false;
     }
@@ -431,7 +432,7 @@
     if (!lastCode) return;
     try {
       await navigator.clipboard.writeText(lastCode);
-      $('copy').textContent = 'Đã copy';
+      $('copy').textContent = 'ÄÃ£ copy';
       setTimeout(() => { $('copy').textContent = 'Copy'; }, 1600);
     } catch {
       $('fw-code').focus();
