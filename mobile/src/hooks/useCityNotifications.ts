@@ -16,7 +16,7 @@ async function ensurePermissions(): Promise<boolean> {
       name: 'Cập nhật hạ tầng',
       importance: Notifications.AndroidImportance.DEFAULT,
       vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#0F9F9A',
+      lightColor: '#0f9f9a',
     });
   }
   const current = await Notifications.getPermissionsAsync();

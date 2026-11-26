@@ -2,17 +2,27 @@
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 import type { Severity } from '../api/types';
 
+/**
+ * Token màu dùng chung của app mobile, bám sát web console
+ * (`apps/console/src/index.css`): nền #f4fbfb, khối header tối #123c4a,
+ * primary teal #0f9f9a, chữ nhấn #087f83. Giữ light-first, không dark mode.
+ */
 export const colors = {
-  bg: '#F4FBFB',
+  bg: '#f4fbfb',
   bgElevated: '#FFFFFF',
   card: '#FFFFFF',
   cardAlt: '#F0F9FA',
-  border: '#D9E8EA',
+  border: '#E2E8F0',
   text: '#0F172A',
   textMuted: '#475569',
   textDim: '#64748B',
-  cyan: '#0F9F9A',
+  cyan: '#0f9f9a',
   cyanSoft: '#CCFBF1',
+  cyanBorder: '#99F6E4',
+  header: '#123c4a',
+  primary: '#0f9f9a',
+  primaryDark: '#087f83',
+  accent: '#087f83',
   green: '#059669',
   amber: '#D97706',
   red: '#DC2626',

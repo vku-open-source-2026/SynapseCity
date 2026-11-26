@@ -112,7 +112,7 @@ export function Chip({
   onPress?: () => void;
   active?: boolean;
 }) {
-  const effectiveColor = active ? colors.cyan : color;
+  const effectiveColor = active ? colors.accent : color;
   const content = (
     <>
       {icon ? <Ionicons name={icon} size={12} color={effectiveColor} /> : null}
@@ -123,7 +123,7 @@ export function Chip({
   return (
     <Pressable
       onPress={onPress}
-      style={[styles.chip, { backgroundColor: active ? '#CCFBF1' : bg }]}
+      style={[styles.chip, { backgroundColor: active ? colors.cyanSoft : bg }]}
     >
       {content}
     </Pressable>
@@ -286,18 +286,18 @@ const styles = StyleSheet.create({
   screenContent: { paddingTop: topInset, paddingHorizontal: 18, gap: 16 },
   card: {
     backgroundColor: colors.card,
-    borderRadius: 20,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
     padding: 16,
     gap: 10,
     shadowColor: '#0F172A',
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
   },
-  cardCyan: { borderColor: '#99F6E4', backgroundColor: '#F0FDFA' },
+  cardCyan: { borderColor: colors.cyanBorder, backgroundColor: '#F0FDFA' },
   cardDanger: { borderColor: '#FECDD3', backgroundColor: '#FFF1F2' },
   sectionHeader: {
     flexDirection: 'row',
@@ -307,7 +307,7 @@ const styles = StyleSheet.create({
   },
   sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   sectionTitle: { color: colors.text, fontSize: 16, fontWeight: '700', letterSpacing: -0.2 },
-  sectionAction: { color: colors.cyan, fontSize: 12, fontWeight: '700' },
+  sectionAction: { color: colors.accent, fontSize: 12, fontWeight: '700' },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -317,10 +317,10 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     alignSelf: 'flex-start',
   },
-  chipText: { fontSize: 10, fontWeight: '700', letterSpacing: 0.1 },
+  chipText: { fontSize: 10, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase' },
   button: {
     minHeight: 48,
-    borderRadius: 14,
+    borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -340,7 +340,7 @@ const styles = StyleSheet.create({
   fieldLabel: { color: colors.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 0.3 },
   input: {
     minHeight: 48,
-    borderRadius: 13,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: '#FFFFFF',
@@ -381,7 +381,7 @@ const styles = StyleSheet.create({
     padding: 11,
   },
   errorText: { color: '#BE123C', fontSize: 11, flex: 1, lineHeight: 16 },
-  retry: { color: colors.cyan, fontSize: 11, fontWeight: '800' },
+  retry: { color: colors.accent, fontSize: 11, fontWeight: '800' },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   statusDot: { width: 7, height: 7, borderRadius: 4 },
   statusText: { fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },

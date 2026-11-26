@@ -35,7 +35,7 @@
                     android:fontFamily="sans-serif-medium"
                     android:letterSpacing="0.12"
                     android:text="@string/widget_brand"
-                    android:textColor="#0F766E"
+                    android:textColor="#087f83"
                     android:textSize="9sp" />
 
                 <TextView
@@ -123,7 +123,7 @@
             android:paddingEnd="9dp"
             android:paddingBottom="5dp"
             android:text="@string/widget_refresh"
-            android:textColor="#0F766E"
+            android:textColor="#087f83"
             android:textSize="9sp" />
 
         <TextView

@@ -58,7 +58,7 @@ export function SettingsScreen({
           <Switch
             value={settings.notificationsEnabled}
             onValueChange={(value) => onChange({ ...settings, notificationsEnabled: value })}
-            trackColor={{ false: '#D9E8EA', true: '#99F6E4' }}
+            trackColor={{ false: colors.border, true: colors.cyanBorder }}
             thumbColor={settings.notificationsEnabled ? colors.cyan : '#94A3B8'}
           />
         </View>
@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
   rowBody: { color: colors.textMuted, fontSize: 10, lineHeight: 15, marginTop: 2 },
   rowLabel: { color: colors.textDim, fontSize: 10, fontWeight: '700', width: 64 },
   rowValue: { color: colors.text, fontSize: 11, fontWeight: '700', flex: 1 },
-  endpoint: { color: colors.cyan, fontSize: 10, flex: 1, textAlign: 'right' },
+  endpoint: { color: colors.accent, fontSize: 10, flex: 1, textAlign: 'right' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 4 },
   warn: { color: colors.amber, fontSize: 10, lineHeight: 15 },
   menu: {
@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     backgroundColor: colors.card,
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
     padding: 12,
@@ -191,8 +191,8 @@ const styles = StyleSheet.create({
   menuIcon: {
     width: 36,
     height: 36,
-    borderRadius: 11,
-    backgroundColor: '#CCFBF1',
+    borderRadius: 12,
+    backgroundColor: colors.cyanSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },

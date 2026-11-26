@@ -85,6 +85,6 @@ const styles = StyleSheet.create({
   noticeRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 4 },
   noticeTitle: { color: colors.text, fontSize: 14, fontWeight: '800' },
   noticeBody: { color: colors.textMuted, fontSize: 11, lineHeight: 17, marginTop: 4 },
-  link: { color: colors.cyan, fontSize: 12, fontWeight: '700', paddingVertical: 8 },
+  link: { color: colors.accent, fontSize: 12, fontWeight: '700', paddingVertical: 8 },
   note: { color: colors.textDim, fontSize: 9, textAlign: 'center', lineHeight: 14 },
 });

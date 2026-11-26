@@ -34,7 +34,7 @@ export function QrCodeView({ value, size = 200 }: { value: string; size?: number
               style={{
                 width: cell,
                 height: cell,
-                backgroundColor: matrix.data[row * matrix.size + column] ? '#06121C' : '#F8FAFC',
+                backgroundColor: matrix.data[row * matrix.size + column] ? colors.header : '#F8FAFC',
               }}
             />
           ))}
@@ -45,7 +45,7 @@ export function QrCodeView({ value, size = 200 }: { value: string; size?: number
 }
 
 const styles = StyleSheet.create({
-  frame: { backgroundColor: '#F8FAFC', borderRadius: 10, overflow: 'hidden' },
+  frame: { backgroundColor: '#F8FAFC', borderRadius: 12, overflow: 'hidden' },
   row: { flexDirection: 'row' },
-  placeholder: { backgroundColor: colors.cardAlt, borderRadius: 10 },
+  placeholder: { backgroundColor: colors.cardAlt, borderRadius: 12 },
 });

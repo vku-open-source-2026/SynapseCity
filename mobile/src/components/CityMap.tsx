@@ -63,17 +63,17 @@ function buildHtml(
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
-  html,body,#map{height:100%;margin:0;background:#F4FBFB}
+  html,body,#map{height:100%;margin:0;background:#f4fbfb}
   body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
   .leaflet-control-attribution{background:rgba(255,255,255,.86)!important;color:#64748B!important;font-size:9px!important}
-  .leaflet-control-attribution a{color:#0F766E!important}
-  .leaflet-control-zoom a{background:#FFFFFF!important;color:#0F172A!important;border-color:#D9E8EA!important}
+  .leaflet-control-attribution a{color:#087f83!important}
+  .leaflet-control-zoom a{background:#FFFFFF!important;color:#0F172A!important;border-color:#E2E8F0!important}
   .pin{width:22px;height:22px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:var(--c);border:2px solid #FFFFFF;box-shadow:0 3px 10px rgba(15,23,42,.22)}
   .pin span{display:block;width:7px;height:7px;border-radius:50%;background:#FFFFFF;margin:5.5px}
   .incident{width:20px;height:20px;transform:rotate(45deg);background:#F97316;border:2px solid #FFFFFF;box-shadow:0 3px 10px rgba(15,23,42,.22);display:flex;align-items:center;justify-content:center}
   .incident b{transform:rotate(-45deg);font:800 11px/1 sans-serif;color:#FFFFFF}
-  .user-dot{width:16px;height:16px;border-radius:50%;background:#0E7490;border:3px solid #FFFFFF;box-shadow:0 0 0 8px rgba(14,116,144,.14)}
-  .user-pulse{width:16px;height:16px;border-radius:50%;background:rgba(14,116,144,.35);animation:pulse 2.2s ease-out infinite}
+  .user-dot{width:16px;height:16px;border-radius:50%;background:#0f9f9a;border:3px solid #FFFFFF;box-shadow:0 0 0 8px rgba(15,159,154,.14)}
+  .user-pulse{width:16px;height:16px;border-radius:50%;background:rgba(15,159,154,.35);animation:pulse 2.2s ease-out infinite}
   @keyframes pulse{0%{transform:scale(.7);opacity:.9}100%{transform:scale(3);opacity:0}}
 </style>
 </head>
@@ -94,7 +94,7 @@ function buildHtml(
 
   var bounds = [];
   L.circle([origin.latitude, origin.longitude], {
-    radius: 1200, color: '#0E7490', weight: 1, opacity: .25, fillColor: '#0E7490', fillOpacity: .04
+    radius: 1200, color: '#0f9f9a', weight: 1, opacity: .25, fillColor: '#0f9f9a', fillOpacity: .04
   }).addTo(map);
   L.marker([origin.latitude, origin.longitude], {
     icon: L.divIcon({ className: '', html: '<div class="user-pulse"></div>', iconSize: [16,16], iconAnchor: [8,8] }),
@@ -309,8 +309,8 @@ export function CityMap({
 }
 
 const styles = StyleSheet.create({
-  wrapper: { overflow: 'hidden', borderRadius: 20, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: colors.border },
-  web: { flex: 1, backgroundColor: '#F4FBFB' },
+  wrapper: { overflow: 'hidden', borderRadius: 12, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: colors.border },
+  web: { flex: 1, backgroundColor: '#f4fbfb' },
   loading: {
     position: 'absolute',
     top: 0,
@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
   legendDiamond: { width: 8, height: 8, transform: [{ rotate: '45deg' }] },
   legendText: { color: colors.textMuted, fontSize: 9, fontWeight: '600' },
   fallback: {
-    borderRadius: 20,
+    borderRadius: 12,
     backgroundColor: colors.bgElevated,
     alignItems: 'center',
     justifyContent: 'center',

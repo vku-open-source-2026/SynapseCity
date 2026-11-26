@@ -112,7 +112,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: '#F0FDFA',
     borderWidth: 1,
-    borderColor: '#CCFBF1',
+    borderColor: colors.cyanSoft,
   },
   ring: {
     position: 'absolute',
@@ -122,12 +122,12 @@ const styles = StyleSheet.create({
   axisH: {
     position: 'absolute',
     height: 1,
-    backgroundColor: '#D9E8EA',
+    backgroundColor: colors.border,
   },
   axisV: {
     position: 'absolute',
     width: 1,
-    backgroundColor: '#D9E8EA',
+    backgroundColor: colors.border,
   },
   dot: {
     position: 'absolute',

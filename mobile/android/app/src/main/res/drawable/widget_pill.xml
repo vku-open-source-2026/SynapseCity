@@ -3,5 +3,5 @@
 <!-- SPDX-FileCopyrightText: 2026 VKU.VIC -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
     <solid android:color="#F1F5F9" />
-    <corners android:radius="10dp" />
+    <corners android:radius="8dp" />
 </shape>

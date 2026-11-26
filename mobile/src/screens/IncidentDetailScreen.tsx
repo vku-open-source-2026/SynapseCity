@@ -182,7 +182,7 @@ const styles = StyleSheet.create({
   iconBox: {
     width: 48,
     height: 48,
-    borderRadius: 15,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -200,7 +200,7 @@ const styles = StyleSheet.create({
     gap: 8,
     alignItems: 'center',
     backgroundColor: colors.card,
-    borderRadius: 13,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
     padding: 10,

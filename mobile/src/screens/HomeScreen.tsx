@@ -203,7 +203,7 @@ function QuickAction({
         pressed && { opacity: 0.8 },
       ]}
     >
-      <View style={[styles.quickIcon, tone === 'cyan' && { backgroundColor: '#CCFBF1' }]}>
+      <View style={[styles.quickIcon, tone === 'cyan' && { backgroundColor: colors.cyanSoft }]}>
         <Ionicons name={icon} size={20} color={tone === 'cyan' ? colors.cyan : colors.text} />
       </View>
       <Text style={styles.quickLabel} numberOfLines={2}>{label}</Text>
@@ -260,21 +260,21 @@ function IncidentRow({ incident, onPress }: { incident: PublicIncident; onPress:
 
 const styles = StyleSheet.create({
   hero: {
-    borderRadius: 24,
+    borderRadius: 12,
     padding: 18,
     flexDirection: 'row',
     gap: 8,
     borderWidth: 1,
-    borderColor: 'rgba(15,159,154,0.18)',
+    borderColor: colors.cyanBorder,
     overflow: 'hidden',
     shadowColor: '#0F172A',
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 7 },
-    elevation: 3,
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
   },
   heroText: { flex: 1, gap: 2 },
-  heroKicker: { color: colors.cyan, fontSize: 9, fontWeight: '800', letterSpacing: 1.4 },
+  heroKicker: { color: colors.accent, fontSize: 10, fontWeight: '800', letterSpacing: 1.2 },
   heroCount: { color: colors.text, fontSize: 46, fontWeight: '800', lineHeight: 52, letterSpacing: -2 },
   heroLabel: { color: colors.textMuted, fontSize: 11, marginBottom: 10 },
   heroEmpty: { color: colors.textMuted, fontSize: 11, lineHeight: 16, marginTop: 4 },
@@ -287,7 +287,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 9,
     borderWidth: 1,
-    borderColor: '#D9E8EA',
+    borderColor: colors.border,
   },
   nearestDot: { width: 8, height: 8, borderRadius: 4 },
   nearestName: { color: colors.text, fontSize: 11, fontWeight: '700' },
@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
   quick: {
     flex: 1,
     backgroundColor: colors.card,
-    borderRadius: 16,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
     paddingVertical: 12,
@@ -305,7 +305,7 @@ const styles = StyleSheet.create({
     gap: 7,
     minHeight: 86,
   },
-  quickCyan: { borderColor: '#99F6E4', backgroundColor: '#F0FDFA' },
+  quickCyan: { borderColor: colors.cyanBorder, backgroundColor: '#F0FDFA' },
   quickIcon: {
     width: 34,
     height: 34,
@@ -320,7 +320,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     backgroundColor: colors.card,
-    borderRadius: 16,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
     padding: 11,
@@ -337,14 +337,14 @@ const styles = StyleSheet.create({
   rowTitle: { color: colors.text, fontSize: 12, fontWeight: '700' },
   rowSub: { color: colors.textDim, fontSize: 9 },
   rowRight: { alignItems: 'flex-end', gap: 4 },
-  distance: { color: colors.cyan, fontSize: 10, fontWeight: '800' },
+  distance: { color: colors.accent, fontSize: 10, fontWeight: '800' },
   muted: { color: colors.textMuted, fontSize: 11, lineHeight: 17 },
   widgetCard: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   widgetIcon: {
     width: 42,
     height: 42,
-    borderRadius: 14,
-    backgroundColor: '#CCFBF1',
+    borderRadius: 12,
+    backgroundColor: colors.cyanSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -353,5 +353,5 @@ const styles = StyleSheet.create({
   footer: { alignItems: 'center', gap: 6, paddingVertical: 8 },
   footerText: { color: colors.textDim, fontSize: 9 },
   sosLink: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  sosLinkText: { color: colors.cyan, fontSize: 10, fontWeight: '700' },
+  sosLinkText: { color: colors.accent, fontSize: 10, fontWeight: '700' },
 });

@@ -43,7 +43,7 @@ export function TabBar({
                 <View style={[styles.centerButton, selected && styles.centerButtonActive]}>
                   <Ionicons name={tab.activeIcon} size={24} color="#FFFFFF" />
                 </View>
-                <Text style={[styles.centerLabel, selected && { color: colors.cyan }]}>{tab.label}</Text>
+                <Text style={[styles.centerLabel, selected && { color: colors.accent }]}>{tab.label}</Text>
               </Pressable>
             );
           }
@@ -80,7 +80,7 @@ const styles = StyleSheet.create({
   },
   bar: {
     height: 64,
-    borderRadius: 24,
+    borderRadius: 16,
     backgroundColor: 'rgba(255,255,255,0.97)',
     borderWidth: 1,
     borderColor: colors.border,
@@ -88,14 +88,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 6,
     shadowColor: '#0F172A',
-    shadowOpacity: 0.10,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 12,
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
   },
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3, height: 56 },
   label: { color: colors.textDim, fontSize: 9, fontWeight: '600' },
-  labelActive: { color: colors.cyan },
+  labelActive: { color: colors.accent },
   indicator: {
     position: 'absolute',
     bottom: 3,
@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
   centerButton: {
     width: 50,
     height: 50,
-    borderRadius: 18,
+    borderRadius: 16,
     backgroundColor: colors.cyan,
     alignItems: 'center',
     justifyContent: 'center',
@@ -120,6 +120,6 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 8,
   },
-  centerButtonActive: { backgroundColor: '#0B7F7B' },
+  centerButtonActive: { backgroundColor: colors.primaryDark },
   centerLabel: { color: colors.textDim, fontSize: 9, fontWeight: '700', marginTop: -1 },
 });

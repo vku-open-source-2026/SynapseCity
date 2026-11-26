@@ -181,7 +181,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     backgroundColor: colors.card,
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
     padding: 11,
@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
   statusBar: { width: 3, height: 34, borderRadius: 2 },
   rowTitle: { color: colors.text, fontSize: 12, fontWeight: '700' },
   rowSub: { color: colors.textDim, fontSize: 9, marginTop: 2 },
-  distance: { color: colors.cyan, fontSize: 10, fontWeight: '800' },
+  distance: { color: colors.accent, fontSize: 10, fontWeight: '800' },
   status: { fontSize: 8, fontWeight: '700' },
   empty: { color: colors.textMuted, fontSize: 11 },
 });

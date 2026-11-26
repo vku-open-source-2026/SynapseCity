@@ -185,7 +185,7 @@ object CityWidgetRenderer {
         val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             shader = LinearGradient(
                 0f, 0f, size.toFloat(), size.toFloat(),
-                Color.parseColor("#ECFEFF"),
+                Color.parseColor("#F0FDFA"),
                 Color.parseColor("#FFFFFF"),
                 Shader.TileMode.CLAMP,
             )
@@ -203,7 +203,7 @@ object CityWidgetRenderer {
         canvas.drawCircle(center, center, size * 0.15f, ringPaint)
 
         val axisPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(80, 217, 232, 234)
+            color = Color.argb(80, 226, 232, 240)
             strokeWidth = 1.5f
         }
         canvas.drawLine(center, size * 0.05f, center, size * 0.95f, axisPaint)
@@ -236,9 +236,9 @@ object CityWidgetRenderer {
             canvas.drawCircle(x, y, if (asset.code == snapshot?.nearestCode) 9f else 6f, outline)
         }
 
-        val halo = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(45, 14, 116, 144) }
+        val halo = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(45, 15, 159, 154) }
         canvas.drawCircle(center, center, 19f, halo)
-        val user = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#0E7490") }
+        val user = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#0f9f9a") }
         canvas.drawCircle(center, center, 10f, user)
         val userOutline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#FFFFFF")

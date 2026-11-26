@@ -282,6 +282,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   successTitle: { color: colors.text, fontSize: 17, fontWeight: '800', textAlign: 'center' },
-  successCode: { color: colors.cyan, fontSize: 12, fontWeight: '800', letterSpacing: 1 },
+  successCode: { color: colors.accent, fontSize: 12, fontWeight: '800', letterSpacing: 1 },
   successBody: { color: colors.textMuted, fontSize: 11, textAlign: 'center', lineHeight: 17 },
 });

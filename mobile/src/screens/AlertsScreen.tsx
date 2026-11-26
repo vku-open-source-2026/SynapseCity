@@ -233,7 +233,7 @@ function NotificationCard({ notification }: { notification: CityNotification }) 
   return (
     <Card style={!notification.read ? styles.unread : undefined}>
       <View style={styles.cardTop}>
-        <View style={[styles.iconBox, { backgroundColor: '#CCFBF1' }]}>
+        <View style={[styles.iconBox, { backgroundColor: colors.cyanSoft }]}>
           <Ionicons name="notifications" size={17} color={colors.cyan} />
         </View>
         <View style={{ flex: 1 }}>
@@ -261,19 +261,19 @@ const styles = StyleSheet.create({
   tabs: {
     flexDirection: 'row',
     backgroundColor: colors.card,
-    borderRadius: 14,
+    borderRadius: 12,
     padding: 4,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  tab: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 10 },
-  tabActive: { backgroundColor: '#CCFBF1' },
+  tab: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 8 },
+  tabActive: { backgroundColor: colors.cyanSoft },
   tabText: { color: colors.textMuted, fontSize: 12, fontWeight: '700' },
-  tabTextActive: { color: colors.cyan },
+  tabTextActive: { color: colors.accent },
   chips: { flexDirection: 'row', gap: 7, flexWrap: 'wrap' },
   card: {
     backgroundColor: colors.card,
-    borderRadius: 16,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
     padding: 13,
@@ -283,7 +283,7 @@ const styles = StyleSheet.create({
   iconBox: {
     width: 36,
     height: 36,
-    borderRadius: 11,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -294,14 +294,14 @@ const styles = StyleSheet.create({
   muted: { color: colors.textMuted, fontSize: 11, lineHeight: 17 },
   loading: { color: colors.textMuted, fontSize: 11 },
   operatorCard: { borderLeftWidth: 3 },
-  unread: { borderColor: '#99F6E4' },
+  unread: { borderColor: colors.cyanBorder },
   unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.cyan },
   loginCard: { alignItems: 'center', gap: 10, paddingVertical: 24 },
   loginIcon: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#CCFBF1',
+    backgroundColor: colors.cyanSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
