@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+  <!-- Expo SecureStore values are wrapped by device-bound Android Keystore keys. -->
+  <exclude domain="sharedpref" path="SecureStore.xml" />
+  <!-- AsyncStorage may still contain a legacy session record from older app versions. -->
+  <exclude domain="database" path="RKStorage" />
+</full-backup-content>
