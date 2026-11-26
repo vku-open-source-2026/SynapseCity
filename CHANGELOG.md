@@ -6,6 +6,15 @@ Keep a Changelog format and version tags use Semantic Versioning.
 ## [Unreleased]
 
 ### Added
+- Contribution leaderboard organization filter: an accessible, responsive
+  dropdown offers “Tất cả tổ chức” and the units present in API data, falls back
+  to `VKU` for missing units, and recomputes the visible top three and table
+  ranks within the selection with an organization-specific empty state.
+- Complete public API reference for `contribution.synapsecity.sbs` in
+  `docs/CONTRIBUTION_API.md`, covering every Rust route, authentication, request
+  validation, response/error schemas, rate limits, and the all-units leaderboard
+  contract; the contribution service README now links to it and documents the
+  `contributor_name`/`msv`/`unit`/`count` row schema.
 - ESP32 water-culvert demo: `city-iot-sensors`/`city-iot-readings` records for
   `cong-nc-001-wl`, an MQTT `iot-bridge` that refreshes sensor last-read state
   through a CAS PATCH, a virtual ESP32 (`apps/iot-mock`) with storm surges, and

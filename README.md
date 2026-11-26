@@ -67,8 +67,8 @@ instances. None of them proxy SOS.
 - budgets and budget transactions;
 - operational reports;
 - city operators and user administration;
-- public data-contribution portal (submissions, moderation, leaderboard, CSV
-  export, map proxy);
+- public data-contribution portal (submissions, moderation, organization-filtered
+  leaderboard, CSV export, map proxy);
 - geofences and CSV/data ingestion;
 - public asset map, public asset lookup and public incident reporting;
 - map tiles, geocoding, reverse geocoding, nearby and polygon search;
@@ -78,6 +78,28 @@ Not owned by this repository: hazards and VNDMS, emergency events, EOP,
 dispatch, emergency resource units, SITREP, AAR, live hazard streaming, the
 emergency command centre and the public hazard map. Those are SynapseCitySOS
 features.
+
+## Contribution portal
+
+The public data-contribution portal is served at
+**https://contribution.synapsecity.sbs** by `apps/contribution-service` (Rust/Axum)
+and `apps/contribution-console` (React/Vite). It supports infrastructure feature
+submissions, administrator moderation, CSV export, map configuration/tiles, and a
+legacy citizen SOS intake that is not an emergency-operations API.
+
+The leaderboard's organization dropdown is a **client-side filter**. The console
+fetches `GET /api/leaderboard`, builds “Tất cả tổ chức” plus the organizations
+present in the returned `unit` values, and uses `VKU` for missing/empty units. The
+top three and table ranks restart at 1 within the selected organization, and an
+organization-specific empty state is shown when there are no matching rows. The
+API still returns all units and accepts no organization query parameter.
+
+The complete public API reference—including every Rust route, admin Bearer and
+sync-secret authentication, request validation, response schemas, status codes,
+and fixed-window rate limits—is in
+[`docs/CONTRIBUTION_API.md`](docs/CONTRIBUTION_API.md). The service-specific route
+inventory and leaderboard schema are in
+[`apps/contribution-service/README.md`](apps/contribution-service/README.md).
 
 ## Android app and home-screen widget
 

@@ -29,6 +29,11 @@ contract and persists through the SynapseBase collections
 * The old `openinfra/datacollector` project and the entire OpenInfra checkout
   have been removed; do not recreate them.
 
+The complete endpoint, authentication, validation, error, rate-limit, and
+response reference is maintained in
+[`docs/CONTRIBUTION_API.md`](../../docs/CONTRIBUTION_API.md). The table below is
+only a route inventory.
+
 ## Endpoints
 
 | Method | Path | Auth | Notes |
@@ -42,7 +47,7 @@ contract and persists through the SynapseBase collections
 | GET | `/api/contributions` | Bearer | pending submissions |
 | POST | `/api/contributions/{id}/approve` | Bearer | 30/min |
 | DELETE | `/api/contributions/{id}` | Bearer | 30/min |
-| GET | `/api/leaderboard` | — | public |
+| GET | `/api/leaderboard` | — | public, all organizations |
 | POST | `/api/sos` | — | 20/min |
 | GET | `/api/sos?status=` | Bearer | operator list |
 | POST | `/api/sos/{id}/ack` | Bearer | 30/min |
@@ -53,6 +58,48 @@ contract and persists through the SynapseBase collections
 | GET | `/api/map/config` | — | basemap selection |
 | GET | `/health`, `/ready` | — | new probes (internal) |
 | GET | `/api/health`, `/api/ready` | — | new probes through nginx |
+
+## Leaderboard response and UI filtering
+
+`GET /api/leaderboard` is anonymous and returns a JSON **array** (not an object).
+Only approved, non-anonymous submissions are counted. Rows are grouped by `msv`
+and sorted by `count` descending, then `contributor_name` ascending for ties.
+Every row has this schema:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `contributor_name` | string | Contributor display name |
+| `msv` | string | Contributor/student identifier and grouping key |
+| `unit` | string | Organization/unit; missing stored units fall back to `VKU` |
+| `count` | integer | Approved, non-anonymous submission count for that `msv` |
+
+```json
+[
+  {
+    "contributor_name": "Nguyen Van A",
+    "msv": "23AI034",
+    "unit": "VKU",
+    "count": 12
+  },
+  {
+    "contributor_name": "Tran Thi B",
+    "msv": "23AI035",
+    "unit": "UIT",
+    "count": 9
+  }
+]
+```
+
+The API currently returns **all units** and has no organization query parameter.
+The React leaderboard fetches the full array, derives its dropdown options from
+the `unit` values present, and applies the selected organization filter in the
+browser. Empty/missing units use the `VKU` fallback. The visible top three and
+table ranks are then recomputed within that selection, with an organization-
+specific empty state. This is a client-side presentation feature; the backend
+response and aggregation contract are unchanged.
+
+See the [full Contribution Portal API reference](../../docs/CONTRIBUTION_API.md#leaderboard)
+for the complete leaderboard contract and every other endpoint.
 
 ## Configuration
 
