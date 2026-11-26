@@ -15,6 +15,9 @@ Keep a Changelog format and version tags use Semantic Versioning.
   validation, response/error schemas, rate limits, and the all-units leaderboard
   contract; the contribution service README now links to it and documents the
   `contributor_name`/`msv`/`unit`/`count` row schema.
+- Bilingual contribution API documentation: a complete Vietnamese translation
+  at `docs/vi/CONTRIBUTION_API.md`, English/Vietnamese language links on both
+  references, and an English/Tiếng Việt index at `docs/README.md`.
 - ESP32 water-culvert demo: `city-iot-sensors`/`city-iot-readings` records for
   `cong-nc-001-wl`, an MQTT `iot-bridge` that refreshes sensor last-read state
   through a CAS PATCH, a virtual ESP32 (`apps/iot-mock`) with storm surges, and

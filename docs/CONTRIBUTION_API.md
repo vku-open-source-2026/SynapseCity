@@ -1,5 +1,7 @@
 # Contribution Portal API reference
 
+**Language / Ngôn ngữ:** [English](CONTRIBUTION_API.md) | [Tiếng Việt](vi/CONTRIBUTION_API.md)
+
 Base URL: **https://contribution.synapsecity.sbs**
 
 This document describes the HTTP contract implemented by the Rust Axum router in

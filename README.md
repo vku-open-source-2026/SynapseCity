@@ -96,10 +96,15 @@ API still returns all units and accepts no organization query parameter.
 
 The complete public API reference—including every Rust route, admin Bearer and
 sync-secret authentication, request validation, response schemas, status codes,
-and fixed-window rate limits—is in
-[`docs/CONTRIBUTION_API.md`](docs/CONTRIBUTION_API.md). The service-specific route
-inventory and leaderboard schema are in
+and fixed-window rate limits—is available in
+[English](docs/CONTRIBUTION_API.md) and
+[Tiếng Việt](docs/vi/CONTRIBUTION_API.md). The service-specific route inventory
+and leaderboard schema are in
 [`apps/contribution-service/README.md`](apps/contribution-service/README.md).
+
+> **Tiếng Việt:** Xem [tài liệu tham khảo API đầy đủ bằng tiếng Việt](docs/vi/CONTRIBUTION_API.md)
+> hoặc [tiếng Anh](docs/CONTRIBUTION_API.md) để biết mọi tuyến, quy tắc xác thực,
+> kiểm tra yêu cầu, schema phản hồi, mã trạng thái và giới hạn tốc độ.
 
 ## Android app and home-screen widget
 
