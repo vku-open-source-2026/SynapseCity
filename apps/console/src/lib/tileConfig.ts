@@ -7,7 +7,7 @@
  * an explicit attribution instead of leaking a direct vendor request.
  */
 
-const BASE_API: string = import.meta.env.VITE_BASE_API_URL ?? "";
+const BASE_API: string = import.meta.env.VITE_BASE_API_URL || "/v1";
 
 export interface TileConfig {
   tileUrl: string;

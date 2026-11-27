@@ -104,21 +104,28 @@ export const MapView = ({
   );
 
   // The backend decides the basemap: VietMap proxy when a key is configured,
-  // OpenStreetMap otherwise. Fall back to OSM if the config call fails.
-  const [tile, setTile] = useState({
+  // OpenStreetMap otherwise. Wait for the config probe before attaching tiles
+  // so no aborted third-party OSM requests fire when VietMap proxy is active.
+  const FALLBACK_TILE = {
     url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     attribution: '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-  });
+  };
+  const [tile, setTile] = useState(null);
   useEffect(() => {
     let cancelled = false;
     fetch(`${API_URL}/api/map/config`)
       .then((response) => (response.ok ? response.json() : null))
       .then((config) => {
-        if (!cancelled && config?.tileUrl) {
+        if (cancelled) return;
+        if (config?.tileUrl) {
           setTile({ url: config.tileUrl, attribution: config.attribution || '' });
+        } else {
+          setTile(FALLBACK_TILE);
         }
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (!cancelled) setTile(FALLBACK_TILE);
+      });
     return () => { cancelled = true; };
   }, []);
 
@@ -138,7 +145,7 @@ export const MapView = ({
   }, []);
 
   useEffect(() => {
-    if (!map) return undefined;
+    if (!map || !tile) return undefined;
     tileLayerRef.current?.remove();
     const layer = L.tileLayer(tile.url, {
       maxZoom: 20,
