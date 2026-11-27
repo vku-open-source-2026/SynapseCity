@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 VKU.VIC
-//! Persistence facade. Production uses SynapseBase; `json` is an explicit
-//! development-only fallback.
+//! Persistence facade. Production uses Tier-2 (SynapseDX) datasets/records;
+//! `base` (direct Tier-1) is a legacy fallback kept for migration/rollback,
+//! and `json` is an explicit development-only fallback.
 
 mod base;
+mod dx;
 mod json;
 
 pub use base::BaseStorage;
+pub use dx::{DxStorage, FEATURES_DATASET, SOS_DATASET, SUBMISSIONS_DATASET};
 pub use json::JsonStorage;
 
 use crate::config::{Config, StorageBackend};
@@ -22,13 +25,73 @@ pub const SOS_REPORTS: &str = "contribution_sos_reports";
 #[derive(Debug, thiserror::Error)]
 pub enum StorageError {
     #[error("SynapseBase error: {0}")]
-    Synapse(#[from] synapseone::Error),
+    Synapse(Box<synapseone::Error>),
+    #[error("Tier-2 error: {0}")]
+    Tier2(Box<synapsedx::Error>),
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
     #[error("{0}")]
     Invalid(String),
+}
+
+impl From<synapseone::Error> for StorageError {
+    fn from(error: synapseone::Error) -> Self {
+        Self::Synapse(Box::new(error))
+    }
+}
+
+impl From<synapsedx::Error> for StorageError {
+    fn from(error: synapsedx::Error) -> Self {
+        Self::Tier2(Box::new(error))
+    }
+}
+
+impl StorageError {
+    /// Whether retrying the same logical operation may succeed. A network error
+    /// is ambiguous: callers must check for a committed record before retrying.
+    pub fn is_retryable(&self) -> bool {
+        match self {
+            Self::Tier2(error) => match error.as_ref() {
+                synapsedx::Error::Network { .. } => true,
+                synapsedx::Error::Api { status, .. } => {
+                    matches!(status, 429 | 500 | 502 | 503 | 504)
+                }
+                _ => false,
+            },
+            // Compatibility for older storage adapters that stringify transport
+            // failures. New Tier-2 code preserves the typed error above.
+            Self::Invalid(message) => {
+                let message = message.to_ascii_lowercase();
+                [
+                    "timeout",
+                    "timed out",
+                    "unavailable",
+                    "network",
+                    " 503",
+                    " 502",
+                    " 500",
+                    " 429",
+                ]
+                .iter()
+                .any(|needle| message.contains(needle))
+            }
+            _ => false,
+        }
+    }
+
+    pub fn is_conflict(&self) -> bool {
+        match self {
+            Self::Tier2(error) => error.is_conflict(),
+            Self::Synapse(error) => error.is_conflict(),
+            Self::Invalid(message) => {
+                let message = message.to_ascii_lowercase();
+                message.contains("already exists") || message.contains("conflict")
+            }
+            _ => false,
+        }
+    }
 }
 
 pub type StorageResult<T> = std::result::Result<T, StorageError>;
@@ -50,6 +113,7 @@ pub trait Storage: Send + Sync {
     async fn delete_feature(&self, feature_id: &str) -> StorageResult<bool>;
     async fn add_contribution(&self, contribution: Value) -> StorageResult<()>;
     async fn get_pending_contributions(&self) -> StorageResult<Vec<Value>>;
+    async fn get_all_contributions(&self) -> StorageResult<Vec<Value>>;
     async fn approve_contribution(&self, contribution_id: &str) -> StorageResult<ApproveOutcome>;
     async fn reject_contribution(&self, contribution_id: &str) -> StorageResult<bool>;
     async fn get_leaderboard(&self) -> StorageResult<Value>;
@@ -61,6 +125,16 @@ pub trait Storage: Send + Sync {
 
 pub async fn from_config(config: &Config) -> StorageResult<Arc<dyn Storage>> {
     match config.storage_backend {
+        StorageBackend::Dx => {
+            let storage = DxStorage::new(
+                &config.synapsedx_base_url,
+                &config.synapsedx_api_key,
+                &config.synapsedx_token,
+                config.tier2_timeout_secs,
+            )
+            .await?;
+            Ok(Arc::new(storage))
+        }
         StorageBackend::Base => {
             let storage =
                 BaseStorage::new(&config.synapseone_base_url, &config.synapseone_api_key).await?;

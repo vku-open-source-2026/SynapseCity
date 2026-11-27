@@ -27,7 +27,8 @@ SynapseCity -> @synapsedx/capabilities -> @synapseone/sdk -> SynapseOne
 
 - Tier 2 only: `https://synapsedx.sbs`, through `@synapsedx/capabilities`.
 - No `@synapseone/sdk` import, SynapseOne call, Tier-1 service access or Tier-2
-  database access from this repository.
+  database access from this repository, except the contribution service's
+  scoped legacy migration/rollback backend and one-off migration binary.
 - No database, queue, cache or filesystem fallback. Domain records are written
   through the Tier-2 records API; public projections are read through the
   Tier-2 publication API.
@@ -140,11 +141,11 @@ routes share the `public-ai` per-IP budget (default 20/min,
 
 ## Dataset ownership
 
-The contribution portal currently uses the legacy SynapseBase collections
-`contribution_features`, `contribution_submissions` and
-`contribution_sos_reports`. This is a scoped exception while the portal moves to
-Tier-2 datasets; the target names are `city-contribution-*`. Do not reuse these
-collections from `city-service`.
+The contribution portal persists through Tier-2 datasets
+`city-contribution-features`, `city-contribution-submissions`, and
+`city-contribution-sos-reports`. Legacy `contribution_*` SynapseBase collections
+and direct Tier-1 access are limited to the contribution service's explicit
+migration/rollback path. Do not reuse those collections from `city-service`.
 
 Every City operations dataset uses the `city-` prefix. A `sos-` dataset is foreign and must
 never be read or written. The service fails at start-up if a configured dataset

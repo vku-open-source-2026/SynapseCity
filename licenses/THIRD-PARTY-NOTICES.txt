@@ -1,0 +1,31 @@
+SynapseCity third-party notices
+===============================
+
+SynapseCity source is Apache-2.0. Published City datasets are intended to be
+PDDL-1.0. Dependencies remain under their upstream licenses. See LICENSE,
+NOTICE, THIRD-PARTY.md, LICENSE-CHOICES.md, and SOURCE-OFFER.txt in this bundle.
+
+Notable components and obligations:
+
+* Leaflet 1.9.4 — BSD-2-Clause. The contribution console uses Leaflet directly;
+  React Leaflet/Hippocratic-2.1 is not included.
+* Font Awesome Free icons — (CC-BY-4.0 AND MIT). Attribution: Font Awesome Free
+  by Fonticons, Inc. and contributors — CC-BY-4.0 and MIT. Canonical license:
+  https://creativecommons.org/licenses/by/4.0/
+* @turf/jsts and jsts — EDL-1.0 OR EPL-1.0; SynapseCity chooses EDL-1.0. Full
+  EDL text is in EDL-1.0.txt.
+* node-forge — BSD-3-Clause OR GPL-2.0; SynapseCity chooses BSD-3-Clause.
+* cssparser 0.38.0 and dtoa-short 0.3.5 — MPL-2.0, statically linked through
+  ammonia in the contribution backend. Full MPL text is in MPL-2.0.txt and
+  source availability is in SOURCE-OFFER.txt.
+* Lightning CSS — MPL-2.0 in web/mobile build graphs. Source availability is in
+  SOURCE-OFFER.txt and exact package/source metadata is in the CI SBOM.
+* ICU/Unicode and webpki-roots — Unicode-3.0/CDLA-Permissive-2.0 terms; exact
+  package notices are retained by the generated CI inventory.
+* Mobile Sharp/libvips — LGPL terms in development-only asset tooling; not
+  confirmed to be bundled in the APK. Re-review before runtime bundling.
+
+The CI license inventory enumerates every resolved npm and Cargo package from
+all repository lockfiles, including development-only packages. Final container
+SBOMs are generated in release CI. This concise bundle is not a substitute for
+upstream copyright notices retained by that generated inventory.

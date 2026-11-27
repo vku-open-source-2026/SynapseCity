@@ -1,45 +1,39 @@
-# Contribution-service Tier-1 exception
+# Contribution-service legacy Tier-1 migration path
 
-Status: **temporary, scoped, pending Tier-2 migration**.
+Status: **Tier-2 production migration complete (2026-11-26); Tier-1 retained only
+for explicit migration/rollback**.
 
-`apps/contribution-service` is the only City application allowed to call the
-Tier-1 SynapseBase SDK. It reads and writes the legacy
-`contribution_submissions`, `contribution_features` and
-`contribution_sos_reports` collections until the `city-contribution-*` Tier-2
-datasets replace them. The exception must not be copied to `city-service`, the
-gateway, the console or the mobile app; `scripts/tier-boundary.test.mjs`
-enforces that boundary.
+`apps/contribution-service` stores production records in Tier-2 datasets
+`city-contribution-features`, `city-contribution-submissions`, and
+`city-contribution-sos-reports` through the published `synapsedx` SDK. The
+`synapseone` SDK and legacy `contribution_*` collections remain only for the
+one-off `migrate_base_to_dx` binary and `STORAGE_BACKEND=base` rollback. This
+exception must not be copied to `city-service`, the gateway, the console or the
+mobile app; `scripts/tier-boundary.test.mjs` enforces that boundary.
 
-## Risk
+## Legacy credential controls
 
-The service holds a long-lived account API key rather than a Tier-2 capability
-credential. A compromise has account-wide blast radius and bypasses Tier-2
-audit/rate-limit semantics.
-
-## Required controls while the exception exists
-
-- **Rotation owner:** the City deployment owner must rotate
-  `CONTRIBUTION_SYNAPSEONE_API_KEY` at least every 90 days and immediately after
-  any suspected exposure. Record the owner and last rotation date in the
-  deployment secret store, never in this repository or an issue.
-- **Least privilege:** the key must be restricted to the three
-  `contribution_*` collections and read/write only; no collection creation
-  outside that prefix, no admin scope, no account-wide wildcard.
-- **Expiry:** set an expiry date on the credential in the identity provider and
-  open a migration ticket before that date. An unexpiring key is not accepted
-  for a new deployment.
-- **Network:** the container keeps exactly one edge-network reference
-  (`synapseone_synapseone-net`, aliased as `edge`). Do not add the service to any
-  other Tier-1 network or publish a host port.
-- **Credential handling:** `SYNAPSEONE_API_KEY` is injected only into
-  `contribution-service`; Tier-3 apps use `SYNAPSEDX_*` only.
-- **CI guard:** `npm run test:tier-boundary` fails when a Tier-1 import,
-  environment variable or network reference appears outside the allowlist.
+- **Rotation owner:** the City deployment owner rotates the legacy key at least
+  every 90 days and immediately after suspected exposure; record the owner and
+  date in the secret store, never in source control.
+- **Least privilege:** restrict `CONTRIBUTION_SYNAPSEONE_API_KEY` to the three
+  `contribution_*` collections and read/write only; no admin or account-wide
+  wildcard.
+- **Expiry:** use a dated credential for migration/rollback and remove it when
+  that path is retired.
+- Inject it only when running the migration or an explicit rollback. New and
+  normal production deployments use `CONTRIBUTION_SYNAPSEDX_API_KEY` or
+  `CONTRIBUTION_SYNAPSEDX_TOKEN` instead.
+- Keep the legacy credential out of logs, source control, and public issues.
+- Do not add the contribution service to another Tier-1 network or publish a
+  host port.
 
 ## Tier-2 migration
 
-Target state: contribution data is stored/read through Tier-2 records/datasets
-with a scoped Tier-2 credential, and `synapseone` is removed from
-`Cargo.toml`, `docker-compose.yml` and `.env.example`. When migration completes,
-remove the allowlist from `scripts/tier-boundary.test.mjs` so the guard requires
-zero Tier-1 references.
+The migration uses deterministic feature IDs, preserves `legacy_id` and
+`legacy_source`, and checks for a committed record after ambiguous transport
+failures before retrying. Tier-2 reads page to completion without the former
+silent 10,000-record cap. Records without legacy IDs fail closed.
+
+After rollback is no longer required, remove `synapseone`, the `base` backend,
+and the corresponding tier-boundary allowlist entries together.

@@ -71,7 +71,10 @@ const Footer = () => {
             </div>
             <div className="border-t border-slate-200 dark:border-slate-800">
                 <p className="mx-auto max-w-7xl px-4 py-5 text-xs text-slate-500 sm:px-6 lg:px-8 dark:text-slate-500">
-                    {m.footer.bottom}
+                    {m.footer.bottom}{" "}
+                    <a href="/THIRD-PARTY-NOTICES.txt" className="hover:text-sky-600 hover:underline dark:hover:text-sky-400">
+                        Font Awesome Free by Fonticons, Inc. and contributors — CC-BY-4.0 and MIT; third-party notices
+                    </a>
                 </p>
             </div>
         </footer>

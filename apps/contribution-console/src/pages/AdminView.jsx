@@ -51,11 +51,13 @@ export function AdminView() {
             });
     }, []);
 
+    /* eslint-disable react-hooks/exhaustive-deps -- fetch only on auth transition */
     useEffect(() => {
         if (isAuthenticated) {
             fetchContributions();
         }
     }, [isAuthenticated]);
+    /* eslint-enable react-hooks/exhaustive-deps */
 
     useEffect(() => {
         if (contributions.length > 0) {
@@ -461,7 +463,8 @@ export function AdminView() {
                             onClick={async () => {
                                 try {
                                     await Promise.all(logic.pendingFeatures.map(feature => {
-                                        const { id, ...featureWithoutId } = feature;
+                                        const featureWithoutId = { ...feature };
+                                        delete featureWithoutId.id;
                                         return apiClient.post('/api/features', featureWithoutId);
                                     }));
                                     alert(`Saved ${logic.pendingFeatures.length} features!`);

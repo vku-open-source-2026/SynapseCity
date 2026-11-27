@@ -21,6 +21,7 @@ pub async fn ready(State(state): State<SharedState>) -> Json<Value> {
         "service": "contribution-backend",
         "version": env!("CARGO_PKG_VERSION"),
         "storage": match state.config.storage_backend {
+            crate::config::StorageBackend::Dx => "dx",
             crate::config::StorageBackend::Base => "base",
             crate::config::StorageBackend::Json => "json",
         },

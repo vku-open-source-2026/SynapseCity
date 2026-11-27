@@ -12,6 +12,9 @@ permissions:
   contents: write
   packages: write
 
+env:
+  SOURCE_COMMIT: ${{ github.sha }}
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -45,6 +48,29 @@ jobs:
         run: cargo test --locked
         working-directory: apps/contribution-service
 
+      - name: Install independently locked frontend dependencies
+        run: |
+          npm --prefix apps/contribution-console ci
+          npm --prefix mobile ci
+
+      - name: Audit production dependencies
+        run: npm run audit:production
+
+      - name: Check dependency licenses and generate release notices
+        run: |
+          npm run licenses:check
+          npm run licenses:inventory
+
+      - name: Generate CycloneDX SBOMs
+        run: npm run sbom:generate
+
+      - name: Build and test contribution frontend
+        working-directory: apps/contribution-console
+        run: |
+          npm run lint
+          npm test
+          npm run build
+
       - name: Prepare compose env
         run: cp .env.example .env
 
@@ -54,6 +80,25 @@ jobs:
         run: |
           OWNER="$(echo "${OWNER}" | tr '[:upper:]' '[:lower:]')"
           SYNAPSECITY_IMAGE_OWNER="$OWNER" SYNAPSECITY_VERSION=latest docker compose build
+
+      - name: Scan runtime images for SBOMs
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          OWNER="$(echo "${OWNER}" | tr '[:upper:]' '[:lower:]')"
+          for image in synapsecity-city-service synapsecity-gateway synapsecity-console synapsecity-contribution-service synapsecity-contribution-console synapsecity-iot-bridge synapsecity-iot-mock; do
+            docker run --rm -v "$PWD/sbom:/sbom" anchore/syft:latest \
+              "docker:ghcr.io/${OWNER}/${image}:latest" \
+              -o "spdx-json=/sbom/image-${image}.spdx.json"
+          done
+
+      - name: Upload release SBOMs
+        uses: actions/upload-artifact@v4
+        with:
+          name: synapsecity-release-sboms
+          path: sbom/
+          retention-days: 30
 
       - name: Log in to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
@@ -98,6 +143,11 @@ jobs:
           files: |
             docker-compose.yml
             infra/nginx/synapsecity.conf
+            LICENSE
+            NOTICE
+            THIRD-PARTY.md
+            licenses/
+            sbom/
           body: |
             SynapseCity ${{ github.ref_name }}
 
@@ -110,4 +160,8 @@ jobs:
             - `ghcr.io/${{ github.repository_owner }}/synapsecity-iot-bridge:${{ github.ref_name }}`
             - `ghcr.io/${{ github.repository_owner }}/synapsecity-iot-mock:${{ github.ref_name }}`
 
-            The pinned Tier-2 SDK tarball and checksum are attached.
+            Source commit: `${{ github.sha }}`
+
+            Dependency audits, license inventory, notice bundle, and CycloneDX
+            SBOMs are attached. MPL source availability is documented in
+            `licenses/SOURCE-OFFER.md` and the rendered image notices.

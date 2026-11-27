@@ -3,11 +3,10 @@
 /**
  * Tier boundary guard.
  *
- * contribution-service has one documented, temporary Tier-1 exception. This
- * test does not pretend the migration is complete; it fails if the exception
- * grows, leaks into another City component, or adds another Tier-1 network or
- * credential path. When the Tier-2 migration lands, remove the allowlist so the
- * guard requires zero Tier-1 references.
+ * contribution-service has one documented, scoped legacy Tier-1 migration and
+ * rollback path. Production uses Tier-2. This test does not pretend the legacy
+ * compatibility code is absent; it fails if the exception grows, leaks into
+ * another City component, or adds another Tier-1 network or credential path.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -25,6 +24,7 @@ const ALLOWED_SOURCE = new Set([
   'src/error.rs',
   'src/storage/base.rs',
   'src/storage/mod.rs',
+  'src/bin/migrate_base_to_dx.rs',
 ]);
 
 function walk(dir) {

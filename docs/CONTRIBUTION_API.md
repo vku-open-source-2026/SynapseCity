@@ -226,11 +226,12 @@ backend; it does not perform a live dependency probe.
   "status": "ready",
   "service": "contribution-backend",
   "version": "0.1.0",
-  "storage": "base"
+  "storage": "dx"
 }
 ```
 
-`storage` is `"base"` in production and may be `"json"` only in development.
+`storage` is `"dx"` in production. `"base"` is the legacy Tier-1
+migration/rollback backend; `"json"` is allowed only in development.
 
 ## Authentication endpoints
 
@@ -281,7 +282,8 @@ returns 401 with `{"detail":"Invalid token type"}`. Missing/invalid fields retur
 
 ## Infrastructure features
 
-Features are GeoJSON-like objects in `contribution_features`.
+Features are GeoJSON-like objects in the Tier-2 dataset
+`city-contribution-features`.
 
 ### GET `/api/features`
 

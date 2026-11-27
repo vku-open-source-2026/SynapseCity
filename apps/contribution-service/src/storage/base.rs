@@ -191,6 +191,11 @@ impl Storage for BaseStorage {
         Ok(items.iter().map(normalise_item).collect())
     }
 
+    async fn get_all_contributions(&self) -> StorageResult<Vec<Value>> {
+        let items = self.query_all(SUBMISSIONS, None, None).await?;
+        Ok(items.iter().map(normalise_item).collect())
+    }
+
     async fn approve_contribution(&self, contribution_id: &str) -> StorageResult<ApproveOutcome> {
         let doc = match self
             .client

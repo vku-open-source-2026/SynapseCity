@@ -2,15 +2,14 @@
 
 Backend for `https://contribution.synapsecity.sbs`, owned by SynapseCity. The
 source was migrated from the OpenInfra reference implementation; OpenInfra is no
-longer a deployment source. It keeps the public contribution-portal HTTP
-contract and persists through the SynapseBase collections
-`contribution_features`, `contribution_submissions` and
-`contribution_sos_reports`.
+longer a deployment source. Production persists through Tier-2 datasets
+`city-contribution-features`, `city-contribution-submissions`, and
+`city-contribution-sos-reports`.
 
 > **Boundary note:** this is a SynapseCity Tier-3 data-collection edge. The
-> direct `synapseone` SDK dependency is a scoped legacy exception while the
-> contribution collections move to Tier-2 datasets. Do not copy this pattern
-> into `city-service`, the gateway or the console.
+> legacy `synapseone` SDK/`contribution_*` path is retained only for the one-off
+> migration and explicit rollback (`STORAGE_BACKEND=base`). Do not copy direct
+> Tier-1 access into `city-service`, the gateway or the console.
 
 ## Why
 
@@ -108,9 +107,12 @@ Same variables as the Python backend, plus:
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `BIND_ADDR` | `0.0.0.0:8000` | listen address |
-| `STORAGE_BACKEND` | `base` | `base` or `json` (dev only) |
-| `SYNAPSEONE_BASE_URL` | `https://api.synapseone.space` | Tier-1 gateway |
-| `SYNAPSEONE_API_KEY` | — | Base API key (`base:*` scopes) |
+| `STORAGE_BACKEND` | `dx` | `dx`/`tier2`, legacy `base`/`tier1`, or dev-only `json` |
+| `SYNAPSEDX_BASE_URL` | `https://synapsedx.sbs` | public HTTPS Tier-2 endpoint |
+| `SYNAPSEDX_API_KEY` / `SYNAPSEDX_TOKEN` | — | Tier-2 credential; at least one required for `dx` |
+| `SYNAPSEDX_TIMEOUT_SECS` | `20` | clamped to 5–120 seconds |
+| `SYNAPSEONE_BASE_URL` | `https://api.synapseone.space` | legacy migration/rollback only |
+| `SYNAPSEONE_API_KEY` | — | required only for `base` |
 | `SYNC_SHARED_SECRET` | — | `X-Sync-Secret` for `/api/sync/ack` |
 | `JWT_SECRET_KEY` | — | ≥32 chars, required |
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | `admin` / — | single admin login |
@@ -121,9 +123,11 @@ Same variables as the Python backend, plus:
 | `BODY_LIMIT_BYTES` | `26214400` | 25 MB |
 | `REQUEST_TIMEOUT_SECS` | `60` | per-request timeout |
 
-Production fails fast on a short JWT secret, `STORAGE_BACKEND=json`, a missing
-Base key, the default admin password, or an `http://`/private dependency URL.
-Set `ALLOW_LOCAL_DEPENDENCIES=true` only for local tests.
+Production fails fast on a short JWT secret, `STORAGE_BACKEND=json`, missing
+credentials for the selected backend, the default admin password, or an
+`http://`/private/credential-bearing dependency URL. `ALLOW_LOCAL_DEPENDENCIES`
+is refused in production; outside production it permits loopback only, never
+RFC1918/ULA/link-local/private Docker hosts.
 
 ## Build and test
 
@@ -140,16 +144,27 @@ SYNC_SHARED_SECRET=testsecret \
 ./target/release/contribution-backend
 ```
 
-The crate resolves `synapseone = "0.9.0"` from crates.io. No sibling checkout
-or `path` dependency is required.
+The crate resolves `synapsedx = "0.7.0"` and legacy `synapseone = "0.9.0"` from
+crates.io. No sibling checkout or `path` dependency is required.
+
+## Tier-1 to Tier-2 migration
+
+Build/run `migrate_base_to_dx` with `SYNAPSEONE_API_KEY` and either
+`SYNAPSEDX_API_KEY` or `SYNAPSEDX_TOKEN`. Feature IDs are deterministic hashes of
+`contribution_features:<legacy id>`, retain `legacy_id`/`legacy_source`, and do
+not reuse City asset IDs. After an ambiguous timeout the migration queries for
+the committed record before retrying. A rerun therefore leaves one feature per
+legacy ID. Records without legacy IDs fail closed rather than receiving random
+IDs.
 
 ## Docker
 
-Build from this directory (self-contained context):
+Build from the repository root (the Docker context includes project notices):
 
 ```bash
-cd SynapseCity/apps/contribution-service
-docker build -t synapsecity-contribution-service:latest .
+docker build -f apps/contribution-service/Dockerfile \
+  --build-arg SOURCE_COMMIT="$(git rev-parse HEAD)" \
+  -t synapsecity-contribution-service:latest .
 ```
 
 The service is part of the SynapseCity stack:
@@ -171,15 +186,22 @@ docker compose -p synapsecity up -d --no-deps --build contribution-service contr
   fallback returned `name`, which the React page did not read).
 * `/health`, `/ready`, `/api/health` and `/api/ready` are new.
 * Password comparison is constant-time.
-* `STORAGE_BACKEND=json` is a development fallback only; production uses Base.
+* `STORAGE_BACKEND=json` is a development fallback only; production uses Tier-2
+  `dx`. `base` is legacy migration/rollback only.
+* Tier-2 reads page to completion using cursors when available, with offset
+  fallback and no silent 10,000-record cap.
 * The service is SynapseCity-owned; the OpenInfra checkout has been removed.
 
 ## Tests
 
 * `tests/api.rs` — auth, rate limiting, contributions, approval, leaderboard,
   features, sync ack, CSV, map config.
-* `tests/base_storage.rs` — collection bootstrap, query normalisation, feature
-  defaults, batch sync against a mock SynapseBase.
+* `tests/base_storage.rs` — legacy collection bootstrap and migration fallback.
+* `tests/dx_storage.rs` — Tier-2 bootstrap, >10,000-record pagination, and
+  concurrent-insert cursor behavior.
+* Migration unit tests — deterministic IDs and post-commit/lost-response reruns.
+* Configuration unit tests — production HTTPS, credential, private IPv4/IPv6,
+  Docker hostname, and local opt-in rules for both dependency settings.
 * Unit tests for the rate limiter and CSV builder.
 
 ## Memory

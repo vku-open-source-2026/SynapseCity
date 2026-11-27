@@ -85,7 +85,9 @@ The public data-contribution portal is served at
 **https://contribution.synapsecity.sbs** by `apps/contribution-service` (Rust/Axum)
 and `apps/contribution-console` (React/Vite). It supports infrastructure feature
 submissions, administrator moderation, CSV export, map configuration/tiles, and a
-legacy citizen SOS intake that is not an emergency-operations API.
+legacy citizen SOS intake that is not an emergency-operations API. Production
+persistence uses Tier-2 `city-contribution-*` datasets through SynapseDX; direct
+Tier-1 `contribution_*` collections are retained only for migration/rollback.
 
 The leaderboard's organization dropdown is a **client-side filter**. The console
 fetches `GET /api/leaderboard`, builds “Tất cả tổ chức” plus the organizations
@@ -476,8 +478,9 @@ The public edge routes `synapsecity.sbs` to the gateway. The gateway proxies
 
 City is a Tier-3 domain application in the OLP 2026 DX-OS model: it owns city
 assets, incidents, maintenance and budget rules, and consumes reusable H-P-D-I
-capabilities from SynapseDX over the public API. It never imports the Tier-1
-SDK or calls a Tier-1 service directly. The tier matrix, HITL contract and OLP
+capabilities from SynapseDX over the public API. It does not import the Tier-1
+SDK or call a Tier-1 service directly, except the contribution service's
+explicit legacy migration/rollback path. The tier matrix, HITL contract and OLP
 evidence checklist are in
 [`SynapseDX/docs/DX_OS_TIER_MODEL_2026-11-04.md`](https://github.com/vku-open-source-2026/SynapseDX/blob/main/docs/DX_OS_TIER_MODEL_2026-11-04.md).
 
@@ -488,7 +491,11 @@ evidence checklist are in
 - Build from source: `npm ci && npm run build` using Node.js 20+; Docker builds are reproducible with `docker compose build`.
 - Issue tracker: [GitHub Issues](https://github.com/vku-open-source-2026/SynapseCity/issues).
 - Change history: [`CHANGELOG.md`](CHANGELOG.md). Versioned release tags are published on GitHub.
-- Dependency inventory: [`THIRD-PARTY.md`](THIRD-PARTY.md); dependencies are not modified or bundled into the repository.
+- Dependency inventory: [`THIRD-PARTY.md`](THIRD-PARTY.md), with MPL source
+  availability in [`licenses/SOURCE-OFFER.md`](licenses/SOURCE-OFFER.md).
+  `npm run licenses:check`, `npm run audit:production`, and
+  `npm run sbom:generate` cover every npm/Cargo lock. Release builds include the
+  notice bundle in frontend `dist`, runtime images, and APK assets.
 
 ## Brand
 

@@ -10,6 +10,11 @@ on:
   pull_request:
     paths:
       - "mobile/**"
+      - "scripts/license-gate.mjs"
+      - "licenses/**"
+      - "LICENSE"
+      - "NOTICE"
+      - "THIRD-PARTY.md"
       - ".github/workflows/mobile-build.yml"
 
 permissions:
@@ -38,6 +43,8 @@ jobs:
           cache: npm
           cache-dependency-path: mobile/package-lock.json
       - run: npm ci
+      - name: Check mobile dependency licenses
+        run: node ../scripts/license-gate.mjs --npm-only --npm-lock mobile/package-lock.json
       - run: npm run typecheck
       - run: npm test
       - run: npm run verify
@@ -71,13 +78,21 @@ jobs:
           "$SDKMANAGER" --install "platforms;android-37.0" "build-tools;37.0.0" "ndk;27.1.12297006" "cmake;3.22.1"
       - name: Install JS dependencies
         run: npm ci
+      - name: Generate APK third-party notices
+        env:
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: |
+          node ../scripts/license-gate.mjs --npm-only --npm-lock mobile/package-lock.json \
+            --notices-output ../licenses/THIRD-PARTY-NOTICES.generated.txt \
+            --output-json dist/license-inventory.json
       - name: Build unsigned release APK
         working-directory: mobile/android
         run: |
           chmod +x gradlew
           ./gradlew :app:assembleRelease --no-daemon --max-workers=2 \
             -PreactNativeArchitectures=arm64-v8a,x86_64 \
-            -Pexpo.signing.skip=true
+            -Pexpo.signing.skip=true \
+            -PsynapsecitySourceCommit=${GITHUB_SHA}
       - name: Prepare artifact
         run: |
           set -euo pipefail
@@ -86,6 +101,13 @@ jobs:
           mkdir -p dist
           APK="android/app/build/outputs/apk/release/app-release-unsigned.apk"
           test -f "$APK"
+          unzip -l "$APK" | grep -q 'assets/THIRD-PARTY-NOTICES.txt'
+          unzip -l "$APK" | grep -q 'assets/licenses/MPL-2.0.txt'
+          unzip -p "$APK" assets/SOURCE-OFFER.txt | grep -q "github.com/vku-open-source-2026/SynapseCity/tree/${GITHUB_SHA}"
+          if unzip -p "$APK" assets/SOURCE-OFFER.txt | grep -q 'SOURCE_COMMIT'; then
+            echo "APK source offer contains an unrendered commit placeholder" >&2
+            exit 1
+          fi
           cp "$APK" "dist/SynapseCity-${VERSION}-unsigned.apk"
           sha256sum "dist/SynapseCity-${VERSION}-unsigned.apk" > "dist/SHA256SUMS.txt"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
@@ -97,6 +119,7 @@ jobs:
           path: |
             mobile/dist/SynapseCity-${{ env.VERSION }}-unsigned.apk
             mobile/dist/SHA256SUMS.txt
+            mobile/dist/license-inventory.json
           if-no-files-found: error
           retention-days: 14
 

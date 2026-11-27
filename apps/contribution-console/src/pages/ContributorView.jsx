@@ -100,7 +100,8 @@ export function ContributorView() {
         try {
             await Promise.all(logic.pendingFeatures.map((feature) => {
                 // Remove id field as backend doesn't accept it
-                const { id, ...featureWithoutId } = feature;
+                const featureWithoutId = { ...feature };
+                delete featureWithoutId.id;
                 return axios.post(`${API_URL}/api/contributions`, {
                     ...featureWithoutId,
                     ...(anonymous

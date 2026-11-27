@@ -11,6 +11,9 @@ on:
 permissions:
   contents: read
 
+env:
+  SOURCE_COMMIT: ${{ github.sha }}
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -60,17 +63,23 @@ jobs:
           npm run test:workflow-artifacts
           npm run test:release-contracts
 
-      - name: Audit production dependencies
-        run: npm audit --omit=dev --audit-level=critical
+      - name: Audit all production dependency locks
+        run: npm run audit:production
 
-      - name: Generate CycloneDX SBOM
-        run: npm sbom --sbom-format=cyclonedx > sbom.cdx.json
+      - name: Check dependency licenses
+        run: npm run licenses:check
 
-      - name: Upload SBOM
+      - name: Verify frontend notice artifacts
+        run: node scripts/check-notice-artifacts.mjs apps/console/dist
+
+      - name: Generate CycloneDX SBOMs for all npm and Cargo locks
+        run: npm run sbom:generate
+
+      - name: Upload SBOMs
         uses: actions/upload-artifact@v4
         with:
-          name: synapsecity-sbom
-          path: sbom.cdx.json
+          name: synapsecity-sboms
+          path: sbom/
           retention-days: 14
 
       - name: Lint console

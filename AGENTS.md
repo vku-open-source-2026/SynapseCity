@@ -28,11 +28,11 @@ The repository is split into product parts:
 - Do not call, import or proxy SynapseCitySOS. A link to
   `https://sos.synapsecity.sbs` is public navigation only.
 - Do not add cross-product imports or API calls anywhere in the workspace.
-- **Contribution exception:** `apps/contribution-service` currently uses the
-  published `synapseone` Rust SDK from crates.io to read/write the `contribution_*` SynapseBase
-  collections. This is a scoped legacy exception while those collections move
-  to Tier-2 datasets. It must not be copied into `city-service`, the gateway or
-  the console; no other City app may call Tier 1 directly.
+- **Contribution Tier-2 (2026-11-26):** `apps/contribution-service` persists
+  through Tier-2 (`synapsedx` Rust SDK, `city-contribution-*` datasets) at
+  `https://synapsedx.sbs`. Direct Tier-1 (`synapseone`, `contribution_*`
+  collections) is legacy migration/rollback only (`STORAGE_BACKEND=base`).
+  No other City app may call Tier 1 directly.
 
 ## Contribution portal
 
@@ -46,8 +46,9 @@ implementation; the `openinfra/` checkout has been removed and must not be recre
   `docker-compose.yml`; aliases `contribution-backend` and
   `contribution-frontend` on the shared edge network.
 - Env prefix: `CONTRIBUTION_*` in `.env` / `.env.example`.
-- Data: `contribution_features`, `contribution_submissions`,
-  `contribution_sos_reports` (legacy SynapseBase exception; target is Tier-2).
+- Data: `city-contribution-features`, `city-contribution-submissions`,
+  `city-contribution-sos-reports` (Tier-2 datasets, PDDL-1.0). Legacy
+  `contribution_*` Tier-1 collections are migration/rollback only.
 - The portal may collect public citizen infrastructure submissions and SOS
   reports, but it is **not** the SOS operations product. It must not add
   dispatch, EOP, SITREP, AAR, hazard feeds or emergency command-centre

@@ -20,6 +20,13 @@ Write-Host "Mirroring $source -> $short"
 & robocopy $source $short /E /XD node_modules .expo dist .git android\app\.cxx android\app\build android\build /NFL /NDL /NJH /NJS /NP | Out-Null
 if ($LASTEXITCODE -gt 7) { throw "robocopy failed with exit code $LASTEXITCODE" }
 
+$repoRoot = Split-Path -Parent $source
+New-Item -ItemType Directory -Force -Path (Join-Path $short 'licenses') | Out-Null
+Copy-Item (Join-Path $repoRoot 'LICENSE'), (Join-Path $repoRoot 'NOTICE'), (Join-Path $repoRoot 'THIRD-PARTY.md') -Destination $short -Force
+Get-ChildItem (Join-Path $repoRoot 'licenses') | Copy-Item -Destination (Join-Path $short 'licenses') -Recurse -Force
+$sourceCommit = (& git -C $repoRoot rev-parse HEAD).Trim()
+if (-not $sourceCommit) { throw "Could not determine SOURCE_COMMIT for APK notices" }
+
 if (-not (Test-Path $store)) {
     Write-Host 'Installing dependencies in the short build directory'
     Push-Location $short
@@ -37,7 +44,7 @@ $env:ANDROID_SDK_ROOT = $env:ANDROID_HOME
 $env:Path = "$env:JAVA_HOME\bin;$env:ANDROID_HOME\platform-tools;$env:Path"
 
 Write-Host 'Building release APK'
-& cmd /c "`"$gradle`" -p `"$short\android`" :app:assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,x86_64 -Pexpo.signing.skip=true > `"$dist\build.log`" 2>&1"
+& cmd /c "`"$gradle`" -p `"$short\android`" :app:assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,x86_64 -Pexpo.signing.skip=true -PsynapsecitySourceCommit=$sourceCommit > `"$dist\build.log`" 2>&1"
 if ($LASTEXITCODE -ne 0) { throw "Gradle failed; see $dist\build.log" }
 if (-not (Test-Path $apk)) { throw "APK not found at $apk" }
 

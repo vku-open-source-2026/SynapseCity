@@ -4,8 +4,10 @@ services:
   city-service:
     image: ghcr.io/${SYNAPSECITY_IMAGE_OWNER:-vku-open-source-2026}/synapsecity-city-service:${SYNAPSECITY_VERSION:-latest}
     build:
-      context: ..
-      dockerfile: SynapseCity/apps/city-service/Dockerfile
+      context: .
+      dockerfile: apps/city-service/Dockerfile
+      args:
+        SOURCE_COMMIT: ${SOURCE_COMMIT:-}
     restart: unless-stopped
     env_file: .env
     environment:
@@ -22,8 +24,10 @@ services:
   gateway:
     image: ghcr.io/${SYNAPSECITY_IMAGE_OWNER:-vku-open-source-2026}/synapsecity-gateway:${SYNAPSECITY_VERSION:-latest}
     build:
-      context: ..
-      dockerfile: SynapseCity/apps/gateway/Dockerfile
+      context: .
+      dockerfile: apps/gateway/Dockerfile
+      args:
+        SOURCE_COMMIT: ${SOURCE_COMMIT:-}
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -45,10 +49,11 @@ services:
   console:
     image: ghcr.io/${SYNAPSECITY_IMAGE_OWNER:-vku-open-source-2026}/synapsecity-console:${SYNAPSECITY_VERSION:-latest}
     build:
-      context: ./apps/console
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/console/Dockerfile
       args:
         VITE_BASE_API_URL: /v1
+        SOURCE_COMMIT: ${SOURCE_COMMIT:-}
     restart: unless-stopped
     expose: ["80"]
     networks:
@@ -129,16 +134,24 @@ services:
     networks: [synapsecity]
 
 
-  # Contribution portal (contribution.synapsecity.sbs). Migrated from the
-  # OpenInfra reference implementation; OpenInfra is not a deployment source.
+  # Contribution portal (contribution.synapsecity.sbs). Tier-3 product.
+  # Persistence is Tier-2 (SynapseDX datasets `city-contribution-*`); direct
+  # Tier-1 (SynapseOne) access is legacy migration/rollback only.
   contribution-service:
     image: ghcr.io/${SYNAPSECITY_IMAGE_OWNER:-vku-open-source-2026}/synapsecity-contribution-service:${SYNAPSECITY_VERSION:-latest}
     build:
-      context: ./apps/contribution-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/contribution-service/Dockerfile
+      args:
+        SOURCE_COMMIT: ${SOURCE_COMMIT:-}
     restart: unless-stopped
     environment:
-      STORAGE_BACKEND: ${CONTRIBUTION_STORAGE_BACKEND:-base}
+      STORAGE_BACKEND: ${CONTRIBUTION_STORAGE_BACKEND:-dx}
+      ALLOW_LOCAL_DEPENDENCIES: "false"
+      SYNAPSEDX_BASE_URL: ${CONTRIBUTION_SYNAPSEDX_BASE_URL:-https://synapsedx.sbs}
+      SYNAPSEDX_API_KEY: ${CONTRIBUTION_SYNAPSEDX_API_KEY:-${SYNAPSEDX_API_KEY:-}}
+      SYNAPSEDX_TOKEN: ${CONTRIBUTION_SYNAPSEDX_TOKEN:-${SYNAPSEDX_TOKEN:-}}
+      SYNAPSEDX_TIMEOUT_SECS: ${CONTRIBUTION_SYNAPSEDX_TIMEOUT_SECS:-20}
       SYNAPSEONE_BASE_URL: ${CONTRIBUTION_SYNAPSEONE_BASE_URL:-https://api.synapseone.space}
       SYNAPSEONE_API_KEY: ${CONTRIBUTION_SYNAPSEONE_API_KEY:-}
       SYNC_SHARED_SECRET: ${CONTRIBUTION_SYNC_SHARED_SECRET:-}
@@ -160,10 +173,11 @@ services:
   contribution-console:
     image: ghcr.io/${SYNAPSECITY_IMAGE_OWNER:-vku-open-source-2026}/synapsecity-contribution-console:${SYNAPSECITY_VERSION:-latest}
     build:
-      context: ./apps/contribution-console
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/contribution-console/Dockerfile
       args:
         VITE_API_URL: ""
+        SOURCE_COMMIT: ${SOURCE_COMMIT:-}
     restart: unless-stopped
     expose: ["5173"]
     networks:

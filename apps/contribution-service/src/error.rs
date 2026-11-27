@@ -79,6 +79,13 @@ impl From<synapseone::Error> for ApiError {
     }
 }
 
+impl From<synapsedx::Error> for ApiError {
+    fn from(error: synapsedx::Error) -> Self {
+        tracing::error!(error = %error, "Tier-2 request failed");
+        ApiError::internal("Storage backend request failed")
+    }
+}
+
 impl From<reqwest::Error> for ApiError {
     fn from(error: reqwest::Error) -> Self {
         tracing::error!(error = %error, "upstream request failed");

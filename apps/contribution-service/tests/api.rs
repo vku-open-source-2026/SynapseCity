@@ -70,6 +70,10 @@ impl Storage for MockStorage {
             .collect())
     }
 
+    async fn get_all_contributions(&self) -> StorageResult<Vec<Value>> {
+        Ok(self.contributions.lock().await.clone())
+    }
+
     async fn approve_contribution(&self, contribution_id: &str) -> StorageResult<ApproveOutcome> {
         let mut contributions = self.contributions.lock().await;
         let Some(item) = contributions
@@ -219,6 +223,10 @@ fn test_config() -> Config {
     Config {
         bind: "127.0.0.1:0".to_string(),
         storage_backend: StorageBackend::Json,
+        synapsedx_base_url: "https://synapsedx.sbs".to_string(),
+        synapsedx_api_key: String::new(),
+        synapsedx_token: String::new(),
+        tier2_timeout_secs: 20,
         synapseone_base_url: "https://api.synapseone.space".to_string(),
         synapseone_api_key: String::new(),
         sync_shared_secret: Some("testsecret".to_string()),

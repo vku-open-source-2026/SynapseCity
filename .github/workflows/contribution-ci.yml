@@ -7,6 +7,11 @@ on:
     paths:
       - 'apps/contribution-service/**'
       - 'apps/contribution-console/**'
+      - 'scripts/**'
+      - 'licenses/**'
+      - 'LICENSE'
+      - 'NOTICE'
+      - 'THIRD-PARTY.md'
       - '.github/workflows/contribution-ci.yml'
       - 'docker-compose.yml'
   push:
@@ -14,6 +19,11 @@ on:
     paths:
       - 'apps/contribution-service/**'
       - 'apps/contribution-console/**'
+      - 'scripts/**'
+      - 'licenses/**'
+      - 'LICENSE'
+      - 'NOTICE'
+      - 'THIRD-PARTY.md'
       - '.github/workflows/contribution-ci.yml'
       - 'docker-compose.yml'
 
@@ -30,7 +40,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.100.0
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
@@ -55,5 +65,14 @@ jobs:
           cache-dependency-path: apps/contribution-console/package-lock.json
       - run: npm ci
         working-directory: apps/contribution-console
+      - run: npm run lint
+        working-directory: apps/contribution-console
+      - run: npm test
+        working-directory: apps/contribution-console
+      - run: npm audit --omit=dev --audit-level=high
+        working-directory: apps/contribution-console
       - run: npm run build
         working-directory: apps/contribution-console
+        env:
+          SOURCE_COMMIT: ${{ github.sha }}
+      - run: node scripts/check-notice-artifacts.mjs apps/contribution-console/dist

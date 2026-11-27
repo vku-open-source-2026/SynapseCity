@@ -145,6 +145,34 @@ android {
             useLegacyPackaging enableLegacyPackaging.toBoolean()
         }
     }
+    def noticeAssets = layout.buildDirectory.dir("generated/licenseNotices/assets")
+    def noticeRoot = rootProject.file("../../LICENSE").exists() ? rootProject.file("../../") : rootProject.file("..")
+    tasks.register("copyLicenseNotices", Copy) {
+        from(new File(noticeRoot, "LICENSE"))
+        from(new File(noticeRoot, "NOTICE"))
+        from(new File(noticeRoot, "THIRD-PARTY.md"))
+        from(new File(noticeRoot, "licenses")) {
+            include "**/*"
+            exclude "SOURCE-OFFER.md"
+            into "licenses"
+        }
+        into noticeAssets
+        doLast {
+            def sourceCommit = findProperty("synapsecitySourceCommit") ?: System.getenv("SOURCE_COMMIT") ?: ""
+            if (!sourceCommit.trim()) {
+                throw new GradleException("Set -PsynapsecitySourceCommit or SOURCE_COMMIT for APK license notices")
+            }
+            def template = new File(noticeRoot, "licenses/SOURCE-OFFER.md").text
+            def rendered = template.replace("SOURCE_COMMIT", sourceCommit.trim())
+            new File(noticeAssets.get().asFile, "SOURCE-OFFER.txt").text = rendered
+            new File(new File(noticeAssets.get().asFile, "licenses"), "SOURCE-OFFER.txt").text = rendered
+            def generated = new File(noticeRoot, "licenses/THIRD-PARTY-NOTICES.generated.txt")
+            def notices = generated.exists() ? generated : new File(noticeRoot, "licenses/THIRD-PARTY-NOTICES.txt")
+            new File(noticeAssets.get().asFile, "THIRD-PARTY-NOTICES.txt").text = notices.text
+        }
+    }
+    android.sourceSets.main.assets.srcDir(noticeAssets)
+    tasks.named("preBuild").configure { dependsOn("copyLicenseNotices") }
     androidResources {
         ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
     }

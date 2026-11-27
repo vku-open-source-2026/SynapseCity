@@ -140,6 +140,10 @@ impl Storage for JsonStorage {
             .collect())
     }
 
+    async fn get_all_contributions(&self) -> StorageResult<Vec<Value>> {
+        Ok(self.state.lock().await.contributions.clone())
+    }
+
     async fn approve_contribution(&self, contribution_id: &str) -> StorageResult<ApproveOutcome> {
         let mut state = self.state.lock().await;
         let Some(index) = state

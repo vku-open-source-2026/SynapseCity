@@ -156,4 +156,6 @@ SOS map API.
 
 Source code is Apache-2.0. Published City datasets are **PDDL 1.0** (Open Data
 Commons Public Domain Dedication and License). See the repository `LICENSE`,
-`NOTICE` and `THIRD-PARTY.md`.
+`NOTICE`, `THIRD-PARTY.md`, and `licenses/`. Production `dist` includes the
+rendered third-party notice/source-offer bundle; Font Awesome attribution is
+shown in the site footer.

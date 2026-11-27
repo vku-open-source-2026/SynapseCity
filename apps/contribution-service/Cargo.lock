@@ -294,6 +294,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "subtle",
+ "synapsedx",
  "synapseone",
  "tempfile",
  "thiserror",
@@ -1728,6 +1729,24 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "synapsedx"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "734a02a55597642c9553515e7b8ef02b6f08b7f95cdf586f2ad875a4baed4960"
+dependencies = [
+ "bytes",
+ "http",
+ "percent-encoding",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "url",
+ "uuid",
 ]
 
 [[package]]

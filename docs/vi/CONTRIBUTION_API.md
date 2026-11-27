@@ -230,12 +230,12 @@ thực hiện kiểm tra trực tiếp phụ thuộc đang hoạt động.
   "status": "ready",
   "service": "contribution-backend",
   "version": "0.1.0",
-  "storage": "base"
+  "storage": "dx"
 }
 ```
 
-`storage` là `"base"` trong production và chỉ có thể là `"json"` trong môi
-trường phát triển.
+`storage` là `"dx"` trong production. `"base"` là backend Tier-1 cũ dùng cho
+migration/rollback; `"json"` chỉ được phép trong môi trường phát triển.
 
 ## Điểm cuối xác thực
 
@@ -286,7 +286,8 @@ thì trả 401 kèm `{"detail":"Invalid token type"}`. Thiếu/không hợp lệ
 
 ## Feature hạ tầng
 
-Feature là các đối tượng tương tự GeoJSON trong `contribution_features`.
+Feature là các đối tượng tương tự GeoJSON trong dataset Tier-2
+`city-contribution-features`.
 
 ### GET `/api/features`
 

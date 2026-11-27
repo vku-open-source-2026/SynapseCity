@@ -7,6 +7,12 @@ node_modules/
 .tanstack/
 .notes/
 
+# Generated dependency inventories/SBOMs are CI artifacts, not source files.
+/licenses/inventory.json
+/licenses/INVENTORY.txt
+/licenses/THIRD-PARTY-NOTICES.generated.txt
+/sbom/
+
 # Generated ESP32 sketches contain the WiFi password
 firmware/
 

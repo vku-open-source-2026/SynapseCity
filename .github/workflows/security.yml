@@ -31,7 +31,8 @@ jobs:
       - name: Review dependency changes
         uses: actions/dependency-review-action@v4
         with:
-          fail-on-severity: critical
+          fail-on-severity: high
+          deny-licenses: Hippocratic-2.1
 
   codeql:
     runs-on: ubuntu-latest

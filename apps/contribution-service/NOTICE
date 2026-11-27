@@ -1,12 +1,20 @@
 SynapseCity — Tier-3 infrastructure product
 Copyright 2026 VKU.VIC Contributors
 
-Source code is licensed under Apache-2.0. Published City datasets are dedicated
-to the public domain under the Open Data Commons Public Domain Dedication and
-License (PDDL) 1.0: https://opendatacommons.org/licenses/pddl/1-0/
+Source code is licensed under Apache-2.0. Published City datasets are intended
+to be dedicated to the public domain under the Open Data Commons Public Domain
+Dedication and License (PDDL) 1.0:
+https://opendatacommons.org/licenses/pddl/1-0/
 
 Team: VKU.VIC
 Members:
 - Ho Sy Bao Nhan
 - Tran Thi Thuy Duong
 - Vo Thanh Nam
+
+Third-party components retain their upstream licenses. The release includes
+THIRD-PARTY.md and licenses/THIRD-PARTY-NOTICES.txt. MPL-2.0 source availability
+is described in licenses/SOURCE-OFFER.md. Font Awesome Free attribution:
+Font Awesome Free by Fonticons, Inc. and contributors — CC-BY-4.0 and MIT.
+
+This notice does not change the terms of any third-party license.
