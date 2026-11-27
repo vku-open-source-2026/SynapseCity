@@ -70,18 +70,41 @@ every operation is migrated.
 - Tier-2 gateway user-key identity is the authorization boundary; the workflow
   does not carry a user token and does not call Tier-3.
 
-## Engine test (local only)
+## Workflow contract and engine tests
+
+Clean-checkout CI and release gates run the repository-local artifact harness:
+
+```bash
+npm run test:workflow-artifacts
+```
+
+The artifact harness executes the JavaScript embedded in the committed code
+nodes and inspects the actual public/private payload destinations. It covers
+registered creates/transitions, full-record `ifVersion` CAS, malformed-input
+refusal before HTTP, terminal-record refusal, `409` propagation, and incident
+sidecar redaction. The suite is non-skippable in a clean checkout, so a
+zero-test/skip-only run cannot pass the release gate. This is a product-artifact
+contract, not a claim that the Tier-1 engine ran.
+
+The real Tier-1 `runWorkflow` engine harness remains available for an explicitly
+provisioned integration job with sibling SynapseOne/DX checkouts:
 
 ```bash
 npm run test:workflow-engine
+npm run test:domain-workflows
+
+# Fail rather than skip when the integration harness is not provisioned:
+REQUIRE_REAL_WORKFLOW_ENGINE=1 npm run test:workflow-engine
+REQUIRE_REAL_DOMAIN_WORKFLOWS=1 npm run test:domain-workflows
 ```
 
-This runs the real Tier-1 `runWorkflow` engine with a fake `fetch` transport
-(no network, no real credential): it asserts the exact POST URL, `X-API-Key`
-from an in-memory api-key resolver, `{data,publish}` body, validated domain
-fields, the audit object, transition GET(`includeInput`)→merge→PATCH with
-`ifVersion`, terminal refusal, `409` CAS propagation, AAR-before-event-close,
-and that a malformed form fails before any HTTP call.
+The real-engine tests use a fake `fetch` transport (no network or real
+credential). They assert the exact POST URL, `X-API-Key` from an in-memory
+api-key resolver, `{data,publish}` body, validated domain fields, audit object,
+transition GET(`includeInput`)→merge→PATCH with `ifVersion`, terminal refusal,
+and `409` CAS propagation. They may skip only for an ordinary local run; a
+required integration run fails when the sibling harness is absent, and each
+file asserts its expected executed-test count.
 
 The machine-readable transition design is `actions.design.json` in this
 directory (operations, required fields, allowed states, patch, invariants and

@@ -178,7 +178,7 @@
         "resource": "budgets",
         "workflowRef": {
           "name": "city-workspace-actions",
-          "checksum": "8e4bb7820b8597dfd3942804608884c874ae90a22e4a8c8cef7feaec6dd5a73e"
+          "checksum": "ce611aedb58d452c05abf7c5d50957f45c9826444ad052b7b07fa97d3eba6d9b"
         },
         "onSubmit": "act-budget-decision-submit"
       },
@@ -210,7 +210,7 @@
         "resource": "maintenance",
         "workflowRef": {
           "name": "city-workspace-actions",
-          "checksum": "8e4bb7820b8597dfd3942804608884c874ae90a22e4a8c8cef7feaec6dd5a73e"
+          "checksum": "ce611aedb58d452c05abf7c5d50957f45c9826444ad052b7b07fa97d3eba6d9b"
         },
         "onSubmit": "act-maintenance-decision-submit"
       },
@@ -729,5 +729,5 @@
     "path": "plugins/city-manager-review.plugin.json",
     "revision": "2026-11-15.business"
   },
-  "checksum": "sha256:b8b4df300b5de5b623aa875644dc40dfbecb05b833a1d98e7edd4f047406d6b0"
+  "checksum": "sha256:378a7009b70fc5cecdedec7d4e42582030f070d2d4df19fd5d187d1b300cf19c"
 }

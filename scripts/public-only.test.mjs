@@ -45,11 +45,30 @@ test('console nginx redirects every retired path to the fixed DX URL', () => {
     assert.ok(!/\?next=/.test(config), 'redirects must not preserve a return target');
 });
 
-test('public edge redirects before proxying the console', () => {
+function edgeServerBlocks() {
     const config = read('infra/nginx/synapsecity.conf');
-    for (const location of ['= /login', '= /register', '= /workspace', '^~ /admin/', '^~ /technician/']) {
-        const pattern = new RegExp(`location ${location.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\{ return 308 ${DX}; \\}`);
-        assert.match(config, pattern, `edge missing redirect for ${location}`);
+    return [...config.matchAll(/^server\s*\{([\s\S]*?)^\}/gm)].map((match) => match[1]);
+}
+
+test('public edge redirects every retired path before proxying either console host', () => {
+    const blocks = edgeServerBlocks();
+    assert.equal(blocks.length, 2, 'canonical and cloud server blocks must both exist');
+    for (const [index, host] of ['synapsecity.sbs', 'cloud.synapsecity.sbs'].entries()) {
+        assert.match(blocks[index], new RegExp(`server_name\\s+${host.replace(/\./g, '\\.')};`));
+        for (const location of ['= /login', '= /register', '= /workspace', '^~ /workspace/', '= /admin', '^~ /admin/', '= /technician', '^~ /technician/']) {
+            const pattern = new RegExp(`location ${location.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\{ return 308 ${DX}; \\}`);
+            assert.match(blocks[index], pattern, `${host} missing redirect for ${location}`);
+        }
+    }
+});
+
+test('every public-edge proxy sanitizes the client IP at the single trusted hop', () => {
+    for (const block of edgeServerBlocks()) {
+        const proxyPasses = block.match(/proxy_pass\s+/g) || [];
+        const forwarded = block.match(/proxy_set_header X-Forwarded-For \$remote_addr;/g) || [];
+        assert.ok(proxyPasses.length >= 5, 'health, ready, API and console proxy locations must exist');
+        assert.equal(forwarded.length, proxyPasses.length, 'every proxy location must set the sanitized client IP');
+        assert.doesNotMatch(block, /\$proxy_add_x_forwarded_for/, 'the edge must overwrite, not append to client-supplied XFF');
     }
 });
 

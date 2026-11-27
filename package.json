@@ -30,6 +30,9 @@
     "test:workflow-artifacts": "node --test --test-concurrency=1 scripts/workflow-artifacts.test.mjs",
     "test:workflow-engine": "node --test --test-concurrency=1 scripts/workflow-engine.test.mjs",
     "test:domain-workflows": "node --test --test-concurrency=1 scripts/domain-workflows.test.mjs",
+    "test:release-contracts": "node --test --test-concurrency=1 scripts/release-contracts.test.mjs",
+    "test:gateway-rate-limit:e2e": "node scripts/gateway-rate-limit-e2e.mjs",
+    "smoke:retired-routes": "node scripts/production-retired-routes-smoke.mjs",
     "workflows:validate": "node workflows/validate.mjs",
     "build:contribution": "npm --prefix apps/contribution-console run build",
     "dev:contribution": "npm --prefix apps/contribution-console run dev"

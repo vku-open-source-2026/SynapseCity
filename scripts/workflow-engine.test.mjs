@@ -14,10 +14,10 @@
  * - a malformed form fails before any HTTP call.
  *
  * It does not use a real credential, network, Tier-1/Tier-2 deployment or
- * Docker. If the sibling SynapseOne checkout/tsx is unavailable the test skips
- * with an explicit reason.
+ * Docker. Local runs may skip when the sibling SynapseOne checkout/tsx is
+ * absent; explicitly required integration runs fail instead of skipping.
  */
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -32,7 +32,12 @@ const HARNESS = path.join(ROOT, 'scripts', 'workflow-engine-harness.mts');
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'plugins', 'workflows', 'manifest.json'), 'utf8'));
 
 const available = fs.existsSync(TSX) && fs.existsSync(ENGINE);
-const skipReason = available ? '' : 'sibling SynapseOne engine/tsx not available; engine test is local-only';
+const required = process.env.REQUIRE_REAL_WORKFLOW_ENGINE === '1';
+const skipReason = available ? '' : 'sibling SynapseOne engine/tsx not available; local-only run skipped';
+if (required && !available) {
+    throw new Error('REQUIRE_REAL_WORKFLOW_ENGINE=1 but the provisioned SynapseOne engine/tsx harness is unavailable');
+}
+let executedTests = 0;
 
 function runHarness(workflowFile, dataset, credentialRef, mode) {
     const stdout = execFileSync(TSX, [HARNESS, path.join(ROOT, workflowFile), dataset, credentialRef, mode], {
@@ -50,7 +55,20 @@ function runHarness(workflowFile, dataset, credentialRef, mode) {
     return JSON.parse(stdout.trim().split('\n').at(-1));
 }
 
-test('real Tier-1 engine executes a valid create and audits the mutation', { skip: available ? false : skipReason }, () => {
+function engineTest(name, fn) {
+    test(name, { skip: available ? false : skipReason }, () => {
+        executedTests += 1;
+        fn();
+    });
+}
+
+after(() => {
+    if (available) {
+        assert.equal(executedTests, 6, 'all real-engine contract tests must execute');
+    }
+});
+
+engineTest('real Tier-1 engine executes a valid create and audits the mutation', () => {
     for (const entry of manifest.workflows.filter((item) => item.operation.endsWith('.create'))) {
         const result = runHarness(entry.file, entry.dataset, manifest.persistence.credentialRef, 'good');
         assert.equal(result.ok, true, JSON.stringify(result));
@@ -85,7 +103,7 @@ test('real Tier-1 engine executes a valid create and audits the mutation', { ski
     }
 });
 
-test('real Tier-1 engine reads, merges and conditionally patches transitions', { skip: available ? false : skipReason }, () => {
+engineTest('real Tier-1 engine reads, merges and conditionally patches transitions', () => {
     const transitions = manifest.workflows.filter((entry) => entry.method === 'PATCH');
     assert.ok(transitions.length >= 5);
     for (const entry of transitions) {
@@ -115,7 +133,7 @@ test('real Tier-1 engine reads, merges and conditionally patches transitions', {
     }
 });
 
-test('real Tier-1 engine rejects terminal records and CAS conflicts', { skip: available ? false : skipReason }, () => {
+engineTest('real Tier-1 engine rejects terminal records and CAS conflicts', () => {
     for (const entry of manifest.workflows.filter((item) => item.method === 'PATCH')) {
         const terminal = runHarness(entry.file, entry.dataset, manifest.persistence.credentialRef, 'terminal');
         assert.equal(terminal.status, 'error', `${entry.workflow} accepted a terminal record`);
@@ -131,7 +149,7 @@ test('real Tier-1 engine rejects terminal records and CAS conflicts', { skip: av
     }
 });
 
-test('real Tier-1 engine rejects a malformed transition before any HTTP call', { skip: available ? false : skipReason }, () => {
+engineTest('real Tier-1 engine rejects a malformed transition before any HTTP call', () => {
     for (const entry of manifest.workflows.filter((item) => item.method === 'PATCH')) {
         const result = runHarness(entry.file, entry.dataset, manifest.persistence.credentialRef, 'malformed');
         assert.equal(result.status, 'error', `${entry.workflow} accepted a malformed action`);
@@ -139,7 +157,7 @@ test('real Tier-1 engine rejects a malformed transition before any HTTP call', {
     }
 });
 
-test('real Tier-1 engine executes the single-record domain transitions with CAS', { skip: available ? false : skipReason }, () => {
+engineTest('real Tier-1 engine executes the single-record domain transitions with CAS', () => {
     // Multi-record/multi-step orchestrations (merge, document attach) are
     // covered by the domain-workflows harness; this test asserts the single
     // record GET → CAS PATCH shape.
@@ -200,7 +218,7 @@ test('real Tier-1 engine executes the single-record domain transitions with CAS'
     }
 });
 
-test('real Tier-1 engine rejects a malformed form without an HTTP call', { skip: available ? false : skipReason }, () => {
+engineTest('real Tier-1 engine rejects a malformed form without an HTTP call', () => {
     for (const entry of manifest.workflows.filter((item) => item.operation.endsWith('.create'))) {
         const result = runHarness(entry.file, entry.dataset, manifest.persistence.credentialRef, 'malformed');
         assert.equal(result.status, 'error', `${entry.workflow} accepted a malformed form`);

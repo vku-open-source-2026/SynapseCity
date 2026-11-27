@@ -8,10 +8,11 @@
  * The wrapper asserts the harness verdict and the real domain effects the
  * harness reports (merge closes duplicates and extends merged_reporter_ids
  * with only successfully closed ones; upvote is idempotent per reporter).
- * It uses no real credential, network, Tier-1/Tier-2 deployment or Docker and
- * skips with an explicit reason when the sibling checkouts/tsx are missing.
+ * It uses no real credential, network, Tier-1/Tier-2 deployment or Docker.
+ * Local runs may skip when the sibling checkouts/tsx are missing; explicitly
+ * required integration runs fail instead of skipping.
  */
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -26,9 +27,15 @@ const DX_HARNESS = path.join(WORKSPACE, 'SynapseDX', 'apps', 'capabilities-servi
 const HARNESS = path.join(ROOT, 'scripts', 'domain-workflows-harness.mts');
 
 const available = fs.existsSync(TSX) && fs.existsSync(ENGINE) && fs.existsSync(DX_HARNESS);
-const skipReason = available ? '' : 'sibling SynapseOne engine/tsx or SynapseDX testing harness not available; domain engine test is local-only';
+const required = process.env.REQUIRE_REAL_DOMAIN_WORKFLOWS === '1';
+const skipReason = available ? '' : 'sibling SynapseOne engine/tsx or SynapseDX testing harness not available; local-only run skipped';
+if (required && !available) {
+    throw new Error('REQUIRE_REAL_DOMAIN_WORKFLOWS=1 but the provisioned SynapseOne/SynapseDX harness is unavailable');
+}
+let executedTests = 0;
 
 test('real engine + real DX routes: merge, upvote and the schedule check behave', { skip: available ? false : skipReason }, () => {
+    executedTests += 1;
     const stdout = execFileSync(TSX, [HARNESS], {
         cwd: ROOT,
         encoding: 'utf8',
@@ -55,4 +62,10 @@ test('real engine + real DX routes: merge, upvote and the schedule check behave'
     assert.equal(verdict.iotRowsImported, 2, 'the IoT batch did not import the valid rows');
     assert.equal(verdict.iotRowsInvalid, 1, 'the IoT batch did not reject the invalid row');
     assert.equal(verdict.assetAttachments, 2, 'the asset document flow did not attach both files');
+});
+
+after(() => {
+    if (available) {
+        assert.equal(executedTests, 1, 'the real-engine domain contract test must execute');
+    }
 });

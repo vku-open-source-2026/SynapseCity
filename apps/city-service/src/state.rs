@@ -18,6 +18,9 @@ use tokio::sync::{Mutex as AsyncMutex, OwnedMutexGuard};
 
 use crate::config::Config;
 
+pub(crate) const OTHER_ROUTE_LABEL: &str = "/__other__";
+const MAX_ROUTE_LABELS: usize = 256;
+
 pub struct Metrics {
     started: Instant,
     requests: AtomicU64,
@@ -51,7 +54,16 @@ impl Metrics {
             .routes
             .lock()
             .unwrap_or_else(|poison| poison.into_inner());
-        *routes.entry(route.to_string()).or_insert(0) += 1;
+        let count = if let Some(count) = routes.get_mut(route) {
+            count
+        } else if routes.len() < MAX_ROUTE_LABELS - 1 {
+            routes.entry(route.to_string()).or_insert(0)
+        } else {
+            // Reserve the final slot for every unknown/overflow route so a
+            // request flood cannot grow the HashMap or metrics output forever.
+            routes.entry(OTHER_ROUTE_LABEL.to_string()).or_insert(0)
+        };
+        *count += 1;
         let mut total = self
             .durations_ms
             .lock()
@@ -348,5 +360,76 @@ mod tests {
         drop(first);
         let (_, replay) = retry.await.unwrap().unwrap();
         assert_eq!(replay, Some(json!({ "id": "m1" })));
+    }
+
+    fn route_series_count(rendered: &str) -> usize {
+        rendered
+            .lines()
+            .filter(|line| line.starts_with("synapsecity_http_route_requests_total{"))
+            .count()
+    }
+
+    #[test]
+    fn unique_record_ids_share_one_bounded_metric_label() {
+        let metrics = Metrics::new();
+        for id in 0..5_000 {
+            let path = format!("/v1/assets/random-{id}?ignored={id}");
+            let route = crate::routes::route_label(&path);
+            assert_eq!(route, "/v1/assets/{id}");
+            metrics.observe(&route, 1.0, 401);
+        }
+        let rendered = metrics.render();
+        assert_eq!(route_series_count(&rendered), 1);
+        assert!(rendered
+            .contains("synapsecity_http_route_requests_total{route=\"/v1/assets/{id}\"} 5000"));
+        assert_eq!(
+            crate::routes::route_label("/v1/auth/arbitrary-path"),
+            "/v1/auth/{path}"
+        );
+        assert_eq!(
+            crate::routes::route_label("/v1/notifications/unread-count"),
+            "/v1/notifications/unread-count"
+        );
+    }
+
+    #[test]
+    fn unknown_route_labels_overflow_into_one_capped_series() {
+        let metrics = Metrics::new();
+        for id in 0..(MAX_ROUTE_LABELS + 100) {
+            metrics.observe(&format!("/untrusted/{id}"), 1.0, 404);
+        }
+        let rendered = metrics.render();
+        assert_eq!(route_series_count(&rendered), MAX_ROUTE_LABELS);
+        assert!(rendered.contains(&format!(
+            "synapsecity_http_route_requests_total{{route=\"{OTHER_ROUTE_LABEL}\"}} 101"
+        )));
+    }
+
+    #[test]
+    fn forwarded_clients_have_independent_rate_limit_buckets() {
+        let limiter = RateLimiter::new();
+        let mut first = HeaderMap::new();
+        first.insert(
+            "x-forwarded-for",
+            axum::http::HeaderValue::from_static("198.51.100.10"),
+        );
+        let mut second = HeaderMap::new();
+        second.insert(
+            "x-forwarded-for",
+            axum::http::HeaderValue::from_static("198.51.100.11"),
+        );
+        let window = Duration::from_secs(60);
+
+        assert_eq!(
+            limiter.check("public-report", &first, None, window, 1),
+            None
+        );
+        assert_eq!(
+            limiter.check("public-report", &second, None, window, 1),
+            None
+        );
+        assert!(limiter
+            .check("public-report", &first, None, window, 1)
+            .is_some());
     }
 }

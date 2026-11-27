@@ -293,7 +293,7 @@
         "resource": "maintenance",
         "workflowRef": {
           "name": "city-workspace-actions",
-          "checksum": "8e4bb7820b8597dfd3942804608884c874ae90a22e4a8c8cef7feaec6dd5a73e"
+          "checksum": "ce611aedb58d452c05abf7c5d50957f45c9826444ad052b7b07fa97d3eba6d9b"
         },
         "onSubmit": "act-maintenance-review-submit"
       },
@@ -953,5 +953,5 @@
     "path": "plugins/city-maintenance-workshop.plugin.json",
     "revision": "2026-11-15.business"
   },
-  "checksum": "sha256:efdb114da0b8d4f87cbeaf2488955aed9d3821661bdc468b1c782b32e2468ec2"
+  "checksum": "sha256:961f515fd02515e95c621d031c0f40f9bcce5e8235f30d1342b2ebfc0c0eaed5"
 }

@@ -34,7 +34,7 @@ jobs:
         run: |
           npm run test:tier-boundary
           npm run test:workflow-artifacts
-          npm run test:workflow-engine
+          npm run test:release-contracts
 
       - name: Build and test
         run: |
@@ -66,7 +66,7 @@ jobs:
         run: |
           set -euo pipefail
           OWNER="$(echo "${OWNER}" | tr '[:upper:]' '[:lower:]')"
-          images="synapsecity-city-service synapsecity-gateway synapsecity-console synapsecity-contribution-service synapsecity-contribution-console"
+          images="synapsecity-city-service synapsecity-gateway synapsecity-console synapsecity-contribution-service synapsecity-contribution-console synapsecity-iot-bridge synapsecity-iot-mock"
           for image in $images; do
             remote="ghcr.io/${OWNER}/${image}"
             docker tag "${remote}:latest" "${remote}:${TAG}"
@@ -84,7 +84,7 @@ jobs:
         run: |
           set -uo pipefail
           OWNER="$(echo "${OWNER}" | tr '[:upper:]' '[:lower:]')"
-          for image in synapsecity-city-service synapsecity-gateway synapsecity-console synapsecity-contribution-service synapsecity-contribution-console; do
+          for image in synapsecity-city-service synapsecity-gateway synapsecity-console synapsecity-contribution-service synapsecity-contribution-console synapsecity-iot-bridge synapsecity-iot-mock; do
             if ! gh api --method PATCH "/orgs/${OWNER}/packages/container/${image}" -f visibility=public >/dev/null 2>&1; then
               echo "::warning::Could not set ${image} public; set it in GitHub package settings."
             fi
@@ -107,5 +107,7 @@ jobs:
             - `ghcr.io/${{ github.repository_owner }}/synapsecity-console:${{ github.ref_name }}`
             - `ghcr.io/${{ github.repository_owner }}/synapsecity-contribution-service:${{ github.ref_name }}`
             - `ghcr.io/${{ github.repository_owner }}/synapsecity-contribution-console:${{ github.ref_name }}`
+            - `ghcr.io/${{ github.repository_owner }}/synapsecity-iot-bridge:${{ github.ref_name }}`
+            - `ghcr.io/${{ github.repository_owner }}/synapsecity-iot-mock:${{ github.ref_name }}`
 
             The pinned Tier-2 SDK tarball and checksum are attached.

@@ -135,7 +135,7 @@
         "resource": "ingest",
         "workflowRef": {
           "name": "city-workspace-actions",
-          "checksum": "8e4bb7820b8597dfd3942804608884c874ae90a22e4a8c8cef7feaec6dd5a73e"
+          "checksum": "ce611aedb58d452c05abf7c5d50957f45c9826444ad052b7b07fa97d3eba6d9b"
         },
         "onSubmit": "act-ingest-delete-submit"
       },
@@ -508,5 +508,5 @@
     "path": "plugins/city-data-ingest.plugin.json",
     "revision": "2026-11-15.business"
   },
-  "checksum": "sha256:3c74cf3cbd55b7f62e547a3d4edf2d3ea7ff3e1c11cc9f99c7a697922d7205ad"
+  "checksum": "sha256:71f685dce7288ec39dc6411175179bfcd8530a624ecc63563726e07c515fda69"
 }

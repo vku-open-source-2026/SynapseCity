@@ -265,7 +265,7 @@
         "resource": "geofences",
         "workflowRef": {
           "name": "city-workspace-actions",
-          "checksum": "8e4bb7820b8597dfd3942804608884c874ae90a22e4a8c8cef7feaec6dd5a73e"
+          "checksum": "ce611aedb58d452c05abf7c5d50957f45c9826444ad052b7b07fa97d3eba6d9b"
         },
         "onSubmit": "act-geofence-create-submit"
       },
@@ -313,7 +313,7 @@
         "resource": "geofences",
         "workflowRef": {
           "name": "city-workspace-actions",
-          "checksum": "8e4bb7820b8597dfd3942804608884c874ae90a22e4a8c8cef7feaec6dd5a73e"
+          "checksum": "ce611aedb58d452c05abf7c5d50957f45c9826444ad052b7b07fa97d3eba6d9b"
         },
         "onSubmit": "act-geofence-update-submit"
       },
@@ -334,7 +334,7 @@
         "resource": "geofences",
         "workflowRef": {
           "name": "city-workspace-actions",
-          "checksum": "8e4bb7820b8597dfd3942804608884c874ae90a22e4a8c8cef7feaec6dd5a73e"
+          "checksum": "ce611aedb58d452c05abf7c5d50957f45c9826444ad052b7b07fa97d3eba6d9b"
         },
         "onSubmit": "act-geofence-delete-submit"
       },
@@ -995,5 +995,5 @@
     "path": "plugins/city-gis-workspace.plugin.json",
     "revision": "2026-11-15.business"
   },
-  "checksum": "sha256:5fc5d7aef5a649e957e8daec78fa193ce0079d72bf074eacb3b088233911a2b1"
+  "checksum": "sha256:4d31a09bfa96addff3ea6894cb058402faa6cee0f0f7cd926c03c129ebfda767"
 }

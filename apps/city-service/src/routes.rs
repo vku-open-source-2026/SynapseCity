@@ -21,7 +21,7 @@ use crate::auth::{self, SessionPrincipal};
 use crate::config::Config;
 use crate::domain;
 use crate::error::{ApiError, ApiResult};
-use crate::state::{AppState, IdempotencyGuard};
+use crate::state::{AppState, IdempotencyGuard, OTHER_ROUTE_LABEL};
 use crate::tier2::{
     self, DatasetKey, DatasetSpec, ASSETS, INCIDENTS, INCIDENT_INTERNAL, MAINTENANCE,
     NOTIFICATIONS, REPORTS, USERS,
@@ -59,14 +59,110 @@ impl<'a> Ctx<'a> {
     }
 }
 
+const KNOWN_V1_FAMILIES: &[&str] = &[
+    "ai",
+    "alerts",
+    "assets",
+    "auth",
+    "budgets",
+    "city",
+    "files",
+    "geofences",
+    "geo",
+    "hitl",
+    "incidents",
+    "ingest",
+    "iot",
+    "maintenance",
+    "map",
+    "notifications",
+    "preventive-maintenance",
+    "public",
+    "reports",
+    "risk",
+    "users",
+];
+
+/// Bounded Prometheus route label. Path parameters are fixed placeholders and
+/// unknown surfaces share one label; `Metrics` also caps the final series count.
 pub fn route_label(path: &str) -> String {
     let path = path.split('?').next().unwrap_or("/");
-    let segments: Vec<&str> = path
+    let segments: Vec<String> = path
         .split('/')
         .filter(|value| !value.is_empty())
-        .take(3)
+        .map(|value| value.to_ascii_lowercase())
         .collect();
-    format!("/{}", segments.join("/"))
+
+    match segments.as_slice() {
+        [] => "/".into(),
+        [segment] if matches!(segment.as_str(), "health" | "ready" | "metrics" | "v1") => {
+            format!("/{segment}")
+        }
+        [first, family] if first == "v1" && KNOWN_V1_FAMILIES.contains(&family.as_str()) => {
+            format!("/v1/{family}")
+        }
+        [first, family, third, ..] if first == "v1" => {
+            if !KNOWN_V1_FAMILIES.contains(&family.as_str()) {
+                return OTHER_ROUTE_LABEL.into();
+            }
+            let label = match family.as_str() {
+                "files" if matches!(third.as_str(), "quota" | "upload") => third.clone(),
+                "incidents" if third == "merge-suggestions" => third.clone(),
+                "maintenance" if matches!(third.as_str(), "upcoming" | "asset") => third.clone(),
+                "notifications"
+                    if matches!(
+                        third.as_str(),
+                        "unread-count" | "capabilities" | "preferences" | "mark-all-read"
+                    ) =>
+                {
+                    third.clone()
+                }
+                "users" if matches!(third.as_str(), "me" | "technicians" | "volunteers") => {
+                    third.clone()
+                }
+                "budgets" if third == "transactions" => third.clone(),
+                "hitl" if third == "approvals" => third.clone(),
+                "iot" if matches!(third.as_str(), "sensors" | "catalog" | "assets") => {
+                    third.clone()
+                }
+                "geo"
+                    if matches!(
+                        third.as_str(),
+                        "assets" | "search-address" | "geocode" | "reverse-geocode" | "coverage"
+                    ) =>
+                {
+                    third.clone()
+                }
+                "ingest" if third == "csv" => third.clone(),
+                "public" if matches!(third.as_str(), "assets" | "files" | "iot" | "incidents") => {
+                    third.clone()
+                }
+                "map" if matches!(third.as_str(), "config" | "status" | "tiles") => third.clone(),
+                "risk" if third == "top" => third.clone(),
+                "auth" | "ai" | "city" | "geo" | "ingest" | "map" | "public" | "risk" => {
+                    "{path}".into()
+                }
+                // Remaining known families use an attacker-controlled third
+                // segment as the record id (/v1/assets/{id}, etc.).
+                "alerts"
+                | "assets"
+                | "budgets"
+                | "files"
+                | "geofences"
+                | "hitl"
+                | "incidents"
+                | "iot"
+                | "maintenance"
+                | "notifications"
+                | "preventive-maintenance"
+                | "reports"
+                | "users" => "{id}".into(),
+                _ => return OTHER_ROUTE_LABEL.into(),
+            };
+            format!("/v1/{family}/{label}")
+        }
+        _ => OTHER_ROUTE_LABEL.into(),
+    }
 }
 
 fn method_name(method: &axum::http::Method) -> &'static str {

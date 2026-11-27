@@ -242,7 +242,7 @@
         "resource": "iot",
         "workflowRef": {
           "name": "city-workspace-actions",
-          "checksum": "8e4bb7820b8597dfd3942804608884c874ae90a22e4a8c8cef7feaec6dd5a73e"
+          "checksum": "ce611aedb58d452c05abf7c5d50957f45c9826444ad052b7b07fa97d3eba6d9b"
         },
         "onSubmit": "act-sensor-create-submit"
       },
@@ -294,7 +294,7 @@
         "resource": "iot",
         "workflowRef": {
           "name": "city-workspace-actions",
-          "checksum": "8e4bb7820b8597dfd3942804608884c874ae90a22e4a8c8cef7feaec6dd5a73e"
+          "checksum": "ce611aedb58d452c05abf7c5d50957f45c9826444ad052b7b07fa97d3eba6d9b"
         },
         "onSubmit": "act-sensor-update-submit"
       },
@@ -315,7 +315,7 @@
         "resource": "iot",
         "workflowRef": {
           "name": "city-workspace-actions",
-          "checksum": "8e4bb7820b8597dfd3942804608884c874ae90a22e4a8c8cef7feaec6dd5a73e"
+          "checksum": "ce611aedb58d452c05abf7c5d50957f45c9826444ad052b7b07fa97d3eba6d9b"
         },
         "onSubmit": "act-sensor-delete-submit"
       },
@@ -353,7 +353,7 @@
         "resource": "iotReadings",
         "workflowRef": {
           "name": "city-workspace-actions",
-          "checksum": "8e4bb7820b8597dfd3942804608884c874ae90a22e4a8c8cef7feaec6dd5a73e"
+          "checksum": "ce611aedb58d452c05abf7c5d50957f45c9826444ad052b7b07fa97d3eba6d9b"
         },
         "onSubmit": "act-reading-create-submit"
       },
@@ -431,7 +431,7 @@
         "resource": "iot",
         "workflowRef": {
           "name": "city-workspace-actions",
-          "checksum": "8e4bb7820b8597dfd3942804608884c874ae90a22e4a8c8cef7feaec6dd5a73e"
+          "checksum": "ce611aedb58d452c05abf7c5d50957f45c9826444ad052b7b07fa97d3eba6d9b"
         },
         "onSubmit": "act-firmware-generate-submit",
         "fields": [
@@ -487,7 +487,7 @@
         "resource": "iotReadings",
         "workflowRef": {
           "name": "city-workspace-actions",
-          "checksum": "8e4bb7820b8597dfd3942804608884c874ae90a22e4a8c8cef7feaec6dd5a73e"
+          "checksum": "ce611aedb58d452c05abf7c5d50957f45c9826444ad052b7b07fa97d3eba6d9b"
         },
         "onSubmit": "act-mock-generate-submit",
         "fields": [
@@ -1251,5 +1251,5 @@
     "path": "plugins/city-iot-network.plugin.json",
     "revision": "2026-11-15.business"
   },
-  "checksum": "sha256:53b7703e4484ee19b8fa319895238e1d75ce9de83b4d7b28b0c8e9e2278e7b85"
+  "checksum": "sha256:cc9046b8f1b065237e26336be5c2086ad88a160d337a2d32cae577e92e53bfdf"
 }

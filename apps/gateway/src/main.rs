@@ -13,7 +13,6 @@ use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::Router;
-use bytes::Bytes;
 use regex::Regex;
 use serde_json::json;
 use std::net::SocketAddr;
@@ -91,6 +90,26 @@ const FORWARDED_RESPONSE_HEADERS: &[&str] = &[
     "x-content-sha256",
     "content-security-policy",
     "content-disposition",
+];
+
+// Console metadata is intentionally narrower than the City API allowlist.
+// Hop-by-hop headers and cookies must never cross the public proxy boundary.
+const CONSOLE_RESPONSE_HEADERS: &[&str] = &[
+    "content-type",
+    "content-length",
+    "cache-control",
+    "content-security-policy",
+    "content-disposition",
+    "etag",
+    "last-modified",
+    "expires",
+    "vary",
+    "service-worker-allowed",
+    "permissions-policy",
+    "strict-transport-security",
+    "x-content-type-options",
+    "x-frame-options",
+    "referrer-policy",
 ];
 
 #[derive(Clone)]
@@ -455,6 +474,43 @@ async fn gateway_dispatcher(State(state): State<AppState>, req: Request) -> Resp
     proxy_to_console(state, req, &raw_uri).await
 }
 
+fn copy_response_headers(
+    source: &reqwest::header::HeaderMap,
+    target: &mut axum::http::HeaderMap,
+    allowed: &[&str],
+) {
+    for (name, value) in source {
+        if allowed.contains(&name.as_str()) {
+            target.insert(name.clone(), value.clone());
+        }
+    }
+}
+
+fn upstream_error_response(upstream: &str, err: &reqwest::Error) -> Response {
+    let timed_out = err.is_timeout();
+    let error = if timed_out {
+        format!("{upstream}_upstream_timeout")
+    } else {
+        format!("{upstream}_upstream_unavailable")
+    };
+    tracing::warn!(upstream, error = %err, "upstream response failed");
+    let status = if timed_out {
+        StatusCode::GATEWAY_TIMEOUT
+    } else {
+        StatusCode::BAD_GATEWAY
+    };
+    (
+        status,
+        [("content-type", "application/json")],
+        json!({
+            "error": error,
+            "upstream": upstream
+        })
+        .to_string(),
+    )
+        .into_response()
+}
+
 async fn proxy_to_city(
     state: AppState,
     req: Request,
@@ -477,30 +533,19 @@ async fn proxy_to_city(
     }
     upstream_req = upstream_req.header("x-correlation-id", corr_id);
 
-    // The City rate limiter keys on the caller, not the gateway. The public
-    // edge appends the TCP peer to x-forwarded-for; if an upstream proxy has
-    // not done so (direct gateway calls, tests), inject the peer address here
-    // so the service never falls back to a shared "unknown" bucket.
-    let peer_ip = req
+    // The public nginx edge is the single trusted hop. It overwrites
+    // x-forwarded-for with the real client address, and City intentionally keys
+    // on the last entry. Preserve that header unchanged; appending the gateway
+    // peer here would replace every client with the nginx/gateway container IP.
+    // Direct gateway calls have no edge header, so only then inject the TCP peer.
+    if let Some(existing) = req.headers().get("x-forwarded-for") {
+        upstream_req = upstream_req.header("x-forwarded-for", existing);
+    } else if let Some(peer_ip) = req
         .extensions()
         .get::<ConnectInfo<SocketAddr>>()
-        .map(|info| info.0.ip().to_string());
-    match (req.headers().get("x-forwarded-for"), peer_ip) {
-        (Some(existing), Some(peer)) => {
-            let mut combined = existing.to_str().unwrap_or("").to_string();
-            if !combined.is_empty() {
-                combined.push_str(", ");
-            }
-            combined.push_str(&peer);
-            upstream_req = upstream_req.header("x-forwarded-for", combined);
-        }
-        (Some(existing), None) => {
-            upstream_req = upstream_req.header("x-forwarded-for", existing);
-        }
-        (None, Some(peer)) => {
-            upstream_req = upstream_req.header("x-forwarded-for", peer);
-        }
-        (None, None) => {}
+        .map(|info| info.0.ip().to_string())
+    {
+        upstream_req = upstream_req.header("x-forwarded-for", peer_ip);
     }
 
     let is_body_method = method != Method::GET && method != Method::HEAD;
@@ -551,12 +596,7 @@ async fn proxy_to_city(
             );
 
             let res_headers = response_builder.headers_mut().unwrap();
-            for (name, value) in res.headers() {
-                let name_lower = name.as_str().to_ascii_lowercase();
-                if FORWARDED_RESPONSE_HEADERS.contains(&name_lower.as_str()) {
-                    res_headers.insert(name.clone(), value.clone());
-                }
-            }
+            copy_response_headers(res.headers(), res_headers, FORWARDED_RESPONSE_HEADERS);
 
             if upstream_status == reqwest::StatusCode::NO_CONTENT
                 || upstream_status == reqwest::StatusCode::NOT_MODIFIED
@@ -564,20 +604,14 @@ async fn proxy_to_city(
                 return response_builder.body(Body::empty()).unwrap();
             }
 
-            let body_bytes = res.bytes().await.unwrap_or_else(|_| Bytes::new());
+            let body_bytes = match res.bytes().await {
+                Ok(body) => body,
+                Err(err) => return upstream_error_response("city", &err),
+            };
             res_headers.insert("content-length", HeaderValue::from(body_bytes.len()));
             response_builder.body(Body::from(body_bytes)).unwrap()
         }
-        Err(err) => (
-            StatusCode::BAD_GATEWAY,
-            [("content-type", "application/json")],
-            json!({
-                "error": "city_upstream_unavailable",
-                "message": err.to_string()
-            })
-            .to_string(),
-        )
-            .into_response(),
+        Err(err) => upstream_error_response("city", &err),
     }
 }
 
@@ -608,27 +642,23 @@ async fn proxy_to_console(state: AppState, req: Request, raw_uri: &str) -> Respo
             );
 
             let res_headers = response_builder.headers_mut().unwrap();
-            if let Some(ct) = res.headers().get("content-type") {
-                res_headers.insert("content-type", ct.clone());
-            }
+            copy_response_headers(res.headers(), res_headers, CONSOLE_RESPONSE_HEADERS);
 
-            if method == Method::HEAD {
+            if upstream_status == reqwest::StatusCode::NO_CONTENT
+                || upstream_status == reqwest::StatusCode::NOT_MODIFIED
+                || method == Method::HEAD
+            {
                 return response_builder.body(Body::empty()).unwrap();
             }
 
-            let body_bytes = res.bytes().await.unwrap_or_else(|_| Bytes::new());
+            let body_bytes = match res.bytes().await {
+                Ok(body) => body,
+                Err(err) => return upstream_error_response("console", &err),
+            };
+            res_headers.insert("content-length", HeaderValue::from(body_bytes.len()));
             response_builder.body(Body::from(body_bytes)).unwrap()
         }
-        Err(err) => (
-            StatusCode::BAD_GATEWAY,
-            [("content-type", "application/json")],
-            json!({
-                "error": "city_upstream_unavailable",
-                "message": err.to_string()
-            })
-            .to_string(),
-        )
-            .into_response(),
+        Err(err) => upstream_error_response("console", &err),
     }
 }
 
@@ -818,5 +848,196 @@ mod tests {
                 "{operator} must require a session"
             );
         }
+    }
+
+    fn test_state(city_service_url: String, console_url: String) -> AppState {
+        AppState {
+            city_service_url,
+            console_url,
+            cors_origin: "https://synapsecity.sbs".into(),
+            upload_limit: 1024 * 1024,
+            client: reqwest::Client::builder()
+                .redirect(reqwest::redirect::Policy::none())
+                .build()
+                .unwrap(),
+            correlation_regex: Arc::new(Regex::new(r"^[A-Za-z0-9_.:-]{1,128}$").unwrap()),
+        }
+    }
+
+    async fn spawn_gateway(state: AppState) -> (String, tokio::task::JoinHandle<()>) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let handle = tokio::spawn(async move {
+            axum::serve(
+                listener,
+                create_app(state).into_make_service_with_connect_info::<SocketAddr>(),
+            )
+            .await
+            .unwrap();
+        });
+        (format!("http://{address}"), handle)
+    }
+
+    async fn spawn_raw_upstream(
+        response: Vec<u8>,
+        expected_requests: usize,
+    ) -> (String, tokio::task::JoinHandle<Vec<String>>) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let handle = tokio::spawn(async move {
+            let mut requests = Vec::new();
+            for _ in 0..expected_requests {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut request = Vec::new();
+                let mut buffer = [0_u8; 2048];
+                loop {
+                    let read = socket.read(&mut buffer).await.unwrap();
+                    if read == 0 {
+                        break;
+                    }
+                    request.extend_from_slice(&buffer[..read]);
+                    if request.windows(4).any(|window| window == b"\r\n\r\n") {
+                        break;
+                    }
+                }
+                requests.push(String::from_utf8_lossy(&request).into_owned());
+                socket.write_all(&response).await.unwrap();
+                socket.shutdown().await.unwrap();
+            }
+            requests
+        });
+        (format!("http://{address}"), handle)
+    }
+
+    fn request_header<'a>(request: &'a str, name: &str) -> Option<&'a str> {
+        request.lines().find_map(|line| {
+            let (key, value) = line.split_once(':')?;
+            key.eq_ignore_ascii_case(name).then_some(value.trim())
+        })
+    }
+
+    #[tokio::test]
+    async fn gateway_preserves_edge_client_ip_without_appending_its_peer() {
+        let body = r#"{"error":"test_upstream"}"#;
+        let response = format!(
+            "HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        )
+        .into_bytes();
+        let (city_url, upstream) = spawn_raw_upstream(response, 3).await;
+        let (gateway_url, gateway) =
+            spawn_gateway(test_state(city_url, "http://127.0.0.1:9".into())).await;
+        let client = reqwest::Client::new();
+
+        for ip in ["198.51.100.10", "198.51.100.11"] {
+            let response = client
+                .get(format!("{gateway_url}/v1/city"))
+                .header("x-forwarded-for", ip)
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
+        }
+        let direct = client
+            .get(format!("{gateway_url}/v1/city"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(direct.status(), reqwest::StatusCode::BAD_REQUEST);
+
+        let requests = upstream.await.unwrap();
+        assert_eq!(
+            request_header(&requests[0], "x-forwarded-for"),
+            Some("198.51.100.10")
+        );
+        assert_eq!(
+            request_header(&requests[1], "x-forwarded-for"),
+            Some("198.51.100.11")
+        );
+        let direct_peer = request_header(&requests[2], "x-forwarded-for").unwrap();
+        assert_eq!(direct_peer, "127.0.0.1");
+        gateway.abort();
+    }
+
+    #[tokio::test]
+    async fn city_mid_stream_failure_is_bad_gateway_not_empty_success() {
+        let response = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 100\r\nConnection: close\r\n\r\n{\"ok\":"
+            .to_vec();
+        let (city_url, _upstream) = spawn_raw_upstream(response, 1).await;
+        let (gateway_url, gateway) =
+            spawn_gateway(test_state(city_url, "http://127.0.0.1:9".into())).await;
+
+        let response = reqwest::Client::new()
+            .get(format!("{gateway_url}/v1/city"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), reqwest::StatusCode::BAD_GATEWAY);
+        let body: serde_json::Value =
+            serde_json::from_str(&response.text().await.unwrap()).unwrap();
+        assert_eq!(body["error"], "city_upstream_unavailable");
+        gateway.abort();
+    }
+
+    #[tokio::test]
+    async fn console_mid_stream_failure_is_bad_gateway_not_empty_success() {
+        let response = b"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: 100\r\nConnection: close\r\n\r\n<html>"
+            .to_vec();
+        let (console_url, _upstream) = spawn_raw_upstream(response, 1).await;
+        let (gateway_url, gateway) =
+            spawn_gateway(test_state("http://127.0.0.1:9".into(), console_url)).await;
+
+        let response = reqwest::Client::new()
+            .get(format!("{gateway_url}/"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), reqwest::StatusCode::BAD_GATEWAY);
+        let body: serde_json::Value =
+            serde_json::from_str(&response.text().await.unwrap()).unwrap();
+        assert_eq!(body["error"], "console_upstream_unavailable");
+        gateway.abort();
+    }
+
+    #[tokio::test]
+    async fn console_proxy_preserves_safe_cache_and_security_headers() {
+        let body = "<html><body>city</body></html>";
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-cache, no-store, must-revalidate\r\nContent-Security-Policy: default-src 'self'; object-src 'none'\r\nETag: \"console-v1\"\r\nContent-Disposition: inline; filename=\"index.html\"\r\nService-Worker-Allowed: /\r\nSet-Cookie: session=must-not-forward\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        )
+        .into_bytes();
+        let (console_url, _upstream) = spawn_raw_upstream(response, 1).await;
+        let (gateway_url, gateway) =
+            spawn_gateway(test_state("http://127.0.0.1:9".into(), console_url)).await;
+
+        let response = reqwest::Client::new()
+            .get(format!("{gateway_url}/"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), reqwest::StatusCode::OK);
+        assert_eq!(
+            response.headers().get("cache-control").unwrap(),
+            "no-cache, no-store, must-revalidate"
+        );
+        assert_eq!(
+            response.headers().get("content-security-policy").unwrap(),
+            "default-src 'self'; object-src 'none'"
+        );
+        assert_eq!(response.headers().get("etag").unwrap(), "\"console-v1\"");
+        assert_eq!(
+            response.headers().get("content-disposition").unwrap(),
+            "inline; filename=\"index.html\""
+        );
+        assert_eq!(
+            response.headers().get("service-worker-allowed").unwrap(),
+            "/"
+        );
+        assert!(!response.headers().contains_key("set-cookie"));
+        assert_eq!(response.text().await.unwrap(), body);
+        gateway.abort();
     }
 }

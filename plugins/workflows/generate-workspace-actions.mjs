@@ -224,6 +224,7 @@ if (!['create', 'update', 'delete', 'execute'].includes(action)) throw new Error
 const fields = envelope.fields && typeof envelope.fields === 'object' && !Array.isArray(envelope.fields) ? envelope.fields : null;
 if (!fields) throw new Error('fields_required');
 const SCHEMAS = ${JSON.stringify(SCHEMAS)};
+const INCIDENT_INTERNAL_FIELDS = ${JSON.stringify(INCIDENT_INTERNAL_FIELDS)};
 const schema = SCHEMAS[resource];
 if (!schema) throw new Error('unsupported_resource');
 const audit = {

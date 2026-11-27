@@ -296,6 +296,7 @@ test('incident workflows route private fields to the sidecar and redact actual p
         fields: { record_id: 'inc-1', status: 'assigned' },
     });
     assert.equal(genericUpdate.resource, 'incidents');
+    const genericMerge = genericArtifact.nodes.find((node) => node.name === 'Merge and enforce invariants');
     const genericPublic = runCode(genericMerge.parameters.code, {
         statusCode: 200,
         input: genericUpdate,
@@ -307,7 +308,6 @@ test('incident workflows route private fields to the sidecar and redact actual p
         action: 'update', submittedBy: 'member-test',
         fields: { record_id: 'inc-1', notes: 'private note' },
     }), /incident_notes_require_dedicated_workflow/);
-    const genericMerge = genericArtifact.nodes.find((node) => node.name === 'Merge and enforce invariants');
     assert.throws(() => runCode(genericMerge.parameters.code, {
         statusCode: 200,
         input: { resource: 'incidents', patch: { status: 'assigned' }, url: 'unused', audit: {} },
