@@ -139,7 +139,7 @@ test('a citizen session can read public data and report an incident but cannot o
   const citizen = tokenFor('citizen');
   assert.equal((await request('/v1/public/assets')).status, 200);
   const reported = await request('/v1/public/incidents', json('POST', {
-    title: 'Citizen report', description: 'Broken hydrant', category: 'damage',
+    title: 'Citizen report', description: 'Broken hydrant', category: 'damage', location: { address: 'Main Street' },
   }));
   assert.equal(reported.status, 201);
 

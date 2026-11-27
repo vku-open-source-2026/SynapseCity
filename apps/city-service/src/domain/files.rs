@@ -51,17 +51,6 @@ const INLINE_BINARY_KEYS: [&str; 4] = [
     "fileContent",
     "contentBase64",
 ];
-const FILE_REFERENCE_KEYS: [&str; 8] = [
-    "photo",
-    "photos",
-    "file_url",
-    "fileUrl",
-    "url",
-    "attachments",
-    "attachment",
-    "file_type",
-];
-const FILE_NAME_REFERENCE_KEYS: [&str; 1] = ["file_name"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -401,10 +390,6 @@ pub fn normalize_checksum(value: Option<&Value>) -> Result<Option<String>, FileE
     Ok(Some(raw))
 }
 
-fn is_reference_key(key: &str) -> bool {
-    key.is_empty() || FILE_REFERENCE_KEYS.contains(&key) || FILE_NAME_REFERENCE_KEYS.contains(&key)
-}
-
 fn is_base64_data_url(value: &str) -> bool {
     Regex::new(r"(?i)^data:[a-z0-9.+/-]+;base64,")
         .map(|regex| regex.is_match(value))
@@ -428,7 +413,7 @@ fn assert_no_inline_binary_at(value: &Value, path: &str, key_hint: &str) -> Resu
         }
         Value::String(text) => {
             let trimmed = text.trim();
-            if is_reference_key(key_hint) && is_base64_data_url(trimmed) {
+            if is_base64_data_url(trimmed) {
                 return Err(invalid("data_url_not_supported", 415));
             }
             if INLINE_BINARY_KEYS.contains(&key_hint) && !trimmed.is_empty() {
@@ -675,8 +660,13 @@ mod tests {
             .code(),
             "data_url_not_supported"
         );
-        // Data URLs under unrelated keys are not reference fields.
-        assert_no_inline_binary(&json!({ "note": "data:text/plain;base64,x" })).unwrap();
+        // A data URL is inline binary regardless of which JSON key carries it.
+        assert_eq!(
+            assert_no_inline_binary(&json!({ "note": "data:text/plain;base64,x" }))
+                .unwrap_err()
+                .code(),
+            "data_url_not_supported"
+        );
     }
 
     #[test]

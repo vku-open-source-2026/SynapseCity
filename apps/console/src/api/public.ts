@@ -33,6 +33,20 @@ export interface AssetQRCodeResponse {
   url: string;
 }
 
+export interface PublicIncidentDraft {
+    draft_id: string;
+    upload_token: string;
+    upload_token_expires_at: number;
+    max_photos: number;
+}
+
+export type PublicAnonymousIncidentRequest = IncidentCreateRequest & {
+    photos?: string[];
+    file_ids?: string[];
+    draft_id?: string;
+    draft_token?: string;
+};
+
 export const publicApi = {
   /**
    * List published public assets.
@@ -96,15 +110,32 @@ export const publicApi = {
   },
 
   /**
-   * Create an anonymous incident (no authentication required)
-   * POST /public/incidents
+   * Validate a citizen report and issue a short-lived capability for private
+   * pre-report photo uploads. Photos are attached only when the final report
+   * presents the same draft capability.
    */
-  createAnonymousIncident: async (data: IncidentCreateRequest, turnstileToken?: string): Promise<Incident> => {
+  createAnonymousIncidentDraft: async (data: IncidentCreateRequest, turnstileToken?: string): Promise<PublicIncidentDraft> => {
     const headers: Record<string, string> = {};
-    if (turnstileToken) {
-      headers['CF-Turnstile-Response'] = turnstileToken;
-    }
-    const response = await httpClient.post<Incident>('/public/incidents', data, { headers });
+    if (turnstileToken) headers['CF-Turnstile-Response'] = turnstileToken;
+    const response = await httpClient.post<PublicIncidentDraft>('/public/incidents/drafts', data, { headers });
+    return response.data;
+  },
+
+  /**
+   * Create an anonymous incident (no authentication required). Reports with
+   * photos must include the server-issued draft returned above.
+   */
+  createAnonymousIncident: async (
+    data: PublicAnonymousIncidentRequest,
+    turnstileToken?: string,
+    draft?: PublicIncidentDraft,
+  ): Promise<Incident> => {
+    const headers: Record<string, string> = {};
+    if (turnstileToken && !draft) headers['CF-Turnstile-Response'] = turnstileToken;
+    const response = await httpClient.post<Incident>('/public/incidents', {
+      ...data,
+      ...(draft ? { draft_id: draft.draft_id, draft_token: draft.upload_token } : {}),
+    }, { headers });
     return response.data;
   },
 

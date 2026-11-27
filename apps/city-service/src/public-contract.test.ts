@@ -193,6 +193,7 @@ test('an operator incident never writes reporter identity or internal comments t
 test('citizen reports keep contact data in the private sidecar and publish:false', async () => {
   const created = await request('/v1/public/incidents', json('POST', {
     title: 'Pothole', description: 'Big pothole', category: 'damage',
+    location: { address: 'Main street' },
     contact_info: { name: 'Citizen', phone_number: '0900000009', id_card_number: '009999999999' },
   }));
   assert.equal(created.status, 201);
@@ -211,6 +212,18 @@ test('citizen reports keep contact data in the private sidecar and publish:false
   const sidecar = tier2.records.get('city-incident-internal')?.get(`internal-${id}`) as Record<string, unknown>;
   assert.ok(sidecar);
   assert.equal((sidecar.contact_info as Record<string, unknown>).phone_number, '0900000009');
+});
+
+test('public incident intake rejects unknown enums and malformed locations', async () => {
+  for (const body of [
+    { title: 'x', description: 'y', category: 'utility', location: { address: 'Main' } },
+    { title: 'x', description: 'y', severity: 'urgent', location: { address: 'Main' } },
+    { title: 'x', description: 'y', location: { address: 'Main', geometry: { type: 'Point', coordinates: [181, 21] } } },
+    { title: 'x', description: 'y', location: null },
+  ]) {
+    const response = await request('/v1/public/incidents', json('POST', body));
+    assert.equal(response.status, 400, JSON.stringify(body));
+  }
 });
 
 test('public incident list excludes non-public and deleted records', async () => {

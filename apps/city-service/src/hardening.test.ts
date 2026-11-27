@@ -103,7 +103,7 @@ test('Turnstile is verified server-side when configured', async () => {
     const valid = await request('/v1/public/incidents', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'cf-turnstile-response': 'valid-token' },
-      body: JSON.stringify({ title: 'Verified report', description: 'y', category: 'other' }),
+      body: JSON.stringify({ title: 'Verified report', description: 'y', category: 'other', location: { address: 'Main Street' } }),
     });
     assert.equal(valid.status, 201);
   } finally {

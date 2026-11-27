@@ -147,6 +147,12 @@ const ReportModal: React.FC<ReportModalProps> = ({
                     description,
                     category,
                     severity,
+                    location: {
+                        address: asset.feature_code || asset.id || asset._id || "Incident location",
+                        ...(asset.geometry?.type === "Point"
+                            ? { geometry: asset.geometry }
+                            : {}),
+                    },
                     reported_via: "web",
                     public_visible: true,
                     contact_info:

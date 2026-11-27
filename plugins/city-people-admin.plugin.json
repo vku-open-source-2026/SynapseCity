@@ -141,7 +141,7 @@
         "resource": "users",
         "workflowRef": {
           "name": "city-workspace-actions",
-          "checksum": "5992167880202afcd581a2acffd0e87986f656775562da222b728b18d36aa928"
+          "checksum": "8e4bb7820b8597dfd3942804608884c874ae90a22e4a8c8cef7feaec6dd5a73e"
         },
         "onSubmit": "act-user-create-submit"
       },
@@ -193,7 +193,7 @@
         "resource": "users",
         "workflowRef": {
           "name": "city-workspace-actions",
-          "checksum": "5992167880202afcd581a2acffd0e87986f656775562da222b728b18d36aa928"
+          "checksum": "8e4bb7820b8597dfd3942804608884c874ae90a22e4a8c8cef7feaec6dd5a73e"
         },
         "onSubmit": "act-user-update-submit"
       },
@@ -219,7 +219,7 @@
         "resource": "users",
         "workflowRef": {
           "name": "city-workspace-actions",
-          "checksum": "5992167880202afcd581a2acffd0e87986f656775562da222b728b18d36aa928"
+          "checksum": "8e4bb7820b8597dfd3942804608884c874ae90a22e4a8c8cef7feaec6dd5a73e"
         },
         "onSubmit": "act-user-suspend-submit"
       },
@@ -240,7 +240,7 @@
         "resource": "users",
         "workflowRef": {
           "name": "city-workspace-actions",
-          "checksum": "5992167880202afcd581a2acffd0e87986f656775562da222b728b18d36aa928"
+          "checksum": "8e4bb7820b8597dfd3942804608884c874ae90a22e4a8c8cef7feaec6dd5a73e"
         },
         "onSubmit": "act-user-delete-submit"
       },
@@ -612,5 +612,5 @@
     "path": "plugins/city-people-admin.plugin.json",
     "revision": "2026-11-15.business"
   },
-  "checksum": "sha256:90c2a03da5491de977b01a564e341292f6a34d599e475fe4b7cb0ee9a52c6bc3"
+  "checksum": "sha256:15c00aa75593dbf13a781c390e9071fa45a152742e534efe7420af47b3cab67f"
 }

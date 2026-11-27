@@ -15,8 +15,9 @@ use super::{
     string_value, JsonMap,
 };
 
-pub const INTERNAL_INCIDENT_FIELDS: [&str; 18] = [
+pub const INTERNAL_INCIDENT_FIELDS: [&str; 19] = [
     "reported_by",
+    "reporter_type",
     "contact_info",
     "reporter_name",
     "reporter_phone",
@@ -36,7 +37,7 @@ pub const INTERNAL_INCIDENT_FIELDS: [&str; 18] = [
     "cost_approval_roles",
 ];
 
-pub const PUBLIC_FIELDS: [&str; 26] = [
+pub const PUBLIC_FIELDS: [&str; 25] = [
     "id",
     "incidentId",
     "incident_number",
@@ -55,7 +56,6 @@ pub const PUBLIC_FIELDS: [&str; 26] = [
     "upvotes",
     "photos",
     "public_visible",
-    "reporter_type",
     "resolution_type",
     "resolved_at",
     "closed_at",
@@ -118,16 +118,6 @@ pub fn to_published_incident(record: &JsonMap) -> JsonMap {
         })
         .unwrap_or_default();
     published.insert("comments".to_string(), Value::Array(comments));
-
-    let reporter_type = string_value(record.get("reporter_type"));
-    published.insert(
-        "reporter_type".to_string(),
-        Value::String(if reporter_type.is_empty() {
-            "citizen".to_string()
-        } else {
-            reporter_type
-        }),
-    );
     if !record.contains_key("public_visible") {
         published.insert("public_visible".to_string(), Value::Bool(true));
     }
@@ -226,6 +216,93 @@ pub fn to_public_incident_view(record: &JsonMap) -> JsonMap {
     view
 }
 
+pub const PUBLIC_INCIDENT_CATEGORIES: [&str; 5] = [
+    "damage",
+    "malfunction",
+    "safety_hazard",
+    "vandalism",
+    "other",
+];
+pub const PUBLIC_INCIDENT_SEVERITIES: [&str; 4] = ["low", "medium", "high", "critical"];
+
+/// Validate the anonymous report fields that the web/mobile forms normally
+/// constrain. Direct API callers must not be able to pollute the public
+/// projection with unknown enums or malformed/out-of-range geometry.
+pub fn validate_public_incident_input(body: &JsonMap) -> Result<(), &'static str> {
+    let category = match body.get("category") {
+        None => "other",
+        Some(Value::String(value)) => value.trim(),
+        Some(_) => return Err("category_invalid"),
+    };
+    if !PUBLIC_INCIDENT_CATEGORIES.contains(&category) {
+        return Err("category_invalid");
+    }
+    let severity = match body.get("severity") {
+        None => "medium",
+        Some(Value::String(value)) => value.trim(),
+        Some(_) => return Err("severity_invalid"),
+    };
+    if !PUBLIC_INCIDENT_SEVERITIES.contains(&severity) {
+        return Err("severity_invalid");
+    }
+
+    let Some(location) = body.get("location") else {
+        return Err("location_required");
+    };
+    let Some(location) = location.as_object() else {
+        return Err("location_invalid");
+    };
+    match location.get("address") {
+        Some(Value::String(address))
+            if !address.trim().is_empty() && address.trim().chars().count() <= 500 => {}
+        _ => return Err("location_address_invalid"),
+    }
+    if let Some(coordinates) = location.get("coordinates") {
+        let Some(coordinates) = coordinates.as_object() else {
+            return Err("location_coordinates_invalid");
+        };
+        let longitude = coordinates
+            .get("longitude")
+            .and_then(Value::as_f64)
+            .ok_or("location_coordinates_invalid")?;
+        let latitude = coordinates
+            .get("latitude")
+            .and_then(Value::as_f64)
+            .ok_or("location_coordinates_invalid")?;
+        if !longitude.is_finite()
+            || !latitude.is_finite()
+            || !(-180.0..=180.0).contains(&longitude)
+            || !(-90.0..=90.0).contains(&latitude)
+        {
+            return Err("location_coordinates_invalid");
+        }
+    }
+    if let Some(geometry) = location.get("geometry") {
+        let Some(geometry) = geometry.as_object() else {
+            return Err("location_geometry_invalid");
+        };
+        if geometry.get("type").and_then(Value::as_str) != Some("Point") {
+            return Err("location_geometry_type_invalid");
+        }
+        let Some(coordinates) = geometry.get("coordinates").and_then(Value::as_array) else {
+            return Err("location_geometry_invalid");
+        };
+        if coordinates.len() != 2 {
+            return Err("location_geometry_invalid");
+        }
+        let longitude = coordinates[0].as_f64().ok_or("location_geometry_invalid")?;
+        let latitude = coordinates[1].as_f64().ok_or("location_geometry_invalid")?;
+        if !longitude.is_finite()
+            || !latitude.is_finite()
+            || !(-180.0..=180.0).contains(&longitude)
+            || !(-90.0..=90.0).contains(&latitude)
+        {
+            return Err("location_geometry_invalid");
+        }
+    }
+    Ok(())
+}
+
 pub fn incident_is_publicly_visible(record: &JsonMap) -> bool {
     if matches!(record.get("public_visible"), Some(Value::Bool(false))) {
         return false;
@@ -271,7 +348,7 @@ mod tests {
         assert!(!published.contains_key("assigned_to"));
         assert!(!published.contains_key("internal_notes"));
         assert!(!published.contains_key("cost_status"));
-        assert_eq!(published.get("reporter_type").unwrap(), "citizen");
+        assert!(published.get("reporter_type").is_none());
         assert_eq!(published.get("public_visible").unwrap(), true);
         let comments = published.get("comments").unwrap().as_array().unwrap();
         assert_eq!(comments.len(), 1);
@@ -344,6 +421,46 @@ mod tests {
 
         let untouched = merge_incident_internal(&public, None);
         assert_eq!(untouched, public);
+    }
+
+    #[test]
+    fn public_report_validation_rejects_unknown_enums_and_bad_locations() {
+        let valid = map(json!({
+            "category": "malfunction",
+            "severity": "high",
+            "location": {
+                "address": "Hanoi",
+                "coordinates": { "longitude": 105.8, "latitude": 21.0 },
+                "geometry": { "type": "Point", "coordinates": [105.8, 21.0] }
+            }
+        }));
+        assert_eq!(validate_public_incident_input(&valid), Ok(()));
+        assert_eq!(
+            validate_public_incident_input(&map(json!({
+                "category": "utility",
+                "location": { "address": "Hanoi" }
+            }))),
+            Err("category_invalid")
+        );
+        assert_eq!(
+            validate_public_incident_input(&map(json!({
+                "severity": "urgent",
+                "location": { "address": "Hanoi" }
+            }))),
+            Err("severity_invalid")
+        );
+        for location in [
+            json!(null),
+            json!({}),
+            json!({ "address": "Hanoi", "geometry": { "type": "Point", "coordinates": [181, 21] } }),
+            json!({ "address": "Hanoi", "geometry": { "type": "LineString", "coordinates": [[105, 21], [106, 22]] } }),
+            json!({ "address": "Hanoi", "coordinates": { "longitude": 105, "latitude": 91 } }),
+        ] {
+            assert!(validate_public_incident_input(&map(json!({
+                "location": location
+            })))
+            .is_err());
+        }
     }
 
     #[test]

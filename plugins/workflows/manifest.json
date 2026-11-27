@@ -3,7 +3,7 @@
   "formatVersion": 3,
   "product": "city",
   "repository": "https://github.com/vku-open-source-2026/SynapseCity",
-  "revision": "2026-11-14",
+  "revision": "2026-11-26",
   "status": "source_ready",
   "active": false,
   "trigger": "manualTrigger",
@@ -40,7 +40,7 @@
       "runtimeChecksum": "DX verifies the artifact graph checksum/revision pins at execution",
       "status": "pending_dx_binding"
     },
-    "transitionTransport": "httpRequest GET(includeInput:true) -> code merge/invariant check -> PATCH full data with ifVersion",
+    "transitionTransport": "httpRequest GET(includeInput:true) -> code merge/invariant check -> PATCH full data with ifVersion; private incident fields use city-incident-internal CAS writes",
     "credentialAllowedOrigins": [
       "https://synapsedx.sbs"
     ]

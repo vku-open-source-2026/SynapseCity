@@ -205,7 +205,6 @@ export function normalizeChecksum(value: unknown): string | undefined {
 }
 
 const INLINE_BINARY_KEYS = new Set(['content_base64', 'file_content', 'fileContent', 'contentBase64']);
-const FILE_REFERENCE_KEYS = new Set(['photo', 'photos', 'file_url', 'fileUrl', 'url', 'attachments', 'attachment', 'file_type', 'file_name']);
 
 /**
  * Reject inline binary anywhere in a write payload. This is the final guard
@@ -226,8 +225,7 @@ export function assertNoInlineBinary(value: unknown, path = 'payload', keyHint =
   }
   if (typeof value !== 'string') return;
   const trimmed = value.trim();
-  const isReferenceField = !keyHint || FILE_REFERENCE_KEYS.has(keyHint);
-  if (isReferenceField && /^data:[a-z0-9.+/-]+;base64,/i.test(trimmed)) {
+  if (/^data:[a-z0-9.+/-]+;base64,/i.test(trimmed)) {
     throw new InvalidFileReferenceError('data_url_not_supported', 415);
   }
   if (INLINE_BINARY_KEYS.has(keyHint) && trimmed) {

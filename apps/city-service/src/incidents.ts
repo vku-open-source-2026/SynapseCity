@@ -12,6 +12,7 @@
 
 export const INTERNAL_INCIDENT_FIELDS = [
   'reported_by',
+  'reporter_type',
   'contact_info',
   'reporter_name',
   'reporter_phone',
@@ -50,7 +51,6 @@ const PUBLIC_FIELDS = [
   'upvotes',
   'photos',
   'public_visible',
-  'reporter_type',
   'resolution_type',
   'resolved_at',
   'closed_at',
@@ -86,7 +86,6 @@ export function toPublishedIncident(record: IncidentRecord): IncidentRecord {
   for (const field of INTERNAL_INCIDENT_FIELDS) delete published[field];
   const comments = Array.isArray(record.comments) ? record.comments : [];
   published.comments = comments.map(publicComment).filter((entry): entry is Record<string, unknown> => entry !== null);
-  published.reporter_type = String(record.reporter_type || 'citizen');
   if (record.public_visible === undefined) published.public_visible = true;
   return published;
 }

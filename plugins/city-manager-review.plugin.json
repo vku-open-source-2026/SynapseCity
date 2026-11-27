@@ -178,7 +178,7 @@
         "resource": "budgets",
         "workflowRef": {
           "name": "city-workspace-actions",
-          "checksum": "5992167880202afcd581a2acffd0e87986f656775562da222b728b18d36aa928"
+          "checksum": "8e4bb7820b8597dfd3942804608884c874ae90a22e4a8c8cef7feaec6dd5a73e"
         },
         "onSubmit": "act-budget-decision-submit"
       },
@@ -210,7 +210,7 @@
         "resource": "maintenance",
         "workflowRef": {
           "name": "city-workspace-actions",
-          "checksum": "5992167880202afcd581a2acffd0e87986f656775562da222b728b18d36aa928"
+          "checksum": "8e4bb7820b8597dfd3942804608884c874ae90a22e4a8c8cef7feaec6dd5a73e"
         },
         "onSubmit": "act-maintenance-decision-submit"
       },
@@ -236,7 +236,7 @@
         "resource": "incidents",
         "workflowRef": {
           "name": "city-incident-verify",
-          "checksum": "8b0c9886c918ab4b102467782d9c5eafb1332c3baaba8bdb71311864b56fccc1"
+          "checksum": "0bb794e6fd6c82fcefc0a42af262776545b471d67f376bf713de5d73897a8dc9"
         },
         "onSubmit": "act-incident-verify-submit"
       },
@@ -729,5 +729,5 @@
     "path": "plugins/city-manager-review.plugin.json",
     "revision": "2026-11-15.business"
   },
-  "checksum": "sha256:fed75c9d47ed733d8bf853cba36a93a8c6451a7a102de87b1a67e8763ee36bcd"
+  "checksum": "sha256:b8b4df300b5de5b623aa875644dc40dfbecb05b833a1d98e7edd4f047406d6b0"
 }

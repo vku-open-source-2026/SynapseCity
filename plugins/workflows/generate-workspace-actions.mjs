@@ -25,6 +25,14 @@ const DATE = () => ({ kind: 'date' });
 const JSONV = () => ({ kind: 'json' });
 const BOOL = () => ({ kind: 'boolean' });
 
+const INCIDENT_INTERNAL_FIELDS = [
+  'reported_by', 'reporter_type', 'contact_info', 'reporter_name', 'reporter_phone',
+  'reporter_email', 'reporter_id_card', 'internal_notes', 'internal_attachments',
+  'assigned_to', 'assigned_at', 'resolution_notes', 'merged_reporter_ids',
+  'maintenance_record_id', 'cost_status', 'cost_approved_at', 'cost_approval_id',
+  'cost_approved_by', 'cost_approval_roles', 'internal_comments', 'upvoters', 'merge_notes',
+];
+
 /**
  * Field allowlists are deliberately flat. Nested domain objects use `*_json`
  * fields and are parsed by the validation node; the browser never executes
@@ -52,7 +60,7 @@ const SCHEMAS = {
     fields: {
       title: S(200), description: S(4000), category: S(80), severity: S(40), status: S(40),
       priority: S(40), asset_id: S(128), resolution_type: S(80), address: S(300),
-      latitude: N(), longitude: N(), details_json: JSONV(),
+      latitude: N(), longitude: N(),
     },
     required: ['title'],
     defaults: { status: 'reported', severity: 'medium', public_visible: true },
@@ -267,10 +275,10 @@ if (action === 'create') {
     record.public_visible = true;
   }
   if (resource === 'assets' && record.public_visible === undefined) record.public_visible = true;
-  return { mode: 'create', url: base, body: { data: record, publish: schema.publish === true }, audit, operation: resource + '.create' };
+  return { mode: 'create', resource, url: base, body: { data: record, publish: schema.publish === true }, audit, operation: resource + '.create' };
 }
 if (action === 'delete') {
-  return { mode: 'delete', url: base + '/' + encodeURIComponent(recordId), audit, operation: resource + '.delete' };
+  return { mode: 'delete', resource, url: base + '/' + encodeURIComponent(recordId), audit, operation: resource + '.delete' };
 }
 const unknown = Object.keys(fields).filter((key) => key !== 'record_id' && key !== 'id' && key !== 'decision' && key !== 'notes' && !(key in schema.fields));
 if (unknown.length) throw new Error('unknown_fields:' + unknown.join(','));
@@ -283,6 +291,12 @@ for (const [name, spec] of Object.entries(schema.fields)) {
 const decision = text(fields.decision);
 const notes = text(fields.notes);
 if (notes) patch.notes = notes;
+if (resource === 'incidents') {
+  if (notes) throw new Error('incident_notes_require_dedicated_workflow');
+  for (const field of INCIDENT_INTERNAL_FIELDS) {
+    if (patch[field] !== undefined) throw new Error('incident_private_field_not_accepted:' + field);
+  }
+}
 if (action === 'execute') {
   const map = schema.decisionStatus || {};
   if (decision) {
@@ -296,7 +310,7 @@ if (action === 'execute') {
 }
 if (!Object.keys(patch).length) throw new Error('nothing_to_update');
 if (patch.status !== undefined && schema.statuses.length && !schema.statuses.includes(String(patch.status))) throw new Error('status_invalid');
-return { mode: 'update', url: base + '/' + encodeURIComponent(recordId), patch, audit, operation: resource + '.' + (decision || action) };
+return { mode: 'update', resource, url: base + '/' + encodeURIComponent(recordId), patch, audit, operation: resource + '.' + (decision || action) };
 `;
 
 const ref = (name) => ({ node: name, type: 'main', index: 0 });
@@ -336,6 +350,15 @@ const action = response.input;
 if (response.statusCode !== 200 || !current || typeof current.data !== 'object' || !current.data) throw new Error('record_not_found');
 const data = current.data;
 if (!Number.isInteger(current.version)) throw new Error('record_version_unavailable');
+if (action.resource === 'incidents') {
+  const internalFields = ${JSON.stringify(INCIDENT_INTERNAL_FIELDS)};
+  for (const field of internalFields) {
+    if (data[field] !== undefined) throw new Error('incident_private_fields_require_sidecar_workflow:' + field);
+  }
+  if (Array.isArray(data.comments) && data.comments.some((entry) => entry && entry.is_internal === true)) {
+    throw new Error('incident_private_comments_require_sidecar_workflow');
+  }
+}
 const schema = ${JSON.stringify(Object.fromEntries(Object.entries(SCHEMAS).map(([key, value]) => [key, { terminal: value.terminal }])))};
 const terminal = schema[action.resource] ? schema[action.resource].terminal : [];
 if (terminal.includes(String(data.status))) throw new Error('record_terminal');
