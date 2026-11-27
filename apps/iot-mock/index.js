@@ -3,9 +3,12 @@
 // Virtual ESP32 for the City water-culvert demo. Publishes realistic
 // water-level readings to MQTT, so the workspace, iot-bridge and Tier-2
 // telemetry path stay live without physical hardware.
+import { readFileSync } from 'node:fs';
 import mqtt from 'mqtt';
 
 const MQTT_URL = process.env.MQTT_URL || 'mqtt://mqtt:1883';
+const MQTT_USERNAME = process.env.MQTT_USERNAME || '';
+const MQTT_PASSWORD = process.env.MQTT_PASSWORD || '';
 const SENSOR_ID = process.env.MOCK_SENSOR_ID || 'cong-nc-001-wl';
 const SENSOR_CODE = process.env.MOCK_SENSOR_CODE || 'CONG-NC-001-WL';
 const INTERVAL_MS = Math.min(Math.max(Number(process.env.MOCK_INTERVAL_MS || 15000), 2000), 3600000);
@@ -13,7 +16,40 @@ const MODE = process.env.MOCK_MODE || 'culvert';
 const DEPTH_CM = Number(process.env.MOCK_DEPTH_CM || 220);
 const TOPIC = process.env.MOCK_TOPIC || `city/sensors/${SENSOR_ID}/data`;
 
-const mqttClient = mqtt.connect(MQTT_URL, { clientId: `city-mock-${SENSOR_ID}`.slice(0, 23) });
+function fail(message) {
+  console.error(`[iot-mock] ${message}`);
+  process.exit(1);
+}
+
+if (!MQTT_USERNAME || !MQTT_PASSWORD) fail('missing MQTT_USERNAME/MQTT_PASSWORD');
+if (!/^[A-Za-z0-9_.:@-]{1,128}$/.test(SENSOR_ID)) fail('MOCK_SENSOR_ID contains unsupported characters');
+if (MQTT_USERNAME !== SENSOR_ID) fail('MQTT_USERNAME must equal MOCK_SENSOR_ID for the per-device ACL');
+if (TOPIC !== `city/sensors/${SENSOR_ID}/data`) fail('MOCK_TOPIC must match the credentialed sensor topic');
+
+let parsedUrl;
+try {
+  parsedUrl = new URL(MQTT_URL);
+} catch {
+  fail('MQTT_URL must be a valid mqtt:// or mqtts:// URL');
+}
+if (!['mqtt:', 'mqtts:'].includes(parsedUrl.protocol)) fail('MQTT_URL must use mqtt:// or mqtts://');
+if (parsedUrl.username || parsedUrl.password) fail('MQTT_URL must not contain credentials');
+
+let mqttCa;
+if (process.env.MQTT_CA_FILE) {
+  try {
+    mqttCa = readFileSync(process.env.MQTT_CA_FILE);
+  } catch {
+    fail('cannot read MQTT_CA_FILE');
+  }
+}
+
+const mqttClient = mqtt.connect(MQTT_URL, {
+  clientId: `city-mock-${SENSOR_ID}`.slice(0, 23),
+  username: MQTT_USERNAME,
+  password: MQTT_PASSWORD,
+  ...(mqttCa ? { ca: mqttCa } : {}),
+});
 
 let phase = 0;
 let stormUntil = 0;
@@ -60,19 +96,19 @@ function reading() {
 
 function publish() {
   const body = reading();
-  mqttClient.publish(TOPIC, JSON.stringify(body), { qos: 0 }, (error) => {
+  mqttClient.publish(TOPIC, JSON.stringify(body), { qos: 1 }, (error) => {
     if (error) console.error(`[iot-mock] publish failed: ${error.message}`);
     else console.log(`[iot-mock] ${TOPIC} value=${body.value} cm ts=${body.timestamp}`);
   });
 }
 
 mqttClient.on('connect', () => {
-  console.log(`[iot-mock] connected ${MQTT_URL}; publishing ${TOPIC} every ${INTERVAL_MS}ms (mode=${MODE})`);
+  console.log(`[iot-mock] connected; publishing ${TOPIC} every ${INTERVAL_MS}ms (mode=${MODE})`);
   publish();
   setInterval(publish, INTERVAL_MS);
 });
 mqttClient.on('reconnect', () => console.log('[iot-mock] reconnecting mqtt...'));
 mqttClient.on('error', (error) => console.error(`[iot-mock] mqtt: ${error.message}`));
 
-process.on('SIGTERM', () => mqttClient.end(true));
-process.on('SIGINT', () => mqttClient.end(true));
+process.on('SIGTERM', () => mqttClient.end(false));
+process.on('SIGINT', () => mqttClient.end(false));

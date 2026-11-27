@@ -6,7 +6,9 @@
   "type": "module",
   "description": "Virtual ESP32 publisher for the SynapseCity water-culvert demo",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "build": "node --check index.js",
+    "lint": "node --check index.js"
   },
   "dependencies": {
     "mqtt": "^5.10.1"

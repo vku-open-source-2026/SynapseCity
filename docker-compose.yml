@@ -55,19 +55,26 @@ services:
       synapsecity:
         aliases: [synapsecity-console]
 
-  # IoT edge: MQTT broker for ESP32 devices + stateless bridge.
-  # Devices: mosquitto_pub -h <host> -t city/sensors/<id>/data -m '{"value":12.3}'
+  # IoT edge: authenticated MQTT broker for ESP32 devices + stateless bridge.
+  # Devices use TLS on 8883 and publish only to their own sensor topic at QoS 1.
   # Bridge forwards via public Tier-2 telemetry ingest -> Tier-1 Stream.
   mqtt:
     image: eclipse-mosquitto:2.0
     restart: unless-stopped
     volumes:
       - ./infra/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mqtt-data:/mosquitto/data
+    secrets:
+      - mqtt_password_file
+      - mqtt_acl_file
+      - mqtt_tls_ca_file
+      - mqtt_tls_cert_file
+      - mqtt_tls_key_file
     expose: ["1883"]
     ports:
-      # ESP32 ngoài mạng publish vào đây; override bằng MQTT_HOST_PORT
-      # vd: MQTT_HOST_PORT=0.0.0.0:1883 (public) hoặc 127.0.0.1:1883 (loopback).
-      - "${MQTT_HOST_PORT:-0.0.0.0:1883}:1883"
+      # Safe default: TLS on loopback. Operators may bind a private interface or
+      # expose 8883 through a firewall; never publish plaintext 1883 to the host.
+      - "${MQTT_HOST_PORT:-127.0.0.1:8883}:8883"
     networks: [synapsecity]
   iot-bridge:
     image: ghcr.io/${SYNAPSECITY_IMAGE_OWNER:-vku-open-source-2026}/synapsecity-iot-bridge:${SYNAPSECITY_VERSION:-latest}
@@ -77,13 +84,25 @@ services:
     restart: unless-stopped
     environment:
       MQTT_URL: mqtt://mqtt:1883
-      MQTT_TOPIC: city/sensors/+/data
+      MQTT_USERNAME: ${IOT_BRIDGE_MQTT_USERNAME:-iot-bridge}
+      MQTT_PASSWORD: ${IOT_BRIDGE_MQTT_PASSWORD:-}
+      MQTT_CLIENT_ID: ${IOT_BRIDGE_MQTT_CLIENT_ID:-iot-bridge}
+      MQTT_SESSION_EXPIRY_SECONDS: ${IOT_MQTT_SESSION_EXPIRY_SECONDS:-604800}
       SYNAPSEDX_BASE_URL: https://synapsedx.sbs
       SYNAPSEDX_API_KEY: ${SYNAPSEDX_API_KEY:-}
       SYNAPSEDX_TOKEN: ${SYNAPSEDX_TOKEN:-}
       TELEMETRY_DATASET: city-iot-readings
       SENSOR_DATASET: city-iot-sensors
       UPDATE_SENSORS: ${IOT_BRIDGE_UPDATE_SENSORS:-true}
+      BRIDGE_QUEUE_MAX: ${IOT_BRIDGE_QUEUE_MAX:-5000}
+      BRIDGE_RETRY_BASE_MS: ${IOT_BRIDGE_RETRY_BASE_MS:-1000}
+      BRIDGE_RETRY_MAX_MS: ${IOT_BRIDGE_RETRY_MAX_MS:-30000}
+      BRIDGE_SHUTDOWN_TIMEOUT_MS: ${IOT_BRIDGE_SHUTDOWN_TIMEOUT_MS:-30000}
+      IOT_SENSOR_CACHE_MS: ${IOT_SENSOR_CACHE_MS:-5000}
+      IOT_TIMESTAMP_MAX_AGE_MS: ${IOT_TIMESTAMP_MAX_AGE_MS:-604800000}
+      IOT_TIMESTAMP_MAX_FUTURE_MS: ${IOT_TIMESTAMP_MAX_FUTURE_MS:-300000}
+      IOT_VALUE_MIN: ${IOT_VALUE_MIN:--1000000}
+      IOT_VALUE_MAX: ${IOT_VALUE_MAX:-1000000}
     depends_on: [mqtt]
     networks: [synapsecity]
 
@@ -98,6 +117,8 @@ services:
     restart: unless-stopped
     environment:
       MQTT_URL: mqtt://mqtt:1883
+      MQTT_USERNAME: ${MOCK_SENSOR_ID:-cong-nc-001-wl}
+      MQTT_PASSWORD: ${IOT_MOCK_MQTT_PASSWORD:-}
       MOCK_SENSOR_ID: ${MOCK_SENSOR_ID:-cong-nc-001-wl}
       MOCK_SENSOR_CODE: ${MOCK_SENSOR_CODE:-CONG-NC-001-WL}
       MOCK_TOPIC: ${MOCK_TOPIC:-}
@@ -150,6 +171,21 @@ services:
         aliases: [contribution-frontend]
     security_opt:
       - no-new-privileges:true
+
+secrets:
+  mqtt_password_file:
+    file: ${MQTT_PASSWORD_FILE:-./infra/mosquitto/password_file}
+  mqtt_acl_file:
+    file: ${MQTT_ACL_FILE:-./infra/mosquitto/aclfile}
+  mqtt_tls_ca_file:
+    file: ${MQTT_TLS_CA_FILE:-./infra/mosquitto/certs/ca.crt}
+  mqtt_tls_cert_file:
+    file: ${MQTT_TLS_CERT_FILE:-./infra/mosquitto/certs/server.crt}
+  mqtt_tls_key_file:
+    file: ${MQTT_TLS_KEY_FILE:-./infra/mosquitto/certs/server.key}
+
+volumes:
+  mqtt-data:
 
 networks:
   synapsecity:

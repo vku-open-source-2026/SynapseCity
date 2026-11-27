@@ -9,3 +9,7 @@ node_modules/
 
 # Generated ESP32 sketches contain the WiFi password
 firmware/
+
+# Operator-supplied MQTT credentials and TLS private keys
+infra/mosquitto/password_file
+infra/mosquitto/certs/

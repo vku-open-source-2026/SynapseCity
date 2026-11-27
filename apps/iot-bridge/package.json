@@ -4,7 +4,13 @@
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "build": "node --check index.js",
+    "lint": "node --check index.js && node --check index.test.js",
+    "test": "node --test index.test.js"
+  },
   "dependencies": {
-    "mqtt": "^5.10.0"
+    "mqtt": "^5.10.1"
   }
 }

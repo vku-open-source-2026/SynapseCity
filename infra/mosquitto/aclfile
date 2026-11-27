@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 VKU.VIC
+# Device usernames must exactly match their sensor id. This pattern prevents a
+# credentialed device from publishing to another device's topic. The reserved
+# bridge account is denied all writes, including its own username-shaped topic.
+pattern write city/sensors/%u/data
+pattern deny city/sensors/iot-bridge/data
+
+# The bridge is a service account with read-only access to telemetry topics.
+user iot-bridge
+topic read city/sensors/+/data

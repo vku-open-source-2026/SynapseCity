@@ -12,7 +12,7 @@ workspace and the public IoT Lab read the same records.
 | Asset | `cong-nc-001` â€” Cá»‘ng thoÃ¡t nÆ°á»›c Nguyá»…n LÆ°Æ¡ng Báº±ng, ÄÃ  Náºµng |
 | Sensor | `cong-nc-001-wl` â€” `water_level`, unit `cm`, depth 220 cm |
 | MQTT topic | `city/sensors/cong-nc-001-wl/data` |
-| MQTT broker | `synapsecity.sbs:1883` (mosquitto, TLS not enabled) |
+| MQTT broker | `synapsecity.sbs:8883` (TLS, per-device credentials) |
 | Public lab | https://synapsecity.sbs/iot |
 | Workspace | https://synapsedx.sbs/workspace?product=city&page=city-iot-network |
 | Asset page | https://synapsecity.sbs/asset/cong-nc-001 |
@@ -27,10 +27,10 @@ JSN-SR04T / MOCK_MODE
    â”‚  pulse / generated cm
 ESP32 (WiFi KMGMSAFEHORIFPT)
    â”‚  MQTT publish JSON {value,timestamp?,metadata?}
-mosquitto  (compose service "mqtt", host 0.0.0.0:1883)
-   â”‚  topic city/sensors/+/data
+mosquitto  (compose service "mqtt", TLS 8883; host loopback by default)
+   â”‚  topic city/sensors/+/data (QoS 1)
 iot-bridge (apps/iot-bridge)
-   â”‚  batch â‰¤100, 1 s; PATCH sensor last_reading/last_seen
+   â”‚  batch â‰¤100, 1 s; bounded retry/backoff; PATCH approved sensors only
 Tier-2 POST /v1/capabilities/telemetry/ingest
    â”‚  datasetId=city-iot-readings  source=mqtt
 SynapseOne Base (records) + Stream (topic â€¦-telemetry)
@@ -40,8 +40,9 @@ SynapseOne Base (records) + Stream (topic â€¦-telemetry)
 ```
 
 The bridge keeps the sensor registry current through a read-merge-CAS PATCH of
-`city-iot-sensors`. A missing sensor is ignored (404) so arbitrary topics do
-not break a batch.
+`city-iot-sensors`. It first requires a registered, active sensor and a value in
+that sensor's configured range; unknown or disabled sensors are rejected before
+forwarding or registry mutation.
 
 ## Firmware generation
 
@@ -79,6 +80,12 @@ The sketch uses `PubSubClient`, NTP timestamps, WiFi/MQTT reconnect, a
 waterproof JSN-SR04T read (`TRIG=D12`, `ECHO=D13`) and `#define MOCK_MODE 1`
 when `mock_fallback` is true. With mock mode the sketch generates a plausible
 water level even when no probe is connected.
+
+The generator still renders the legacy plaintext `PubSubClient` sketch. Before
+connecting to the hardened broker, adapt it to a TLS-capable MQTT client, trust
+the operator CA, set port `8883`, and provision the sensor's unique username and
+password. The broker rejects anonymous and cross-sensor publishes; credentials
+must never be committed or shared in the sketch repository.
 
 The legacy per-sensor route `POST /v1/iot/sensors/:id/firmware` remains for
 session-scoped operators; it now renders the same MQTT template.
@@ -145,20 +152,37 @@ MOCK_INTERVAL_MS=15000
 MOCK_MODE=culvert
 MOCK_DEPTH_CM=220
 IOT_BRIDGE_UPDATE_SENSORS=true
-MQTT_HOST_PORT=0.0.0.0:1883
+MQTT_HOST_PORT=127.0.0.1:8883
+MQTT_PASSWORD_FILE=/secure/synapsecity/mosquitto/password_file
+MQTT_ACL_FILE=./infra/mosquitto/aclfile
+MQTT_TLS_CA_FILE=/secure/synapsecity/mosquitto/ca.crt
+MQTT_TLS_CERT_FILE=/secure/synapsecity/mosquitto/server.crt
+MQTT_TLS_KEY_FILE=/secure/synapsecity/mosquitto/server.key
+IOT_BRIDGE_MQTT_USERNAME=iot-bridge
+IOT_BRIDGE_MQTT_PASSWORD=<set-out-of-band>
+IOT_MOCK_MQTT_PASSWORD=<set-out-of-band>
 ```
 
 `PUBLIC_IOT_SENSORS` is an explicit allowlist; empty means the public live
 endpoints return no data. Only fields in `public_iot_sensor_view` are exposed.
+See [`IOT_MQTT_MIGRATION.md`](IOT_MQTT_MIGRATION.md) for credential, certificate,
+ACL, cutover, and rollback requirements.
 
 ## Security notes
 
-- MQTT is currently anonymous on port 1883 for the demo. Before exposing the
-  broker beyond a trusted network, enable `password_file`/ACLs, restrict the
-  firewall to the field network, and add the device credential to the
-  generated sketch.
+- MQTT authentication is mandatory. External devices use TLS on port 8883;
+  plaintext 1883 is available only inside the Compose network. The default host
+  binding is `127.0.0.1:8883`.
+- Device usernames must equal their sensor id. The Mosquitto ACL permits each
+  device to write only `city/sensors/<its-id>/data`; the bridge account has
+  read-only access to the telemetry wildcard.
+- The bridge accepts QoS 1 only, validates registry membership, sensor status,
+  timestamp skew, and configured value ranges, and delays MQTT PUBACK until
+  Tier-2 ingest succeeds. Retries are bounded by a capped backoff and queue
+  size; graceful shutdown drains or leaves readings unacknowledged for broker
+  redelivery.
 - The generated `.ino` contains the WiFi password. Do not commit it or share it
-  publicly.
+  publicly. MQTT credentials and TLS private keys must also stay out of git.
 - The public firmware endpoint is stateless and rate-limited by the City
   public-read limiter. It cannot read datasets.
 - The public telemetry endpoint only serves record ids in
