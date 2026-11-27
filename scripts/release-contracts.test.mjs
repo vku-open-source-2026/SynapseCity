@@ -12,7 +12,7 @@ const read = (relative) => fs.readFileSync(path.join(ROOT, relative), 'utf8');
 const compose = read('docker-compose.yml');
 const release = read('.github/workflows/release.yml');
 const ci = read('.github/workflows/ci.yml');
-const EXPECTED_TESTS = 4;
+const EXPECTED_TESTS = 5;
 let executedTests = 0;
 
 function contractTest(name, fn) {
@@ -77,6 +77,23 @@ contractTest('the stale root Dockerfile is absent and canonical service Dockerfi
     ]) {
         assert.ok(fs.existsSync(path.join(ROOT, relative)), `${relative} is missing`);
         assert.doesNotMatch(read(relative), /SynapseCity\/vendor|dist\/src\/server\.js/, relative);
+    }
+});
+
+contractTest('SBOM generation reads every lockfile without requiring separate workspace installs', () => {
+    const generator = read('scripts/generate-sboms.mjs');
+    assert.match(
+        generator,
+        /\['sbom', '--package-lock-only', '--omit=optional', '--sbom-format=cyclonedx'\]/,
+        'npm SBOM generation must use lockfiles and skip uninstalled platform optionals',
+    );
+    for (const lock of [
+        'package-lock.json',
+        'apps/console/package-lock.json',
+        'apps/contribution-console/package-lock.json',
+        'mobile/package-lock.json',
+    ]) {
+        assert.ok(generator.includes(lock), `${lock} is missing from SBOM generation`);
     }
 });
 

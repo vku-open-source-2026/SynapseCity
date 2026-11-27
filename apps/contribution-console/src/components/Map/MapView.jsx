@@ -4,6 +4,11 @@ import { INFRASTRUCTURE_TYPES, MAP_STYLE, MAP_CENTER, MAP_ZOOM, ZOOM_THRESHOLD }
 import { createCustomIcon, clusterFeatures, createClusterIcon } from '../../utils/mapUtils';
 import { API_URL } from '../../config';
 
+const FALLBACK_TILE = {
+  url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  attribution: '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+};
+
 function textElement(tag, text, style = {}) {
   const element = document.createElement(tag);
   element.textContent = text;
@@ -106,10 +111,6 @@ export const MapView = ({
   // The backend decides the basemap: VietMap proxy when a key is configured,
   // OpenStreetMap otherwise. Wait for the config probe before attaching tiles
   // so no aborted third-party OSM requests fire when VietMap proxy is active.
-  const FALLBACK_TILE = {
-    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-  };
   const [tile, setTile] = useState(null);
   useEffect(() => {
     let cancelled = false;

@@ -17,7 +17,10 @@ const npmProjects = [
   ['mobile', 'mobile/package-lock.json', 'mobile'],
 ];
 for (const [name, , cwd] of npmProjects) {
-  const json = execFileSync(process.env.NPM || 'npm', ['sbom', '--sbom-format=cyclonedx'], {
+  // Foreign-platform optional packages may bundle dependencies that npm does not
+  // record as separate lock entries. Omit those uninstalled optionals here; the
+  // license gate below still audits every component in every lockfile.
+  const json = execFileSync(process.env.NPM || 'npm', ['sbom', '--package-lock-only', '--omit=optional', '--sbom-format=cyclonedx'], {
     cwd: join(root, cwd),
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
