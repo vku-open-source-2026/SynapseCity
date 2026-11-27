@@ -39,12 +39,20 @@ describe("files capability client", () => {
         expect(config.headers["X-File-Visibility"]).toBeUndefined();
     });
 
-    it("uploads anonymous photos to the public endpoint and marks them public", async () => {
+    it("uploads anonymous photos with a private draft capability", async () => {
         const file = new File([new Uint8Array([9])], "pothole.png", { type: "image/png" });
-        await uploadPublicFile(file);
+        await uploadPublicFile(file, { draftId: "draft-1", uploadToken: "upload-token" });
         const [path, , config] = post.mock.calls[0];
         expect(path).toBe("/public/files");
-        expect(config.headers["X-File-Visibility"]).toBe("public");
+        expect(config.headers["X-File-Visibility"]).toBeUndefined();
+        expect(config.headers["X-Report-Draft-Id"]).toBe("draft-1");
+        expect(config.headers["X-Report-Upload-Token"]).toBe("upload-token");
+    });
+
+    it("refuses to upload an unbound public photo", async () => {
+        const file = new File([new Uint8Array([9])], "pothole.png", { type: "image/png" });
+        await expect(uploadPublicFile(file)).rejects.toBeInstanceOf(FileUploadError);
+        expect(post).not.toHaveBeenCalled();
     });
 
     it("surfaces the server error code instead of pretending the upload succeeded", async () => {

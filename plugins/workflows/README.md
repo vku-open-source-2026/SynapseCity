@@ -30,9 +30,16 @@ every operation is migrated.
   datasource/dataset/id is never accepted.
 - The public incident-create and generic incident schemas do not contain
   internal fields (`assigned_to`, `reporter_type`, `resolution_notes`).
-  Status-transition artifacts keep their existing fields but every incident
-  PATCH is sent with `publish:false`, so those records never enter the public
-  projection until the City service publishes a redacted copy.
+  Comment/assign/resolve/close/reject/acknowledge/verify/visibility/upvote
+  transitions query the private
+  `city-incident-internal` sidecar, strip every internal field and internal
+  comment from the full `city-incidents` PATCH, and create/PATCH the sidecar
+  with its own `ifVersion` CAS. Merge keeps duplicate public closes redacted and
+  writes `merge_notes`/`merged_reporter_ids` only to the primary sidecar.
+  Generic incident updates reject private notes/payloads and refuse to
+  re-write legacy records that still contain private fields; use the dedicated
+  sidecar-aware transitions to migrate/update them.
+  `publish:false` remains a publication control, not a redaction boundary.
 - The generic `users` schema cannot set `role` or `permissions_json`; workflow
   registrations create citizen profiles only. Role elevation remains in City
   `/v1/users` administration.
@@ -126,20 +133,21 @@ cannot express are now dedicated workflow sources:
 
 | Operation | Artifact | Dataset |
 | --- | --- | --- |
-| `incidents.comment` (structured, internal visibility) | `city-incident-comment.workflow.json` | `city-incidents` |
+| `incidents.comment` (structured, internal visibility) | `city-incident-comment.workflow.json` | `city-incidents` + private sidecar |
 | `incidents.visibility` | `city-incident-visibility.workflow.json` | `city-incidents` |
-| `incidents.upvote` (idempotent per reporter) | `city-incident-upvote.workflow.json` | `city-incidents` |
-| `incidents.merge` (multi-record close + primary annotation) | `city-incident-merge.workflow.json` | `city-incidents` |
+| `incidents.upvote` (idempotent per reporter) | `city-incident-upvote.workflow.json` | `city-incidents` + private sidecar |
+| `incidents.merge` (multi-record close + primary annotation) | `city-incident-merge.workflow.json` | `city-incidents` + private sidecar |
 | `maintenance.schedule` (recurring preventive schedule) | `city-maintenance-schedule.workflow.json` | `city-maintenance` |
 | `maintenance.scheduleCheck` (idempotent due scan → work orders) | `city-maintenance-schedule-check.workflow.json` | `city-maintenance` |
 | `iotReadings.batch` (CSV → validated reading rows + job record) | `city-iot-batch.workflow.json` | `city-iot-readings` |
 | `assets.document` (file metadata → asset attachment entry) | `city-asset-document.workflow.json` | `city-assets` |
 
-`city-incident-merge` closes each duplicate with
-`resolution_type:duplicate`/`merged_into` and only extends
-`merged_reporter_ids` with duplicates that actually closed; a missing
+`city-incident-merge` closes each duplicate with redacted public fields
+(`resolution_type:duplicate`/`merged_into`) and only extends the private primary
+sidecar's `merged_reporter_ids` with duplicates that actually closed; a missing
 duplicate is reported as failed and never blocks the merge. `upvote` refuses a
-second entry per reporter. `schedule-check` is idempotent by a schedule-run
+second entry per reporter and stores reporter ids only in the sidecar.
+`schedule-check` is idempotent by a schedule-run
 marker so re-running does not duplicate work orders.
 
 File and approval reads inside these workflows send `X-Workspace-App: city`.

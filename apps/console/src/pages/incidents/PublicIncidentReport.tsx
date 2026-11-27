@@ -20,7 +20,7 @@ import {
   TriangleAlert,
   X,
 } from "lucide-react"
-import { publicApi } from "../../api/public"
+import { publicApi, type PublicIncidentDraft } from "../../api/public"
 import { uploadPublicFile } from "../../lib/files"
 import { Turnstile } from "../../components/Turnstile"
 import Header from "../../components/Header"
@@ -35,6 +35,11 @@ type PublicIncidentErrorResponse = { detail?: string }
 type PublicIncidentCreate = IncidentCreateRequest & {
   photos?: string[]
   contact_info?: { name?: string; phone_number?: string }
+}
+
+type PublicIncidentSubmit = {
+  data: PublicIncidentCreate
+  draft?: PublicIncidentDraft
 }
 
 const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || ""
@@ -113,7 +118,8 @@ const PublicIncidentReport: React.FC = () => {
   useEffect(() => () => photosRef.current.forEach((p) => URL.revokeObjectURL(p.url)), [])
 
   const createMutation = useMutation({
-    mutationFn: (data: PublicIncidentCreate) => publicApi.createAnonymousIncident(data, turnstileToken),
+    mutationFn: ({ data, draft }: PublicIncidentSubmit) =>
+      publicApi.createAnonymousIncident(data, turnstileToken, draft),
     onSuccess: (incident) => {
       navigate({
         to: "/public/incidents/$incidentId",
@@ -192,35 +198,25 @@ const PublicIncidentReport: React.FC = () => {
     e.preventDefault()
     const next: Record<string, string> = {}
     if (!title.trim()) next.title = r.errors.title
+    else if (title.trim().length > 140) next.title = "Tiêu đề tối đa 140 ký tự."
     if (!description.trim()) next.description = r.errors.description
+    else if (description.trim().length > 2000) next.description = "Mô tả tối đa 2000 ký tự."
     if (!address.trim()) next.address = r.errors.address
+    else if (address.trim().length > 500) next.address = "Địa chỉ tối đa 500 ký tự."
     if (TURNSTILE_SITE_KEY && !turnstileToken) next.captcha = r.errors.captcha
-    setErrors(next)
-    if (Object.keys(next).length) return
-
-    // Photos go up first so a failed upload never leaves a report without them.
-    let photoIds: string[] = []
-    if (photos.length) {
-      setUploading(true)
-      try {
-        const uploaded = await Promise.all(photos.map((p) => uploadPublicFile(p.file)))
-        photoIds = uploaded.map((f) => f.file_id)
-      } catch {
-        setErrors({ photos: r.errors.photos })
-        return
-      } finally {
-        setUploading(false)
-      }
-    }
-
     const latitude = parseFloat(lat)
     const longitude = parseFloat(lng)
     const hasCoords = Number.isFinite(latitude) && Number.isFinite(longitude)
+    if ((lat !== "" || lng !== "") && (!hasCoords || Math.abs(latitude) > 90 || Math.abs(longitude) > 180)) {
+      next.address = "Tọa độ không hợp lệ."
+    }
+    setErrors(next)
+    if (Object.keys(next).length) return
+
     const contact = contactName.trim() || contactPhone.trim()
       ? { name: contactName.trim(), phone_number: contactPhone.trim() }
       : undefined
-
-    createMutation.mutate({
+    const data: PublicIncidentCreate = {
       title: title.trim(),
       description: description.trim(),
       category,
@@ -231,9 +227,35 @@ const PublicIncidentReport: React.FC = () => {
           ? { geometry: { type: "Point", coordinates: [longitude, latitude] } }
           : {}),
       },
-      ...(photoIds.length ? { photos: photoIds } : {}),
       ...(contact ? { contact_info: contact } : {}),
-    })
+    }
+
+    // Validate the complete report and obtain a short-lived draft capability
+    // before any bytes are uploaded. Draft files stay private until the final
+    // report successfully binds them.
+    if (photos.length) {
+      setUploading(true)
+      try {
+        const draft = await publicApi.createAnonymousIncidentDraft(data, turnstileToken)
+        const uploaded = await Promise.all(
+          photos.map((p) => uploadPublicFile(p.file, {
+            draftId: draft.draft_id,
+            uploadToken: draft.upload_token,
+          })),
+        )
+        createMutation.mutate({
+          data: { ...data, photos: uploaded.map((file) => file.file_id) },
+          draft,
+        })
+      } catch {
+        setErrors({ submit: r.errors.submit })
+        return
+      } finally {
+        setUploading(false)
+      }
+    } else {
+      createMutation.mutate({ data })
+    }
   }
 
   const busy = uploading || createMutation.isPending
@@ -282,12 +304,12 @@ const PublicIncidentReport: React.FC = () => {
             </div>
             <div>
               <label htmlFor="report-title" className={label}>{r.titleLabel}</label>
-              <input id="report-title" className={field} value={title} onChange={(e) => setTitle(e.target.value)} placeholder={r.titlePlaceholder} maxLength={160} />
+              <input id="report-title" className={field} value={title} onChange={(e) => setTitle(e.target.value)} placeholder={r.titlePlaceholder} maxLength={140} />
               <FieldError>{errors.title}</FieldError>
             </div>
             <div>
               <label htmlFor="report-detail" className={label}>{r.detailLabel}</label>
-              <textarea id="report-detail" className={`${field} min-h-32`} value={description} onChange={(e) => setDescription(e.target.value)} placeholder={r.detailPlaceholder} rows={5} />
+              <textarea id="report-detail" className={`${field} min-h-32`} value={description} onChange={(e) => setDescription(e.target.value)} placeholder={r.detailPlaceholder} rows={5} maxLength={2000} />
               <FieldError>{errors.description}</FieldError>
             </div>
           </Section>
@@ -322,7 +344,7 @@ const PublicIncidentReport: React.FC = () => {
               <label htmlFor="report-address" className={label}>{r.addressLabel}</label>
               <div className="relative">
                 <MapPin className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <input id="report-address" className={`${field} pl-10`} value={address} onChange={(e) => setAddress(e.target.value)} placeholder={r.addressPlaceholder} />
+                <input id="report-address" className={`${field} pl-10`} value={address} onChange={(e) => setAddress(e.target.value)} placeholder={r.addressPlaceholder} maxLength={500} />
               </div>
               <FieldError>{errors.address}</FieldError>
             </div>

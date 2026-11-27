@@ -3920,6 +3920,39 @@ app.post('/v1/public/incidents', publicReportRateLimit, async (req, res, next) =
     if (title.length > 140) return res.status(400).json({ error: 'title_too_long', detail: 'title must be at most 140 characters' });
     const description = requiredString(body, 'description');
     if (description.length > 2000) return res.status(400).json({ error: 'description_too_long', detail: 'description must be at most 2000 characters' });
+    const category = body.category === undefined ? 'other' : body.category;
+    if (typeof category !== 'string' || !['damage', 'malfunction', 'safety_hazard', 'vandalism', 'other'].includes(category)) {
+      return res.status(400).json({ error: 'category_invalid' });
+    }
+    const severity = body.severity === undefined ? 'medium' : body.severity;
+    if (typeof severity !== 'string' || !['low', 'medium', 'high', 'critical'].includes(severity)) {
+      return res.status(400).json({ error: 'severity_invalid' });
+    }
+    const location = body.location as Record<string, unknown> | undefined;
+    if (!location || typeof location !== 'object' || Array.isArray(location)
+      || typeof location.address !== 'string' || !location.address.trim() || location.address.trim().length > 500) {
+      return res.status(400).json({ error: 'location_address_invalid' });
+    }
+    if (location.coordinates !== undefined) {
+      const coordinates = location.coordinates as Record<string, unknown> | undefined;
+      const longitude = coordinates?.longitude;
+      const latitude = coordinates?.latitude;
+      if (!coordinates || typeof longitude !== 'number' || typeof latitude !== 'number'
+        || !Number.isFinite(longitude) || !Number.isFinite(latitude)
+        || Math.abs(longitude) > 180 || Math.abs(latitude) > 90) {
+        return res.status(400).json({ error: 'location_coordinates_invalid' });
+      }
+    }
+    if (location.geometry !== undefined) {
+      const geometry = location.geometry as { type?: unknown; coordinates?: unknown } | undefined;
+      const coordinates = geometry?.coordinates;
+      if (!geometry || geometry.type !== 'Point' || !Array.isArray(coordinates) || coordinates.length !== 2
+        || typeof coordinates[0] !== 'number' || typeof coordinates[1] !== 'number'
+        || !Number.isFinite(coordinates[0]) || !Number.isFinite(coordinates[1])
+        || Math.abs(coordinates[0]) > 180 || Math.abs(coordinates[1]) > 90) {
+        return res.status(400).json({ error: 'location_geometry_invalid' });
+      }
+    }
     const photoValues: unknown[] = Array.isArray(body.photos)
       ? body.photos
       : (Array.isArray(body.file_ids) ? body.file_ids : (body.file_id ? [body.file_id] : []));
@@ -3936,8 +3969,8 @@ app.post('/v1/public/incidents', publicReportRateLimit, async (req, res, next) =
       incident_code: number,
       title,
       description,
-      category: String(body.category || 'other'),
-      severity: String(body.severity || 'medium'),
+      category,
+      severity,
       status: 'reported',
       reporter_type: 'citizen',
       reported_by: 'anonymous',

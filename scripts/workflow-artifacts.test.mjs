@@ -13,6 +13,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
+import vm from 'node:vm';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { validateBundle, canonicalJson } from './lib/plugin-bundle.mjs';
@@ -113,8 +114,9 @@ test('transition flows use includeInput, merge invariants and conditional full P
     for (const entry of transitions()) {
         const workflow = readWorkflow(entry.file);
         assert.equal(workflow.name, entry.workflow);
-        const [trigger, validate, read, merge, patch] = workflow.nodes;
-        assert.equal(workflow.nodes.length, 5);
+        const sidecarAware = entry.operation === 'incidents.assign' || entry.operation === 'incidents.resolve';
+        assert.equal(workflow.nodes.length, sidecarAware ? 12 : 5);
+        const [trigger, validate, read] = workflow.nodes;
         assert.equal(trigger.type, 'manualTrigger');
         assert.equal(validate.type, 'code');
         assert.equal(read.type, 'httpRequest');
@@ -123,24 +125,28 @@ test('transition flows use includeInput, merge invariants and conditional full P
         assert.ok(read.parameters.url.includes(`${API}/${entry.dataset}/records/`));
         assert.deepEqual(read.parameters.auth, { credentialRef: 'synapsedx-organization', header: 'X-API-Key', allowedOrigins: ['https://synapsedx.sbs'] });
 
+        const merge = workflow.nodes.find((node) => node.id === 'merge-record');
         assert.equal(merge.type, 'code');
         const mergeCode = merge.parameters.code;
         assert.match(mergeCode, /response\.input/);
-        assert.match(mergeCode, /\.\.\.data, \.\.\.action\.patch/);
         assert.match(mergeCode, /ifVersion: current\.version/);
-        assert.match(mergeCode, /record_terminal/);
         assert.match(mergeCode, /record_version_unavailable/);
+        if (!sidecarAware) {
+            assert.match(mergeCode, /\.\.\.data, \.\.\.action\.patch/);
+            assert.match(mergeCode, /record_terminal/);
+        }
         if (entry.operation.startsWith('incidents') || entry.operation === 'maintenance.assign' || entry.operation === 'maintenance.start') {
             assert.match(mergeCode, /record_status_invalid/);
         }
         if (entry.operation === 'maintenance.complete') assert.match(mergeCode, /record_not_in_progress/);
 
+        const patch = workflow.nodes.find((node) => node.id === 'http-patch');
         assert.equal(patch.type, 'httpRequest');
         assert.equal(patch.parameters.method, 'PATCH');
         assert.equal(patch.parameters.body, '={{ $json.body }}');
+        assert.ok(patch.parameters.url.includes(`${entry.dataset}/records/`));
         assert.deepEqual(patch.parameters.auth, { credentialRef: 'synapsedx-organization', header: 'X-API-Key', allowedOrigins: ['https://synapsedx.sbs'] });
-        assert.deepEqual(workflow.connections[read.name].main[0][0].node, merge.name);
-        assert.deepEqual(workflow.connections[merge.name].main[0][0].node, patch.name);
+        if (sidecarAware) assert.equal(patch.parameters.includeInput, true);
     }
 });
 
@@ -165,34 +171,148 @@ test('no artifact writes via a projection, Base SDK or Tier-3 API', () => {
     }
 });
 
-test('incident workflows keep internal fields out of public writes', () => {
-    const internal = ['assigned_to', 'reporter_type', 'resolution_notes'];
-    const incidentFiles = manifest.workflows
-        .concat(manifest.lifecycleWorkflows || [])
-        .concat((manifest.domainWorkflows || []).filter((entry) => entry.resource === 'incidents'))
-        .filter((entry) => entry.resource === 'incidents');
-    for (const entry of incidentFiles) {
-        const workflow = readWorkflow(entry.file);
-        const writes = workflow.nodes.filter((node) =>
-            node.type === 'httpRequest' && ['POST', 'PATCH'].includes(node.parameters.method));
-        assert.ok(writes.length > 0, `${entry.workflow} has no write node`);
-        for (const write of writes) {
-            if (write.parameters.method === 'PATCH') {
-                const merge = workflow.nodes.find((node) => node.type === 'code' && node.parameters.code.includes('publish: false'));
-                assert.ok(merge, `${entry.workflow} PATCH must stay unpublished`);
-            } else {
-                const body = write.parameters.body;
-                const code = workflow.nodes
-                    .filter((node) => node.type === 'code')
-                    .map((node) => node.parameters.code)
-                    .join('\n');
-                assert.ok(
-                    body.includes('publish: false') || code.includes('publish: false'),
-                    `${entry.workflow} POST must stay private`,
-                );
-            }
+test('incident workflows route private fields to the sidecar and redact actual public writes', () => {
+    const internal = [
+        'assigned_to', 'reported_by', 'contact_info', 'reporter_type', 'resolution_notes',
+        'merged_reporter_ids', 'internal_comments', 'upvoters', 'merge_notes',
+    ];
+    const runCode = (source, input) => JSON.parse(JSON.stringify(vm.runInNewContext(
+        `(function () { ${source}\n })()`,
+        { $input: input, $now: '2026-11-26T12:00:00.000Z' },
+        { timeout: 1000 },
+    )));
+    const cases = [
+        ['city-incident-comment', { incident_id: 'inc-1', comment: 'Private crew note', is_internal: true }],
+        ['city-incident-assign', { incident_id: 'inc-1', assigned_to: 'operator-2' }],
+        ['city-incident-resolve', { incident_id: 'inc-1', resolution_notes: 'Fixed privately', resolution_type: 'fixed' }],
+        ['city-incident-close', { incident_id: 'inc-1', notes: 'Closed privately' }],
+        ['city-incident-reject', { incident_id: 'inc-1', reason: 'Not an issue privately' }],
+        ['city-incident-upvote', { incident_id: 'inc-1' }],
+        ['city-incident-acknowledge', { incident_id: 'inc-1' }],
+        ['city-incident-verify', { incident_id: 'inc-1' }],
+        ['city-incident-visibility', { incident_id: 'inc-1', visibility: 'internal' }],
+    ];
+    for (const [name, fields] of cases) {
+        const workflow = readWorkflow(`plugins/workflows/${name}.workflow.json`);
+        const action = runCode(workflow.nodes.find((node) => node.id === 'validate-envelope').parameters.code, {
+            pluginId: 'plugin-test', widgetId: 'widget-test', product: 'city', resource: 'incidents',
+            submittedBy: 'member-test', submittedAt: '2026-11-26T12:00:00.000Z', fields,
+        });
+        const plan = runCode(workflow.nodes.find((node) => node.id === 'merge-record').parameters.code, {
+            statusCode: 200,
+            input: action,
+            body: {
+                version: 3,
+                data: {
+                    id: 'inc-1', title: 'Broken pump', status: 'reported', assigned_to: 'old-operator',
+                    reported_by: 'reporter-private', contact_info: { phone_number: '0900' },
+                    reporter_type: 'citizen', resolution_notes: 'old private note', upvoters: ['old-user'],
+                    comments: [
+                        { id: 'public-1', comment: 'Public update', is_internal: false, user_id: 'private-user' },
+                        { id: 'internal-1', comment: 'Old private comment', is_internal: true, user_id: 'private-user' },
+                    ],
+                },
+            },
+        });
+        const prepared = runCode(workflow.nodes.find((node) => node.id === 'prepare-sidecar').parameters.code, {
+            statusCode: 200, input: plan, body: { items: [] },
+        });
+        const publicPatch = workflow.nodes.find((node) => node.id === 'http-patch');
+        assert.ok(publicPatch.parameters.url.includes('city-incidents/records/'), `${name}: public destination`);
+        assert.ok(prepared.sidecar.url.includes('city-incident-internal/records/'), `${name}: sidecar destination`);
+        for (const field of internal) {
+            assert.equal(prepared.body.data[field], undefined, `${name}: public write contains ${field}`);
         }
+        assert.equal(prepared.body.publish, false, `${name}: public write must stay unpublished`);
+        assert.equal(prepared.sidecar.body.publish, false, `${name}: sidecar write must stay private`);
+        assert.equal(prepared.body.data.comments.some((entry) => entry.is_internal === true), false);
+        assert.equal(prepared.body.data.comments.some((entry) => entry.user_id !== undefined), false);
+        assert.equal(prepared.sidecar.body.data.contact_info.phone_number, '0900');
+        assert.ok(prepared.sidecar.body.data.internal_comments.some((entry) => entry.id === 'internal-1'));
+        if (name === 'city-incident-comment') {
+            assert.equal(prepared.body.data.comments.length, 1);
+            assert.ok(prepared.sidecar.body.data.internal_comments.some((entry) => entry.comment === 'Private crew note'));
+        }
+        if (name === 'city-incident-assign') assert.equal(prepared.sidecar.body.data.assigned_to, 'operator-2');
+        if (name === 'city-incident-resolve') assert.equal(prepared.sidecar.body.data.resolution_notes, 'Fixed privately');
+        if (name === 'city-incident-close') assert.equal(prepared.sidecar.body.data.resolution_notes, 'Closed privately');
+        if (name === 'city-incident-reject') assert.equal(prepared.sidecar.body.data.resolution_notes, 'Not an issue privately');
+        if (name === 'city-incident-upvote') {
+            assert.ok(prepared.sidecar.body.data.upvoters.includes('member-test'));
+            assert.equal(prepared.body.data.upvotes, 1);
+        }
+
+        const existing = runCode(workflow.nodes.find((node) => node.id === 'prepare-sidecar').parameters.code, {
+            statusCode: 200,
+            input: plan,
+            body: { items: [{ id: 'internal-inc-1', version: 7, data: { contact_info: { phone_number: '0900' }, internal_notes: 'keep me' } }] },
+        });
+        assert.equal(existing.sidecar.exists, true);
+        assert.equal(existing.sidecar.body.ifVersion, 7);
+        assert.equal(existing.sidecar.body.data.internal_notes, 'keep me');
     }
+
+    const merge = readWorkflow('plugins/workflows/city-incident-merge.workflow.json');
+    const mergeAction = runCode(merge.nodes.find((node) => node.id === 'validate-envelope').parameters.code, {
+        pluginId: 'plugin-test', widgetId: 'widget-test', product: 'city', resource: 'incidents',
+        submittedBy: 'member-test', submittedAt: '2026-11-26T12:00:00.000Z',
+        fields: { incident_id: 'inc-1', duplicate_ids: 'dup-1', merge_notes: 'Private merge note' },
+    });
+    const primaryPlan = runCode(merge.nodes.find((node) => node.id === 'prepare-query').parameters.code, {
+        statusCode: 200, input: mergeAction,
+        body: { version: 3, data: { id: 'inc-1', title: 'Primary', status: 'reported', merged_reporter_ids: ['legacy-private'] } },
+    });
+    const duplicatePlan = runCode(merge.nodes.find((node) => node.id === 'plan-closes').parameters.code, {
+        statusCode: 200, input: primaryPlan,
+        body: { items: [{ id: 'dup-1', version: 4, data: { id: 'dup-1', status: 'reported', assigned_to: 'private-tech', resolution_notes: 'old private', comments: [] } }] },
+    });
+    for (const field of internal) assert.equal(duplicatePlan.slots[0].body.data[field], undefined, `merge public write contains ${field}`);
+    assert.equal(duplicatePlan.slots[0].body.data.resolution_notes, undefined);
+    const collected = runCode(merge.nodes.find((node) => node.id === 'collect-closed-duplicates').parameters.code, {
+        statusCode: 200, input: duplicatePlan,
+        body: { items: [{ id: 'dup-1', data: { status: 'closed', merged_into: 'inc-1' } }] },
+    });
+    const primarySidecar = runCode(merge.nodes.find((node) => node.id === 'merge-primary').parameters.code, {
+        statusCode: 200, input: collected, body: { items: [] },
+    });
+    assert.ok(primarySidecar.sidecar.url.includes('city-incident-internal/records/'));
+    assert.equal(primarySidecar.sidecar.body.data.merge_notes, 'Private merge note');
+    assert.deepEqual(primarySidecar.sidecar.body.data.merged_reporter_ids, ['dup-1', 'legacy-private']);
+    const publicWrites = merge.nodes.filter((node) => node.id.startsWith('patch-duplicate-'));
+    assert.equal(publicWrites.length, 5, 'merge only writes redacted public duplicate closes');
+    assert.ok(duplicatePlan.slots[0].url.includes('city-incidents/records/'));
+
+    const genericArtifact = readWorkflow('plugins/workflows/city-workspace-actions.workflow.json');
+    const genericValidate = genericArtifact.nodes.find((node) => node.name === 'Validate envelope and select operation');
+    const genericCreate = runCode(genericValidate.parameters.code, {
+        pluginId: 'plugin-test', widgetId: 'widget-test', product: 'city', resource: 'incidents',
+        action: 'create', submittedBy: 'member-test',
+        fields: { title: 'Public incident', category: 'damage', severity: 'low' },
+    });
+    for (const field of internal) assert.equal(genericCreate.body.data[field], undefined);
+    const genericUpdate = runCode(genericValidate.parameters.code, {
+        pluginId: 'plugin-test', widgetId: 'widget-test', product: 'city', resource: 'incidents',
+        action: 'update', submittedBy: 'member-test',
+        fields: { record_id: 'inc-1', status: 'assigned' },
+    });
+    assert.equal(genericUpdate.resource, 'incidents');
+    const genericPublic = runCode(genericMerge.parameters.code, {
+        statusCode: 200,
+        input: genericUpdate,
+        body: { version: 1, data: { id: 'inc-1', status: 'reported', title: 'Public incident' } },
+    });
+    assert.equal(genericPublic.body.publish, false);
+    assert.throws(() => runCode(genericValidate.parameters.code, {
+        pluginId: 'plugin-test', widgetId: 'widget-test', product: 'city', resource: 'incidents',
+        action: 'update', submittedBy: 'member-test',
+        fields: { record_id: 'inc-1', notes: 'private note' },
+    }), /incident_notes_require_dedicated_workflow/);
+    const genericMerge = genericArtifact.nodes.find((node) => node.name === 'Merge and enforce invariants');
+    assert.throws(() => runCode(genericMerge.parameters.code, {
+        statusCode: 200,
+        input: { resource: 'incidents', patch: { status: 'assigned' }, url: 'unused', audit: {} },
+        body: { version: 1, data: { id: 'inc-1', status: 'reported', assigned_to: 'private-tech' } },
+    }), /incident_private_fields_require_sidecar_workflow/);
 
     // The public incident create artifact and the generic incident schema carry
     // no internal operator field at all.
@@ -278,22 +398,26 @@ test('domain workflows pin their portable graph checksum and keep incident write
 
     const merge = readWorkflow('plugins/workflows/city-incident-merge.workflow.json');
     // The merge orchestration caps duplicates at the fixed slot count and only
-    // annotates the primary with duplicates that are actually closed.
+    // annotates the private primary sidecar with duplicates actually closed.
     const plan = merge.nodes.find((node) => node.name === 'Plan duplicate closes');
     assert.match(plan.parameters.code, /while \(slots\.length < 5\)/);
+    const collect = merge.nodes.find((node) => node.id === 'collect-closed-duplicates');
+    assert.match(collect.parameters.code, /merged_into\) === String\(state\.primary\.id\)/);
     const annotate = merge.nodes.find((node) => node.name === 'Merge primary annotation');
-    assert.match(annotate.parameters.code, /merged_into\) === String\(primaryId\)/);
     assert.match(annotate.parameters.code, /new Set\(\[\.\.\.existing, \.\.\.closedIds\]\)/);
+    assert.match(annotate.parameters.code, /merge_notes: state\.mergeNotes/);
     assert.match(annotate.parameters.code, /publish: false/);
-    const closes = merge.nodes.filter((node) => node.type === 'httpRequest' && node.parameters.method === 'PATCH');
-    assert.equal(closes.length, 6, 'five duplicate closes plus the primary annotation');
-    for (const close of closes) {
+    const publicCloses = merge.nodes.filter((node) => node.id.startsWith('patch-duplicate-'));
+    assert.equal(publicCloses.length, 5, 'five redacted duplicate closes');
+    assert.ok(merge.nodes.some((node) => node.id === 'http-patch-primary-sidecar'));
+    assert.ok(merge.nodes.some((node) => node.id === 'http-create-primary-sidecar'));
+    for (const close of publicCloses) {
         assert.equal(close.parameters.auth.credentialRef, 'synapsedx-organization');
     }
 
     const upvote = readWorkflow('plugins/workflows/city-incident-upvote.workflow.json');
     const decide = upvote.nodes.find((node) => node.name === 'Decide upvote path and version');
-    assert.match(decide.parameters.code, /upvoters\.includes\(action\.submitter\)/);
+    assert.match(decide.parameters.code, /publicRecord/);
     assert.match(decide.parameters.code, /publish: false/);
 });
 

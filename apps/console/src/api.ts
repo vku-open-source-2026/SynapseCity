@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: 2026 VKU.VIC
 import { asList, httpClient } from "./lib/httpClient";
 import { FileUploadError, uploadPublicFile } from "./lib/files";
+import { publicApi } from "./api/public";
 import axios from "axios";
 
 // Force HTTPS in production
@@ -120,25 +121,32 @@ export interface IncidentCreate {
     description: string;
     category: IncidentCategory;
     severity: IncidentSeverity;
+    location?: {
+        address: string;
+        geometry?: { type: string; coordinates: number[] | number[][] | number[][][] };
+    };
     reported_via?: string;
     public_visible?: boolean;
     contact_info?: ContactInfo;
 }
 
 export const createIncident = async (data: IncidentCreate, image?: File, turnstileToken?: string) => {
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (turnstileToken) {
-        headers["CF-Turnstile-Response"] = turnstileToken;
-    }
     // Photos go through the Tier-2 files capability first; only the file id is
-    // sent with the report, never a data URL or base64 body.
-    const uploaded = image ? await uploadPublicFile(image) : null;
+    // sent with the report, never a data URL or base64 body. A server-issued
+    // draft keeps pre-report uploads private and binds them to this report.
+    const draft = image
+        ? await publicApi.createAnonymousIncidentDraft(data, turnstileToken)
+        : undefined;
+    const uploaded = image && draft
+        ? await uploadPublicFile(image, { draftId: draft.draft_id, uploadToken: draft.upload_token })
+        : null;
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (turnstileToken && !draft) headers["CF-Turnstile-Response"] = turnstileToken;
     const response = await httpClient.post("/public/incidents", {
         ...data,
-        photos: uploaded ? [uploaded.file_id] : [],
-    }, {
-        headers,
-    });
+        ...(uploaded ? { photos: [uploaded.file_id] } : {}),
+        ...(draft ? { draft_id: draft.draft_id, draft_token: draft.upload_token } : {}),
+    }, { headers });
     return response.data;
 };
 

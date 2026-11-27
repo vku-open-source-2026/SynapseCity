@@ -62,16 +62,57 @@
         300
       ],
       "parameters": {
-        "code": "const response = $input || {};\nconst current = response.body;\nconst action = response.input;\nif (response.statusCode !== 200 || !current || typeof current.data !== 'object' || !current.data) throw new Error('record_not_found');\nconst data = current.data;\nif (!Number.isInteger(current.version)) throw new Error('record_version_unavailable');\nif (![\"reported\",\"open\",\"acknowledged\",\"assigned\",\"investigating\",\"in_progress\",\"waiting_approval\",\"resolved\"].includes(String(data.status))) throw new Error('record_status_invalid');\nconst next = { ...data, ...action.patch };\nreturn { body: { data: next, ifVersion: current.version, publish: false }, encodedId: action.encodedId, audit: action.audit };\n"
+        "code": "const response = $input || {};\nconst current = response.body;\nconst action = response.input;\nif (response.statusCode !== 200 || !current || typeof current.data !== 'object' || !current.data) throw new Error('record_not_found');\nconst data = current.data;\nif (!Number.isInteger(current.version)) throw new Error('record_version_unavailable');\nif (![\"reported\",\"open\",\"acknowledged\",\"assigned\",\"investigating\",\"in_progress\",\"waiting_approval\",\"resolved\"].includes(String(data.status))) throw new Error('record_status_invalid');\n\n\n\nconst INTERNAL_FIELDS = [\"reported_by\",\"contact_info\",\"reporter_name\",\"reporter_phone\",\"reporter_email\",\"reporter_id_card\",\"internal_notes\",\"internal_attachments\",\"assigned_to\",\"assigned_at\",\"resolution_notes\",\"merged_reporter_ids\",\"maintenance_record_id\",\"cost_status\",\"cost_approved_at\",\"cost_approval_id\",\"cost_approved_by\",\"cost_approval_roles\",\"reporter_type\",\"internal_comments\",\"upvoters\",\"merge_notes\"];\nconst publicComment = (entry) => {\n  if (!entry || typeof entry !== 'object' || entry.is_internal === true) return null;\n  const clean = {};\n  for (const key of ['id', 'comment', 'posted_at', 'created_at']) {\n    if (entry[key] !== undefined) clean[key] = entry[key];\n  }\n  clean.is_internal = false;\n  if (entry.public_author === true && entry.user_name) clean.user_name = entry.user_name;\n  return clean;\n};\nconst publicRecord = (data) => {\n  const next = { ...data };\n  for (const field of INTERNAL_FIELDS) delete next[field];\n  next.comments = (Array.isArray(data.comments) ? data.comments : []).map(publicComment).filter(Boolean);\n  return next;\n};\nconst legacyInternal = (data) => {\n  const internal = {};\n  for (const field of INTERNAL_FIELDS) {\n    if (field === 'internal_comments') continue;\n    if (data[field] !== undefined) internal[field] = data[field];\n  }\n  const comments = (Array.isArray(data.comments) ? data.comments : []).filter((entry) => entry && entry.is_internal === true);\n  if (comments.length) internal.internal_comments = comments;\n  return internal;\n};\n\nconst next = publicRecord(data);\n\nconst publicPatch = { status: 'closed', closed_at: action.patch.closed_at };\nconst sidecarPatch = legacyInternal(data);\nif (action.patch.resolution_notes !== undefined) sidecarPatch.resolution_notes = action.patch.resolution_notes;\n\nObject.assign(next, publicPatch);\nconst internalId = 'internal-' + action.recordId;\nreturn {\n  body: { data: next, ifVersion: current.version, publish: false },\n  encodedId: action.encodedId,\n  recordId: action.recordId,\n  internalId,\n  sidecarPatch,\n  sidecarQuery: { where: { or: [{ id: internalId }, { id: action.recordId }] }, limit: 2 },\n  audit: action.audit,\n  operation: action.operation,\n  \n  \n};"
+      }
+    },
+    {
+      "id": "http-query-sidecar",
+      "name": "Query private incident sidecar",
+      "type": "httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1080,
+        300
+      ],
+      "parameters": {
+        "url": "https://synapsedx.sbs/v1/capabilities/datasets/city-incident-internal/records/query",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        "auth": {
+          "credentialRef": "synapsedx-organization",
+          "header": "X-API-Key",
+          "allowedOrigins": [
+            "https://synapsedx.sbs"
+          ]
+        },
+        "timeoutMs": 15000,
+        "body": "={{ $json.sidecarQuery }}",
+        "includeInput": true
+      }
+    },
+    {
+      "id": "prepare-sidecar",
+      "name": "Prepare private sidecar write",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        300
+      ],
+      "parameters": {
+        "code": "const response = $input || {};\nconst plan = response.input;\nif (response.statusCode !== 200 || !response.body || !Array.isArray(response.body.items)) throw new Error('sidecar_query_failed');\nconst item = response.body.items.find((entry) => String(entry.id) === plan.internalId)\n  || response.body.items.find((entry) => String(entry.id) === plan.recordId)\n  || null;\nconst exists = Boolean(item && Number.isInteger(item.version));\nconst current = exists ? item.data : {};\nconst sidecarId = exists ? String(item.id) : plan.internalId;\nconst data = { ...current, ...plan.sidecarPatch };\nif (Array.isArray(data.internal_comments)) {\n  const seen = new Set();\n  data.internal_comments = data.internal_comments.filter((entry) => {\n    const key = entry && entry.id ? String(entry.id) : JSON.stringify(entry);\n    if (seen.has(key)) return false;\n    seen.add(key);\n    return true;\n  });\n}\nif (plan.operation === 'incidents.upvote') {\n  const upvoters = (Array.isArray(data.upvoters) ? data.upvoters : []).map(String).filter(Boolean);\n  const already = upvoters.includes(plan.submitter);\n  if (!already) upvoters.push(plan.submitter);\n  data.upvoters = upvoters;\n  plan.body.data.upvotes = (Number.isInteger(plan.body.data.upvotes) ? plan.body.data.upvotes : 0) + (already ? 0 : 1);\n  plan.upvotes = plan.body.data.upvotes;\n  plan.upvoters = upvoters;\n}\ndata.id = sidecarId;\ndata.incident_id = plan.recordId;\ndata.updated_at = $now;\nconst body = exists\n  ? { data, ifVersion: item.version, publish: false }\n  : { data, publish: false };\nreturn {\n  ...plan,\n  sidecar: {\n    exists,\n    url: 'https://synapsedx.sbs/v1/capabilities/datasets/city-incident-internal/records/' + encodeURIComponent(sidecarId),\n    body,\n  },\n};"
       }
     },
     {
       "id": "http-patch",
-      "name": "Patch full record",
+      "name": "Patch redacted public incident",
       "type": "httpRequest",
       "typeVersion": 4,
       "position": [
-        640,
+        1520,
         300
       ],
       "parameters": {
@@ -88,9 +129,104 @@
             "https://synapsedx.sbs"
           ]
         },
+        "timeoutMs": 15000,
         "body": "={{ $json.body }}",
-        "includeInput": false,
-        "timeoutMs": 15000
+        "includeInput": true
+      }
+    },
+    {
+      "id": "restore-state",
+      "name": "Restore incident workflow state",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        1740,
+        300
+      ],
+      "parameters": {
+        "code": "const response = $input || {};\nreturn response.input || {};"
+      }
+    },
+    {
+      "id": "if-sidecar",
+      "name": "Private sidecar exists?",
+      "type": "if",
+      "typeVersion": 1,
+      "position": [
+        1960,
+        300
+      ],
+      "parameters": {
+        "condition": "={{ $json.sidecar.exists === true }}"
+      }
+    },
+    {
+      "id": "http-patch-sidecar",
+      "name": "Patch private incident sidecar",
+      "type": "httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2180,
+        180
+      ],
+      "parameters": {
+        "url": "={{ $json.sidecar.url }}",
+        "method": "PATCH",
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        "auth": {
+          "credentialRef": "synapsedx-organization",
+          "header": "X-API-Key",
+          "allowedOrigins": [
+            "https://synapsedx.sbs"
+          ]
+        },
+        "timeoutMs": 15000,
+        "body": "={{ $json.sidecar.body }}",
+        "includeInput": true
+      }
+    },
+    {
+      "id": "http-create-sidecar",
+      "name": "Create private incident sidecar",
+      "type": "httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2180,
+        420
+      ],
+      "parameters": {
+        "url": "https://synapsedx.sbs/v1/capabilities/datasets/city-incident-internal/records",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        "auth": {
+          "credentialRef": "synapsedx-organization",
+          "header": "X-API-Key",
+          "allowedOrigins": [
+            "https://synapsedx.sbs"
+          ]
+        },
+        "timeoutMs": 15000,
+        "body": "={{ $json.sidecar.body }}",
+        "includeInput": true
+      }
+    },
+    {
+      "id": "summarize",
+      "name": "Summarize incident action",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        300
+      ],
+      "parameters": {
+        "code": "const response = $input || {};\nconst state = response.input || {};\nif (![200, 201].includes(response.statusCode)) throw new Error('incident_write_failed');\nreturn {\n  operation: state.operation,\n  incident_id: state.recordId,\n  audit: state.audit,\n  \n  \n};"
       }
     }
   ],
@@ -132,7 +268,91 @@
       "main": [
         [
           {
-            "node": "Patch full record",
+            "node": "Query private incident sidecar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query private incident sidecar": {
+      "main": [
+        [
+          {
+            "node": "Prepare private sidecar write",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare private sidecar write": {
+      "main": [
+        [
+          {
+            "node": "Patch redacted public incident",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Patch redacted public incident": {
+      "main": [
+        [
+          {
+            "node": "Restore incident workflow state",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore incident workflow state": {
+      "main": [
+        [
+          {
+            "node": "Private sidecar exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Private sidecar exists?": {
+      "main": [
+        [
+          {
+            "node": "Patch private incident sidecar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create private incident sidecar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Patch private incident sidecar": {
+      "main": [
+        [
+          {
+            "node": "Summarize incident action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create private incident sidecar": {
+      "main": [
+        [
+          {
+            "node": "Summarize incident action",
             "type": "main",
             "index": 0
           }

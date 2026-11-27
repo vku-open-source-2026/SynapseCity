@@ -108,11 +108,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn headers_middleware(
-    State(state): State<AppState>,
-    mut req: Request,
-    next: Next,
-) -> Response {
+async fn headers_middleware(State(state): State<AppState>, req: Request, next: Next) -> Response {
     let started = std::time::Instant::now();
     let path = routes::route_label(req.uri().path());
     let correlation = req
@@ -156,7 +152,7 @@ fn add_security_headers(headers: &mut axum::http::HeaderMap, state: &AppState, c
     }
     headers.insert(
         "access-control-allow-headers",
-        HeaderValue::from_static("authorization,content-type,x-api-key,x-correlation-id,x-file-name,x-filename,x-checksum-sha256,x-file-visibility,x-entity-type,x-entity-id,cf-turnstile-response,x-report-id,x-report-edit-token"),
+        HeaderValue::from_static("authorization,content-type,x-api-key,x-correlation-id,x-file-name,x-filename,x-checksum-sha256,x-file-visibility,x-entity-type,x-entity-id,cf-turnstile-response,x-report-id,x-report-edit-token,x-report-draft-id,x-report-upload-token"),
     );
     headers.insert(
         "access-control-allow-methods",

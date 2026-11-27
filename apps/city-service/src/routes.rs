@@ -12,7 +12,7 @@ use std::time::Duration;
 use axum::body::Bytes;
 use axum::extract::{Request, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, Uri};
-use axum::response::{IntoResponse, Response};
+use axum::response::Response;
 use chrono::{SecondsFormat, Utc};
 use serde_json::{json, Map, Value};
 
@@ -21,9 +21,9 @@ use crate::auth::{self, SessionPrincipal};
 use crate::config::Config;
 use crate::domain;
 use crate::error::{ApiError, ApiResult};
-use crate::state::AppState;
+use crate::state::{AppState, IdempotencyGuard};
 use crate::tier2::{
-    self, AllRows, DatasetKey, DatasetSpec, ASSETS, INCIDENTS, INCIDENT_INTERNAL, MAINTENANCE,
+    self, DatasetKey, DatasetSpec, ASSETS, INCIDENTS, INCIDENT_INTERNAL, MAINTENANCE,
     NOTIFICATIONS, REPORTS, USERS,
 };
 use crate::web;
@@ -33,7 +33,9 @@ const JSON_LIMIT: usize = 2 * 1024 * 1024;
 struct Ctx<'a> {
     state: &'a AppState,
     headers: &'a HeaderMap,
+    method: &'static str,
     uri: &'a Uri,
+    peer: Option<std::net::SocketAddr>,
     query: &'a HashMap<String, String>,
     body: &'a Map<String, Value>,
     session: Option<&'a SessionPrincipal>,
@@ -113,6 +115,9 @@ fn operator_permission(method: &str, path: &str) -> &'static str {
         };
     }
     if path.starts_with("/v1/maintenance") || path.starts_with("/v1/preventive-maintenance") {
+        if path.ends_with("/approve") || path.ends_with("/reject") {
+            return "maintenance:approve";
+        }
         return if read {
             "maintenance:read"
         } else {
@@ -220,17 +225,47 @@ fn is_operator_sensitive(path: &str) -> bool {
 
 /// Server-side Idempotency-Key handling. Tier-2 has no native upsert, so a
 /// retried create (incidents, maintenance, budget transactions, iot batch)
-/// would duplicate records. When the caller sends `Idempotency-Key` (or
-/// `X-Idempotency-Key`), the first response is cached in-memory for 24h and
-/// replays return the stored body with 201 instead of creating again.
-/// Follow-up: move this to a Tier-2 idempotent create/upsert when available.
-fn idempotency_replay(ctx: &Ctx<'_>) -> Option<(String, Response)> {
-    let key = crate::state::idempotency_key(ctx.headers)?;
-    crate::state::idempotency_lookup(ctx.state, &key).map(|value| (key, web::created(value)))
+/// would duplicate records. Keys are scoped by subject, method and route, and
+/// retries with a different body are rejected. The guard is held across the
+/// write so concurrent identical retries cannot both pass the lookup.
+struct IdempotencyAttempt {
+    guard: IdempotencyGuard,
+    replay: Option<Response>,
 }
 
-fn idempotency_remember(ctx: &Ctx<'_>, key: &str, value: &Value) {
-    crate::state::idempotency_store(ctx.state, key, value.clone());
+impl IdempotencyAttempt {
+    fn remember(&mut self, value: &Value) {
+        self.guard.remember(value.clone());
+    }
+}
+
+async fn idempotency_begin(ctx: &Ctx<'_>) -> ApiResult<Option<IdempotencyAttempt>> {
+    let Some(key) = crate::state::idempotency_key(ctx.headers) else {
+        return Ok(None);
+    };
+    let subject = ctx
+        .principal()
+        .map(|principal| principal.sub.clone())
+        .unwrap_or_else(|| {
+            format!(
+                "anonymous:{}",
+                crate::state::client_key(ctx.headers, ctx.peer)
+            )
+        });
+    let scope = crate::state::idempotency_scope(&key, &subject, ctx.method, ctx.uri.path());
+    let body_hash = crate::state::idempotency_body_hash(&Value::Object(ctx.body.clone()));
+    let (guard, cached) = crate::state::idempotency_begin(ctx.state, scope, body_hash)
+        .await
+        .map_err(|_| {
+            ApiError::conflict(
+                "idempotency_body_mismatch",
+                "This Idempotency-Key was already used with a different request body.",
+            )
+        })?;
+    Ok(Some(IdempotencyAttempt {
+        guard,
+        replay: cached.map(web::created),
+    }))
 }
 
 pub async fn dispatch(State(state): State<AppState>, req: Request) -> ApiResult<Response> {
@@ -302,14 +337,31 @@ pub async fn dispatch(State(state): State<AppState>, req: Request) -> ApiResult<
         )?;
     }
 
+    let session = auth::session_from_headers(&state.config, &headers);
+    if path.starts_with("/v1") && !is_anonymous(&path) && session.is_none() {
+        return Err(ApiError::unauthorized("authentication_required"));
+    }
+    if path.starts_with("/v1") && !is_anonymous(&path) {
+        if let Some(session) = session.as_ref() {
+            let permission = operator_permission(method, &path);
+            if !auth::has_permission(session, permission) {
+                return Err(ApiError::forbidden(
+                    "forbidden",
+                    format!("{permission}_required"),
+                ));
+            }
+        }
+    }
+
     if raw_upload {
         let limit = state.config.files_max_bytes + 1024 * 1024;
         let (bytes, _, _) = web::raw_body(req, limit).await?;
-        let session = auth::session_from_headers(&state.config, &headers);
         let ctx = Ctx {
             state: &state,
             headers: &headers,
+            method,
             uri: &uri,
+            peer,
             query: &query,
             body: &Map::new(),
             session: session.as_ref(),
@@ -341,29 +393,17 @@ pub async fn dispatch(State(state): State<AppState>, req: Request) -> ApiResult<
 
     let body = if matches!(method, "POST" | "PUT" | "PATCH") {
         let (body, _, _) = web::json_body(req, JSON_LIMIT).await?;
+        domain::files::assert_no_inline_binary(&Value::Object(body.clone())).map_err(file_error)?;
         body
     } else {
         Map::new()
     };
-    let session = auth::session_from_headers(&state.config, &headers);
-    if path.starts_with("/v1") && !is_anonymous(&path) && session.is_none() {
-        return Err(ApiError::unauthorized("authentication_required"));
-    }
-    if path.starts_with("/v1") && !is_anonymous(&path) {
-        if let Some(session) = session.as_ref() {
-            let permission = operator_permission(&method, &path);
-            if !auth::has_permission(session, permission) {
-                return Err(ApiError::forbidden(
-                    "forbidden",
-                    format!("{permission}_required"),
-                ));
-            }
-        }
-    }
     let ctx = Ctx {
         state: &state,
         headers: &headers,
+        method,
         uri: &uri,
+        peer,
         query: &query,
         body: &body,
         session: session.as_ref(),
@@ -491,7 +531,9 @@ pub async fn dispatch(State(state): State<AppState>, req: Request) -> ApiResult<
         }
         ("GET", ["v1", "iot", "sensors"]) => generic_list(&ctx, DatasetKey::Sensors).await,
         ("POST", ["v1", "iot", "sensors"]) => generic_create(&ctx, DatasetKey::Sensors).await,
-        ("GET", ["v1", "iot", "catalog"]) => Ok(web::json_response(crate::iot_firmware::catalog_json())),
+        ("GET", ["v1", "iot", "catalog"]) => {
+            Ok(web::json_response(crate::iot_firmware::catalog_json()))
+        }
         ("GET", ["v1", "iot", "sensors", id]) => generic_get(&ctx, DatasetKey::Sensors, id).await,
         ("PUT", ["v1", "iot", "sensors", id]) => {
             generic_update(&ctx, DatasetKey::Sensors, id).await
@@ -590,6 +632,7 @@ pub async fn dispatch(State(state): State<AppState>, req: Request) -> ApiResult<
         ("GET", ["v1", "public", "assets", code]) => public_asset(&ctx, code).await,
         ("GET", ["v1", "public", "incidents"]) => public_incidents(&ctx).await,
         ("POST", ["v1", "public", "incidents"]) => public_incident_create(&ctx).await,
+        ("POST", ["v1", "public", "incidents", "drafts"]) => public_incident_draft(&ctx).await,
         ("POST", ["v1", "public", "incidents", id, "photos"]) => {
             public_incident_photos(&ctx, id).await
         }
@@ -698,7 +741,7 @@ fn matches_filters(row: &Map<String, Value>, filters: &HashMap<String, String>) 
             continue;
         }
         if key.ends_with("_from") || key.ends_with("_after") {
-            let field = key.trim_end_matches("_from").trim_end_matches("_after");
+            let _field = key.trim_end_matches("_from").trim_end_matches("_after");
             let candidate = value.and_then(Value::as_str).and_then(compare_timestamp);
             let threshold = compare_timestamp(raw);
             if let (Some(candidate), Some(threshold)) = (candidate, threshold) {
@@ -709,7 +752,7 @@ fn matches_filters(row: &Map<String, Value>, filters: &HashMap<String, String>) 
             continue;
         }
         if key.ends_with("_to") || key.ends_with("_before") {
-            let field = key.trim_end_matches("_to").trim_end_matches("_before");
+            let _field = key.trim_end_matches("_to").trim_end_matches("_before");
             let candidate = value.and_then(Value::as_str).and_then(compare_timestamp);
             let threshold = compare_timestamp(raw);
             if let (Some(candidate), Some(threshold)) = (candidate, threshold) {
@@ -824,12 +867,14 @@ async fn generic_get(ctx: &Ctx<'_>, key: DatasetKey, id: &str) -> ApiResult<Resp
 async fn generic_create(ctx: &Ctx<'_>, key: DatasetKey) -> ApiResult<Response> {
     // Idempotent maintenance creates: retries with the same Idempotency-Key
     // replay the stored record instead of creating a duplicate work order.
-    let replay_key = (key == DatasetKey::Maintenance)
-        .then(|| crate::state::idempotency_key(ctx.headers))
-        .flatten();
-    if let Some(ref key) = replay_key {
-        if let Some(cached) = crate::state::idempotency_lookup(ctx.state, key) {
-            return Ok(web::created(cached));
+    let mut idempotency = if key == DatasetKey::Maintenance {
+        idempotency_begin(ctx).await?
+    } else {
+        None
+    };
+    if let Some(attempt) = idempotency.as_mut() {
+        if let Some(replay) = attempt.replay.take() {
+            return Ok(replay);
         }
     }
     let spec = tier2::spec_for(key);
@@ -837,8 +882,8 @@ async fn generic_create(ctx: &Ctx<'_>, key: DatasetKey) -> ApiResult<Response> {
     let input = web::private_input(ctx.body);
     let row = tier2::create(ctx.client(), &opts, spec, input, None).await?;
     let value = Value::Object(row);
-    if let Some(key) = replay_key {
-        idempotency_remember(ctx, &key, &value);
+    if let Some(attempt) = idempotency.as_mut() {
+        attempt.remember(&value);
     }
     Ok(web::created(value))
 }
@@ -1408,14 +1453,208 @@ async fn files_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
     Ok(web::created(view))
 }
 
+fn required_upload_header<'a>(
+    ctx: &'a Ctx<'_>,
+    name: &str,
+    code: &'static str,
+) -> ApiResult<&'a str> {
+    ctx.headers
+        .get(name)
+        .and_then(|value| value.to_str().ok())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| ApiError::forbidden(code, code))
+}
+
+fn public_report_hash(body: &Map<String, Value>) -> String {
+    let mut draft = body.clone();
+    for key in [
+        "photos",
+        "file_ids",
+        "file_id",
+        "draft_id",
+        "draft_token",
+        "report_upload_token",
+        "turnstile_token",
+        "cf-turnstile-response",
+    ] {
+        draft.remove(key);
+    }
+    crate::state::idempotency_body_hash(&Value::Object(draft))
+}
+
+fn validate_public_incident_draft(body: &Map<String, Value>) -> ApiResult<()> {
+    let title = web::required_string(body, "title")?;
+    if title.chars().count() > 140 {
+        return Err(ApiError::bad_request(
+            "title_too_long",
+            "title must be at most 140 characters",
+        ));
+    }
+    let description = web::required_string(body, "description")?;
+    if description.chars().count() > 2000 {
+        return Err(ApiError::bad_request(
+            "description_too_long",
+            "description must be at most 2000 characters",
+        ));
+    }
+    domain::incidents::validate_public_incident_input(body)
+        .map_err(|code| ApiError::bad_request(code, code))?;
+    if let Some(asset_id) = body.get("asset_id") {
+        if asset_id
+            .as_str()
+            .map(|value| value.trim().is_empty() || value.trim().chars().count() > 128)
+            .unwrap_or(true)
+        {
+            return Err(ApiError::bad_request(
+                "asset_id_invalid",
+                "asset_id_invalid",
+            ));
+        }
+    }
+    if let Some(contact) = body.get("contact_info") {
+        let Some(contact) = contact.as_object() else {
+            return Err(ApiError::bad_request(
+                "contact_info_invalid",
+                "contact_info_invalid",
+            ));
+        };
+        for key in ["name", "phone_number", "id_card_number"] {
+            if let Some(value) = contact.get(key) {
+                if value
+                    .as_str()
+                    .map(|value| value.trim().chars().count() > 200)
+                    .unwrap_or(true)
+                {
+                    return Err(ApiError::bad_request(
+                        "contact_info_invalid",
+                        "contact_info_invalid",
+                    ));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Best-effort TTL cleanup for draft uploads and unreferenced report uploads.
+/// Legacy public files without either binding are deliberately not swept:
+/// older reports may reference them without report_id.
+async fn cleanup_expired_draft_uploads(ctx: &Ctx<'_>) {
+    let cutoff = Utc::now().timestamp_millis() - auth::REPORT_UPLOAD_TTL_SECONDS * 1000;
+    let opts = ctx.opts();
+    let rows = match tier2::list_all(ctx.client(), &opts, tier2::FILES, 5000).await {
+        Ok(rows) => rows.items,
+        Err(error) => {
+            tracing::warn!(error = %error, "draft upload cleanup scan failed");
+            return;
+        }
+    };
+    for row in rows {
+        let has_draft = row
+            .get("draft_id")
+            .and_then(Value::as_str)
+            .map(|value| !value.is_empty())
+            .unwrap_or(false);
+        let has_report = row.get("report_id").and_then(Value::as_str).is_some();
+        if !has_draft && !has_report {
+            continue;
+        }
+        let expired = row
+            .get("created_at")
+            .and_then(Value::as_str)
+            .and_then(compare_timestamp)
+            .map(|created| created < cutoff)
+            .unwrap_or(false);
+        if !expired {
+            continue;
+        }
+        let Some(id) = row.get("id").and_then(Value::as_str) else {
+            continue;
+        };
+        if let Some(report_id) = row.get("report_id").and_then(Value::as_str) {
+            match find_public_incident(ctx, report_id).await {
+                Ok(Some(incident)) => {
+                    let referenced = incident
+                        .get("photos")
+                        .and_then(Value::as_array)
+                        .map(|photos| {
+                            photos.iter().any(|photo| {
+                                photo
+                                    .as_str()
+                                    .and_then(domain::files::file_id_from_reference)
+                                    .as_deref()
+                                    == Some(id)
+                            })
+                        })
+                        .unwrap_or(false);
+                    if referenced {
+                        continue;
+                    }
+                }
+                Err(_) => continue,
+                Ok(None) => {}
+            }
+        }
+        if let Err(error) = ctx.client().files().delete(id, &opts).await {
+            if !error.is_not_found() {
+                tracing::warn!(file_id = %id, error = %error, "expired draft object delete failed");
+                continue;
+            }
+        }
+        if let Err(error) = tier2::delete(ctx.client(), &opts, tier2::FILES, id).await {
+            tracing::warn!(file_id = %id, error = %error, "expired draft metadata delete failed");
+        }
+    }
+}
+
+async fn public_incident_draft(ctx: &Ctx<'_>) -> ApiResult<Response> {
+    enforce_turnstile(ctx).await?;
+    let body = web::private_input(ctx.body);
+    validate_public_incident_draft(&body)?;
+    if ["photos", "file_ids", "file_id"]
+        .iter()
+        .any(|key| body.get(*key).is_some())
+    {
+        return Err(ApiError::bad_request(
+            "draft_photos_not_accepted",
+            "Create the draft before uploading photos.",
+        ));
+    }
+    cleanup_expired_draft_uploads(ctx).await;
+    let draft_id = uuid::Uuid::new_v4().to_string();
+    let report_hash = public_report_hash(&body);
+    let (upload_token, expires_at) =
+        auth::issue_report_upload_token(ctx.config(), &draft_id, &report_hash);
+    Ok(web::created(json!({
+        "draft_id": draft_id,
+        "upload_token": upload_token,
+        "upload_token_expires_at": expires_at,
+        "max_photos": MAX_PUBLIC_INCIDENT_PHOTOS,
+    })))
+}
+
+async fn public_upload_count(ctx: &Ctx<'_>, field: &str, reference: &str) -> ApiResult<usize> {
+    let opts = ctx.opts();
+    let (items, _) = tier2::query_records(
+        ctx.client(),
+        &opts,
+        tier2::FILES,
+        json!({ (field): reference }),
+        MAX_PUBLIC_INCIDENT_PHOTOS as i64 + 1,
+        0,
+        None,
+    )
+    .await?;
+    Ok(items.len())
+}
+
 async fn files_upload_raw(ctx: Ctx<'_>, bytes: Bytes, public: bool) -> ApiResult<Response> {
     let principal = ctx.principal().cloned();
     if !public && principal.is_none() {
         return Err(ApiError::unauthorized("authentication_required"));
     }
-    if public {
-        enforce_turnstile(&ctx).await?;
-    }
+    let mut draft_id = None;
     if bytes.is_empty() {
         return Err(ApiError::bad_request(
             "binary_body_required",
@@ -1496,18 +1735,50 @@ async fn files_upload_raw(ctx: Ctx<'_>, bytes: Bytes, public: bool) -> ApiResult
         .and_then(|value| value.to_str().ok())
         .map(str::trim)
         .filter(|value| !value.is_empty());
-    if report_id.is_some() || report_token.is_some() {
-        let (Some(report_id), Some(report_token)) = (report_id.as_deref(), report_token) else {
-            return Err(ApiError::forbidden(
-                "report_edit_token_required",
-                "A report id and edit token are required together.",
+    if public {
+        if report_id.is_some() || report_token.is_some() {
+            let (Some(report_id), Some(report_token)) = (report_id.as_deref(), report_token) else {
+                return Err(ApiError::forbidden(
+                    "report_edit_token_required",
+                    "A report id and edit token are required together.",
+                ));
+            };
+            if !auth::verify_report_edit_token(ctx.config(), report_token, report_id) {
+                return Err(ApiError::forbidden(
+                    "report_edit_token_invalid",
+                    "The report edit token is invalid or expired.",
+                ));
+            }
+            if public_upload_count(&ctx, "report_id", report_id).await?
+                >= MAX_PUBLIC_INCIDENT_PHOTOS
+            {
+                return Err(ApiError::too_large(
+                "too_many_photos",
+                format!("At most {MAX_PUBLIC_INCIDENT_PHOTOS} photos may be attached to one report."),
             ));
-        };
-        if !public || !auth::verify_report_edit_token(ctx.config(), report_token, report_id) {
-            return Err(ApiError::forbidden(
-                "report_edit_token_invalid",
-                "The report edit token is invalid or expired.",
-            ));
+            }
+        } else {
+            let draft = required_upload_header(&ctx, "x-report-draft-id", "report_draft_required")?;
+            let token = required_upload_header(
+                &ctx,
+                "x-report-upload-token",
+                "report_upload_token_required",
+            )?;
+            if !auth::verify_report_upload_token(ctx.config(), token, draft) {
+                return Err(ApiError::forbidden(
+                    "report_upload_token_invalid",
+                    "The draft upload token is invalid or expired.",
+                ));
+            }
+            if public_upload_count(&ctx, "draft_id", draft).await? >= MAX_PUBLIC_INCIDENT_PHOTOS {
+                return Err(ApiError::too_large(
+                    "too_many_photos",
+                    format!(
+                        "At most {MAX_PUBLIC_INCIDENT_PHOTOS} photos may be uploaded for a draft."
+                    ),
+                ));
+            }
+            draft_id = Some(draft.to_string());
         }
     }
     let id = uuid::Uuid::new_v4().to_string();
@@ -1544,9 +1815,12 @@ async fn files_upload_raw(ctx: Ctx<'_>, bytes: Bytes, public: bool) -> ApiResult
                 .unwrap_or("anonymous")
         }),
     );
-    file.insert("public".into(), json!(public));
+    file.insert("public".into(), json!(public && draft_id.is_none()));
     if let Some(report_id) = report_id {
         file.insert("report_id".into(), json!(report_id));
+    }
+    if let Some(draft_id) = draft_id {
+        file.insert("draft_id".into(), json!(draft_id));
     }
     file.insert("created_at".into(), json!(now));
     file.insert("updated_at".into(), json!(now));
@@ -2679,6 +2953,24 @@ async fn write_incident_internal(
     }
 }
 
+async fn create_incident_internal(
+    ctx: &Ctx<'_>,
+    incident_id: &str,
+    record: &Map<String, Value>,
+) -> ApiResult<bool> {
+    let Some(mut internal) = domain::incidents::to_internal_incident(record) else {
+        return Ok(false);
+    };
+    let opts = ctx.opts();
+    let id = incident_internal_id(incident_id);
+    internal.insert("id".into(), json!(id));
+    internal.insert("incident_id".into(), json!(incident_id));
+    // Create-only: an existing sidecar is never updated or deleted by a create
+    // request. A duplicate incident id therefore fails before touching it.
+    tier2::create(ctx.client(), &opts, INCIDENT_INTERNAL, internal, Some(&id)).await?;
+    Ok(true)
+}
+
 async fn restore_incident_internal(
     ctx: &Ctx<'_>,
     incident_id: &str,
@@ -2808,10 +3100,12 @@ async fn incidents_list(ctx: &Ctx<'_>) -> ApiResult<Response> {
 }
 
 async fn incidents_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
-    if let Some((_, replay)) = idempotency_replay(ctx) {
-        return Ok(replay);
+    let mut idempotency = idempotency_begin(ctx).await?;
+    if let Some(attempt) = idempotency.as_mut() {
+        if let Some(replay) = attempt.replay.take() {
+            return Ok(replay);
+        }
     }
-    let replay_key = crate::state::idempotency_key(ctx.headers);
     let body = web::private_input(ctx.body);
     let incident_id =
         web::string_field(&body, "incidentId").unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
@@ -2893,9 +3187,10 @@ async fn incidents_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
     let published = domain::incidents::to_published_incident(&incident);
     let publish = incident.get("public_visible").and_then(Value::as_bool) != Some(false);
     let opts = ctx.opts();
-    // Sidecar first for atomicity: a private-data failure must abort before a
-    // public record exists, and a public failure removes the orphan sidecar.
-    write_incident_internal(ctx, &incident_id, &incident).await?;
+    // Create the private sidecar with create-only semantics. If the id already
+    // exists this fails without modifying it; cleanup below removes only a
+    // sidecar this request actually created.
+    let created_internal = create_incident_internal(ctx, &incident_id, &incident).await?;
     let created = match tier2::create_with_visibility(
         ctx.client(),
         &opts,
@@ -2908,13 +3203,15 @@ async fn incidents_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
     {
         Ok(created) => created,
         Err(error) => {
-            let _ = tier2::delete(
-                ctx.client(),
-                &opts,
-                INCIDENT_INTERNAL,
-                &incident_internal_id(&incident_id),
-            )
-            .await;
+            if created_internal {
+                let _ = tier2::delete(
+                    ctx.client(),
+                    &opts,
+                    INCIDENT_INTERNAL,
+                    &incident_internal_id(&incident_id),
+                )
+                .await;
+            }
             return Err(error);
         }
     };
@@ -2923,8 +3220,8 @@ async fn incidents_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
         &created,
         internal.as_ref(),
     )));
-    if let Some(key) = replay_key {
-        idempotency_remember(ctx, &key, &value);
+    if let Some(attempt) = idempotency.as_mut() {
+        attempt.remember(&value);
     }
     Ok(web::created(value))
 }
@@ -3238,13 +3535,15 @@ async fn incidents_action(ctx: &Ctx<'_>, id: &str, action: &str) -> ApiResult<Re
                     "duplicate_ids_required",
                 ));
             }
-            let merge_notes = web::string_field(&body, "merge_notes").unwrap_or_else(|| format!(
-                "Merged into {}",
-                existing
-                    .get("incident_number")
-                    .and_then(Value::as_str)
-                    .unwrap_or(id)
-            ));
+            let merge_notes = web::string_field(&body, "merge_notes").unwrap_or_else(|| {
+                format!(
+                    "Merged into {}",
+                    existing
+                        .get("incident_number")
+                        .and_then(Value::as_str)
+                        .unwrap_or(id)
+                )
+            });
             let mut closed: Vec<String> = Vec::new();
             let mut failed: Vec<Value> = Vec::new();
             for duplicate_id in &duplicate_ids {
@@ -3614,7 +3913,7 @@ async fn maintenance_action(ctx: &Ctx<'_>, id: &str, action: &str) -> ApiResult<
                 .principal()
                 .map(|value| value.username.clone())
                 .unwrap_or_else(|| "city-user".into());
-            if ctx.config().hitl_required || !approval_id.is_empty() {
+            if ctx.config().is_production || ctx.config().hitl_required || !approval_id.is_empty() {
                 if approval_id.is_empty() {
                     return Err(ApiError::new(
                         StatusCode::PRECONDITION_REQUIRED,
@@ -3801,10 +4100,12 @@ async fn iot_write(ctx: &Ctx<'_>, sensor_id: &str) -> ApiResult<Response> {
 }
 
 async fn iot_batch(ctx: &Ctx<'_>) -> ApiResult<Response> {
-    if let Some((_, replay)) = idempotency_replay(ctx) {
-        return Ok(replay);
+    let mut idempotency = idempotency_begin(ctx).await?;
+    if let Some(attempt) = idempotency.as_mut() {
+        if let Some(replay) = attempt.replay.take() {
+            return Ok(replay);
+        }
     }
-    let replay_key = crate::state::idempotency_key(ctx.headers);
     let values: Vec<Value> = ctx
         .body
         .get("readings")
@@ -3821,8 +4122,8 @@ async fn iot_batch(ctx: &Ctx<'_>) -> ApiResult<Response> {
         }
     }
     let value = Value::Array(created);
-    if let Some(key) = replay_key {
-        idempotency_remember(ctx, &key, &value);
+    if let Some(attempt) = idempotency.as_mut() {
+        attempt.remember(&value);
     }
     Ok(web::created(value))
 }
@@ -3888,7 +4189,10 @@ fn firmware_options(body: &Map<String, Value>, default_sensor: &str) -> ApiResul
     } else {
         requested
     };
-    if !crate::iot_firmware::SENSORS.iter().any(|s| s.id == sensor_kind) {
+    if !crate::iot_firmware::SENSORS
+        .iter()
+        .any(|s| s.id == sensor_kind)
+    {
         return Err(ApiError::bad_request(
             "invalid_sensor",
             "unknown sensor id; see GET /v1/public/iot/catalog",
@@ -3982,10 +4286,11 @@ fn firmware_response(
         .and_then(Value::as_str)
         .unwrap_or("infrastructure")
         .to_string();
-    let suggestions: Vec<Value> = crate::iot_firmware::suggest_for_asset(&asset_type, &opts.sensor_kind)
-        .iter()
-        .map(|s| json!({"id": s.id, "label": s.label, "unit": s.unit}))
-        .collect();
+    let suggestions: Vec<Value> =
+        crate::iot_firmware::suggest_for_asset(&asset_type, &opts.sensor_kind)
+            .iter()
+            .map(|s| json!({"id": s.id, "label": s.label, "unit": s.unit}))
+            .collect();
     json!({
         "sensor_id": sensor_id,
         "sensor_code": sensor_code,
@@ -4060,7 +4365,12 @@ async fn iot_public_firmware(ctx: &Ctx<'_>) -> ApiResult<Response> {
     }
     let firmware = firmware_options(body, "water_level_jsn")?;
     let mut sensor = Map::new();
-    if let Some(asset_id) = body.get("asset_id").and_then(Value::as_str).map(str::trim).filter(|v| !v.is_empty()) {
+    if let Some(asset_id) = body
+        .get("asset_id")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+    {
         if asset_id.len() <= 128
             && asset_id
                 .chars()
@@ -4108,7 +4418,9 @@ async fn public_iot_sensor_list(ctx: &Ctx<'_>) -> ApiResult<Response> {
             items.push(public_iot_sensor_view(&row));
         }
     }
-    Ok(web::json_response(json!({"items": items, "total": items.len()})))
+    Ok(web::json_response(
+        json!({"items": items, "total": items.len()}),
+    ))
 }
 
 async fn public_iot_readings(ctx: &Ctx<'_>) -> ApiResult<Response> {
@@ -4174,11 +4486,21 @@ async fn public_iot_readings(ctx: &Ctx<'_>) -> ApiResult<Response> {
 async fn iot_mock(ctx: &Ctx<'_>, sensor_id: &str) -> ApiResult<Response> {
     let opts = ctx.opts();
     let sensor = tier2::get(ctx.client(), &opts, tier2::SENSORS, sensor_id).await?;
-    let count = ctx.body.get("count").and_then(Value::as_u64).unwrap_or(24).clamp(1, 200) as usize;
+    let count = ctx
+        .body
+        .get("count")
+        .and_then(Value::as_u64)
+        .unwrap_or(24)
+        .clamp(1, 200) as usize;
     let min = ctx.body.get("min").and_then(Value::as_f64).unwrap_or(50.0);
     let max = ctx.body.get("max").and_then(Value::as_f64).unwrap_or(250.0);
     let (lo, hi) = if min <= max { (min, max) } else { (max, min) };
-    let interval_secs = ctx.body.get("interval_seconds").and_then(Value::as_u64).unwrap_or(300).clamp(10, 86400);
+    let interval_secs = ctx
+        .body
+        .get("interval_seconds")
+        .and_then(Value::as_u64)
+        .unwrap_or(300)
+        .clamp(10, 86400);
     let now = Utc::now();
     let mut created = Vec::with_capacity(count);
     for i in 0..count {
@@ -4187,16 +4509,22 @@ async fn iot_mock(ctx: &Ctx<'_>, sensor_id: &str) -> ApiResult<Response> {
         let wave = (phase.sin() * 0.5 + 0.5).clamp(0.0, 1.0);
         let noise = ((((i as u64).wrapping_mul(2654435761)) % 1000) as f64 / 1000.0 - 0.5) * 0.15;
         let value = ((lo + (hi - lo) * (wave + noise).clamp(0.0, 1.0)) * 100.0).round() / 100.0;
-        let ts = (now - chrono::Duration::seconds((count - 1 - i) as i64 * interval_secs as i64)).to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+        let ts = (now - chrono::Duration::seconds((count - 1 - i) as i64 * interval_secs as i64))
+            .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
         let mut data = Map::new();
         data.insert("sensor_id".into(), json!(sensor_id));
         data.insert("value".into(), json!(value));
         data.insert("timestamp".into(), json!(ts));
-        data.insert("metadata".into(), json!({"source": "mock", "sensor_code": sensor.get("sensor_code")}));
+        data.insert(
+            "metadata".into(),
+            json!({"source": "mock", "sensor_code": sensor.get("sensor_code")}),
+        );
         let row = tier2::create(ctx.client(), &opts, tier2::SENSOR_DATA, data, None).await?;
         created.push(Value::Object(row));
     }
-    Ok(web::created(json!({"sensor_id": sensor_id, "ingested": created.len(), "readings": created})))
+    Ok(web::created(
+        json!({"sensor_id": sensor_id, "ingested": created.len(), "readings": created}),
+    ))
 }
 
 async fn iot_statistics(ctx: &Ctx<'_>, sensor_id: &str) -> ApiResult<Response> {
@@ -4374,7 +4702,8 @@ async fn alerts_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
             "alert",
             created.get("id").and_then(Value::as_str).unwrap_or(""),
         )
-        .await {
+        .await
+        {
             let alert_id = created
                 .get("id")
                 .and_then(|value| value.as_str())
@@ -4491,17 +4820,19 @@ async fn budget_transactions(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
 }
 
 async fn budget_transaction_create(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> {
-    if let Some((_, replay)) = idempotency_replay(ctx) {
-        return Ok(replay);
+    let mut idempotency = idempotency_begin(ctx).await?;
+    if let Some(attempt) = idempotency.as_mut() {
+        if let Some(replay) = attempt.replay.take() {
+            return Ok(replay);
+        }
     }
-    let replay_key = crate::state::idempotency_key(ctx.headers);
     let mut body = web::private_input(ctx.body);
     body.insert("budget_id".into(), json!(id));
     let opts = ctx.opts();
     let row = tier2::create(ctx.client(), &opts, tier2::TRANSACTIONS, body, None).await?;
     let value = Value::Object(row);
-    if let Some(key) = replay_key {
-        idempotency_remember(ctx, &key, &value);
+    if let Some(attempt) = idempotency.as_mut() {
+        attempt.remember(&value);
     }
     Ok(web::created(value))
 }
@@ -4962,7 +5293,8 @@ async fn notify_operators(
                 "dedupe_key": format!("{notification_type_value}:{entity_id}:{user_id}"),
             }),
         )
-        .await {
+        .await
+        {
             tracing::warn!(
                 kind = %notification_type_value,
                 recipient = %user_id,
@@ -6094,8 +6426,14 @@ fn public_filter(
     })];
     if exclude_inactive {
         let hidden = json!([
-            "decommissioned", "deleted", "purged", "retired",
-            "rejected", "canceled", "cancelled", "archived"
+            "decommissioned",
+            "deleted",
+            "purged",
+            "retired",
+            "rejected",
+            "canceled",
+            "cancelled",
+            "archived"
         ]);
         conditions.push(json!({
             "or": [
@@ -6404,6 +6742,7 @@ async fn resolve_public_report_photos(
     ctx: &Ctx<'_>,
     values: &[Value],
     incident_id: Option<&str>,
+    draft_id: Option<&str>,
 ) -> ApiResult<Vec<Value>> {
     let mut photos = Vec::new();
     for value in values {
@@ -6416,17 +6755,29 @@ async fn resolve_public_report_photos(
         let Some(record) = file_metadata(ctx, &file_id).await? else {
             return Err(ApiError::not_found("file_not_found", "file_not_found"));
         };
-        if record.get("public").and_then(Value::as_bool) != Some(true)
-            || record
-                .get("owner")
-                .and_then(Value::as_str)
-                .map(|owner| !owner.eq_ignore_ascii_case("anonymous"))
-                .unwrap_or(true)
+        if record
+            .get("owner")
+            .and_then(Value::as_str)
+            .map(|owner| !owner.eq_ignore_ascii_case("anonymous"))
+            .unwrap_or(true)
         {
             return Err(ApiError::not_found("file_not_found", "file_not_found"));
         }
-        if let Some(incident_id) = incident_id {
-            if record.get("report_id").and_then(Value::as_str) != Some(incident_id) {
+        if let Some(draft_id) = draft_id {
+            if record.get("draft_id").and_then(Value::as_str) != Some(draft_id)
+                || record.get("report_id").and_then(Value::as_str).is_some()
+                || record.get("public").and_then(Value::as_bool) == Some(true)
+            {
+                return Err(ApiError::forbidden(
+                    "photo_not_uploaded_for_report",
+                    "The photo was not uploaded for this report draft.",
+                ));
+            }
+        } else {
+            if record.get("public").and_then(Value::as_bool) != Some(true)
+                || incident_id.is_none()
+                || record.get("report_id").and_then(Value::as_str) != incident_id
+            {
                 return Err(ApiError::forbidden(
                     "photo_not_uploaded_for_report",
                     "The photo was not uploaded for this report.",
@@ -6453,31 +6804,70 @@ async fn resolve_public_report_photos(
     Ok(photos)
 }
 
-async fn public_incident_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
-    if let Some((_, replay)) = idempotency_replay(ctx) {
-        return Ok(replay);
+async fn bind_public_draft_photo(
+    ctx: &Ctx<'_>,
+    file_id: &str,
+    draft_id: &str,
+    incident_id: &str,
+) -> ApiResult<()> {
+    let Some(record) = file_metadata(ctx, file_id).await? else {
+        return Err(ApiError::not_found("file_not_found", "file_not_found"));
+    };
+    if record.get("draft_id").and_then(Value::as_str) != Some(draft_id)
+        || record.get("report_id").and_then(Value::as_str).is_some()
+        || record.get("public").and_then(Value::as_bool) == Some(true)
+    {
+        return Err(ApiError::forbidden(
+            "photo_not_uploaded_for_report",
+            "The photo was not uploaded for this report draft.",
+        ));
     }
-    let replay_key = crate::state::idempotency_key(ctx.headers);
-    enforce_turnstile(ctx).await?;
+    let opts = ctx.opts();
+    tier2::update(
+        ctx.client(),
+        &opts,
+        tier2::FILES,
+        file_id,
+        json!({
+            "draft_id": null,
+            "report_id": incident_id,
+            "public": true,
+            "updated_at": crate::now_iso(),
+        })
+        .as_object()
+        .cloned()
+        .unwrap_or_default(),
+        None,
+    )
+    .await?;
+    Ok(())
+}
+
+async fn public_incident_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
+    let mut idempotency = idempotency_begin(ctx).await?;
+    if let Some(attempt) = idempotency.as_mut() {
+        if let Some(replay) = attempt.replay.take() {
+            return Ok(replay);
+        }
+    }
     let body = web::private_input(ctx.body);
+    let draft_id = web::string_field(&body, "draft_id");
+    let draft_token = web::string_field(&body, "draft_token")
+        .or_else(|| web::string_field(&body, "report_upload_token"));
+    if draft_id.is_some() != draft_token.is_some() {
+        return Err(ApiError::forbidden(
+            "report_upload_token_required",
+            "A draft id and upload token are required together.",
+        ));
+    }
+    if draft_id.is_none() {
+        enforce_turnstile(ctx).await?;
+    }
+    validate_public_incident_draft(&body)?;
     let incident_id = uuid::Uuid::new_v4().to_string();
     let number = incident_number();
-    // Abuse guard: bound citizen input before any Tier-2 write. Caps mirror
-    // the mobile/web forms (title 140, description 2000).
     let title = web::required_string(&body, "title")?;
-    if title.chars().count() > 140 {
-        return Err(ApiError::bad_request(
-            "title_too_long",
-            "title must be at most 140 characters",
-        ));
-    }
     let description = web::required_string(&body, "description")?;
-    if description.chars().count() > 2000 {
-        return Err(ApiError::bad_request(
-            "description_too_long",
-            "description must be at most 2000 characters",
-        ));
-    }
     let photo_values: Vec<Value> = body
         .get("photos")
         .and_then(Value::as_array)
@@ -6491,10 +6881,30 @@ async fn public_incident_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
             format!("At most {MAX_PUBLIC_INCIDENT_PHOTOS} photos may be attached."),
         ));
     }
+    if !photo_values.is_empty() && draft_id.is_none() {
+        return Err(ApiError::forbidden(
+            "report_upload_token_required",
+            "Create a report draft and upload photos with its capability first.",
+        ));
+    }
+    if let (Some(draft_id), Some(draft_token)) = (draft_id.as_deref(), draft_token.as_deref()) {
+        if !auth::verify_report_upload_token_for_report(
+            ctx.config(),
+            draft_token,
+            draft_id,
+            &public_report_hash(&body),
+        ) {
+            return Err(ApiError::forbidden(
+                "report_upload_token_invalid",
+                "The draft upload token is invalid, expired, or does not match this report.",
+            ));
+        }
+    }
     let photos: Vec<Value> = if photo_values.is_empty() {
         Vec::new()
     } else {
-        resolve_public_report_photos(ctx, &photo_values, None).await?
+        resolve_public_report_photos(ctx, &photo_values, Some(&incident_id), draft_id.as_deref())
+            .await?
     };
     let now = crate::now_iso();
     let mut incident = Map::new();
@@ -6568,6 +6978,48 @@ async fn public_incident_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
         .await;
         return Err(error);
     }
+    if let Some(draft_id) = draft_id.as_deref() {
+        let mut bound: Vec<String> = Vec::new();
+        for value in &photo_values {
+            let Some(file_id) = report_photo_file_id(value) else {
+                continue;
+            };
+            if let Err(error) = bind_public_draft_photo(ctx, &file_id, draft_id, &incident_id).await
+            {
+                // Best-effort rollback keeps any earlier photos private if a
+                // later binding fails; the incident itself is removed below.
+                for bound_id in &bound {
+                    let _ = tier2::update(
+                        ctx.client(),
+                        &opts,
+                        tier2::FILES,
+                        bound_id,
+                        json!({
+                            "draft_id": draft_id,
+                            "report_id": null,
+                            "public": false,
+                            "updated_at": crate::now_iso(),
+                        })
+                        .as_object()
+                        .cloned()
+                        .unwrap_or_default(),
+                        None,
+                    )
+                    .await;
+                }
+                let _ = tier2::delete(ctx.client(), &opts, INCIDENTS, &incident_id).await;
+                let _ = tier2::delete(
+                    ctx.client(),
+                    &opts,
+                    INCIDENT_INTERNAL,
+                    &incident_internal_id(&incident_id),
+                )
+                .await;
+                return Err(error);
+            }
+            bound.push(file_id);
+        }
+    }
     if let Err(error) = notify_operators(
         ctx,
         "incident_reported",
@@ -6591,7 +7043,8 @@ async fn public_incident_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
         "incident",
         &incident_id,
     )
-    .await {
+    .await
+    {
         tracing::warn!(
             incident_id = %incident_id,
             error = %error,
@@ -6607,8 +7060,8 @@ async fn public_incident_create(ctx: &Ctx<'_>) -> ApiResult<Response> {
     response.insert("edit_token".into(), json!(edit_token));
     response.insert("edit_token_expires_at".into(), json!(expires_at));
     let value = Value::Object(response);
-    if let Some(key) = replay_key {
-        idempotency_remember(ctx, &key, &value);
+    if let Some(attempt) = idempotency.as_mut() {
+        attempt.remember(&value);
     }
     Ok(web::created(value))
 }
@@ -6678,7 +7131,7 @@ async fn public_incident_photos(ctx: &Ctx<'_>, id: &str) -> ApiResult<Response> 
             format!("At most {MAX_PUBLIC_INCIDENT_PHOTOS} photos may be attached to one report."),
         ));
     }
-    let photos = resolve_public_report_photos(ctx, &values, Some(&incident_id)).await?;
+    let photos = resolve_public_report_photos(ctx, &values, Some(&incident_id), None).await?;
     let mut merged = current;
     merged.extend(photos);
     let mut patch = Map::new();
@@ -7133,7 +7586,7 @@ mod route_tests {
     use serde_json::{json, Value};
     use synapsedx::{Client, Credentials};
     use tower::ServiceExt;
-    use wiremock::matchers::{body_partial_json, header, method, path, query_param};
+    use wiremock::matchers::{body_partial_json, header, method, path, path_regex, query_param};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     fn state(uri: &str) -> AppState {
@@ -7144,6 +7597,26 @@ mod route_tests {
 
     fn app(state: AppState) -> Router {
         Router::new().fallback(dispatch).with_state(state)
+    }
+
+    fn idempotency_ctx<'a>(
+        state: &'a AppState,
+        headers: &'a HeaderMap,
+        uri: &'a Uri,
+        query: &'a HashMap<String, String>,
+        body: &'a Map<String, Value>,
+        session: Option<&'a SessionPrincipal>,
+    ) -> Ctx<'a> {
+        Ctx {
+            state,
+            headers,
+            method: "POST",
+            uri,
+            peer: None,
+            query,
+            body,
+            session,
+        }
     }
 
     fn admin_token(config: &Config) -> String {
@@ -7255,8 +7728,7 @@ mod route_tests {
                 assert_eq!(status, StatusCode::GONE, "{method} {route}");
                 assert_eq!(body["error"], "workspace_moved", "{method} {route}");
                 assert_eq!(
-                    body["workspace_url"],
-                    "https://synapsedx.sbs/workspace",
+                    body["workspace_url"], "https://synapsedx.sbs/workspace",
                     "{method} {route}"
                 );
                 assert!(
@@ -7267,14 +7739,7 @@ mod route_tests {
         }
         // The bare namespace and nested sub-paths answer 410 as well.
         for uri in ["/v1/auth", "/v1/auth/", "/v1/auth/verify/extra/segments"] {
-            let (status, _, body) = call(
-                app.clone(),
-                Method::GET,
-                uri,
-                None,
-                None,
-            )
-            .await;
+            let (status, _, body) = call(app.clone(), Method::GET, uri, None, None).await;
             assert_eq!(status, StatusCode::GONE, "{uri}");
             assert_eq!(body["error"], "workspace_moved", "{uri}");
         }
@@ -7300,14 +7765,8 @@ mod route_tests {
         .await;
         assert_eq!(status, StatusCode::GONE);
         // The second request is rejected by the limiter before the route.
-        let (status, _, body) = call(
-            app,
-            Method::POST,
-            "/v1/auth/login",
-            None,
-            Some(json!({})),
-        )
-        .await;
+        let (status, _, body) =
+            call(app, Method::POST, "/v1/auth/login", None, Some(json!({}))).await;
         assert_eq!(status, StatusCode::TOO_MANY_REQUESTS, "{body}");
         assert_eq!(body["code"], "rate_limited");
         assert!(body["details"]["retry_after_seconds"].as_u64().unwrap_or(0) >= 1);
@@ -7766,7 +8225,8 @@ mod route_tests {
             Some(json!({
                 "title": "Broken pump",
                 "description": "Pump is leaking",
-                "category": "utility",
+                "category": "malfunction",
+                "location": { "address": "Pump station" },
                 "contact_info": {"name": "Citizen", "phone_number": "0900"}
             })),
         )
@@ -7841,22 +8301,23 @@ mod route_tests {
     }
 
     #[tokio::test]
-    async fn anonymous_public_file_upload_reaches_validation_instead_of_auth() {
+    async fn anonymous_public_file_upload_requires_a_draft_capability() {
         let response = app(state("http://127.0.0.1:1"))
             .oneshot(
                 Request::builder()
                     .method(Method::POST)
                     .uri("/v1/public/files")
                     .header("content-type", "image/png")
+                    .header("x-file-name", "photo.png")
                     .body(Body::from(vec![1u8, 2, 3]))
                     .unwrap(),
             )
             .await
             .unwrap();
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
         let bytes = response.into_body().collect().await.unwrap().to_bytes();
         let body: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
-        assert_eq!(body["code"], "x_file_name_required");
+        assert_eq!(body["code"], "report_draft_required");
     }
 
     fn role_token(config: &Config, role: &str, username: &str) -> String {
@@ -8204,14 +8665,7 @@ mod route_tests {
             config,
             Client::new(&server.uri(), Credentials::none()).unwrap(),
         ));
-        let (status, _, body) = call(
-            app,
-            Method::DELETE,
-            "/v1/files/f9",
-            Some(&token),
-            None,
-        )
-        .await;
+        let (status, _, body) = call(app, Method::DELETE, "/v1/files/f9", Some(&token), None).await;
         assert_eq!(status, StatusCode::BAD_GATEWAY, "{body}");
         assert_eq!(body["code"], "upstream_delete_failed");
     }
@@ -8265,14 +8719,7 @@ mod route_tests {
             config,
             Client::new(&server.uri(), Credentials::none()).unwrap(),
         ));
-        let (status, _, _) = call(
-            app,
-            Method::DELETE,
-            "/v1/files/f9",
-            Some(&token),
-            None,
-        )
-        .await;
+        let (status, _, _) = call(app, Method::DELETE, "/v1/files/f9", Some(&token), None).await;
         assert_eq!(status, StatusCode::NO_CONTENT);
     }
 
@@ -8321,14 +8768,7 @@ mod route_tests {
             config,
             Client::new(&server.uri(), Credentials::none()).unwrap(),
         ));
-        let (status, _, _) = call(
-            app,
-            Method::DELETE,
-            "/v1/files/f9",
-            Some(&token),
-            None,
-        )
-        .await;
+        let (status, _, _) = call(app, Method::DELETE, "/v1/files/f9", Some(&token), None).await;
         assert_eq!(status, StatusCode::NO_CONTENT);
     }
 
@@ -8367,16 +8807,24 @@ mod route_tests {
                 }
             })
         };
-        for (id, number) in [("inc-1", "INC-100"), ("dup-1", "INC-101"), ("dup-2", "INC-102")] {
+        for (id, number) in [
+            ("inc-1", "INC-100"),
+            ("dup-1", "INC-101"),
+            ("dup-2", "INC-102"),
+        ] {
             Mock::given(method("GET"))
-                .and(path(format!("/v1/capabilities/datasets/city-incidents/records/{id}")))
+                .and(path(format!(
+                    "/v1/capabilities/datasets/city-incidents/records/{id}"
+                )))
                 .respond_with(ResponseTemplate::new(200).set_body_json(incident(id, number)))
                 .mount(&server)
                 .await;
         }
         // Unknown duplicate: record GET 404s and the list fallback is empty.
         Mock::given(method("GET"))
-            .and(path("/v1/capabilities/datasets/city-incidents/records/dup-3"))
+            .and(path(
+                "/v1/capabilities/datasets/city-incidents/records/dup-3",
+            ))
             .respond_with(
                 ResponseTemplate::new(404).set_body_json(json!({"error": {"code": "not_found"}})),
             )
@@ -8393,7 +8841,9 @@ mod route_tests {
         // close/merge patches carry internal fields (resolution_notes,
         // merged_reporter_ids) so the sidecar is created per incident.
         Mock::given(method("POST"))
-            .and(path("/v1/capabilities/datasets/city-incident-internal/records"))
+            .and(path(
+                "/v1/capabilities/datasets/city-incident-internal/records",
+            ))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "id": "created", "version": 1,
                 "createdAt": "2026-11-01T00:00:00.000Z",
@@ -8411,7 +8861,9 @@ mod route_tests {
             "dup-2",
         ] {
             Mock::given(method("GET"))
-                .and(path(format!("/v1/capabilities/datasets/city-incident-internal/records/{id}")))
+                .and(path(format!(
+                    "/v1/capabilities/datasets/city-incident-internal/records/{id}"
+                )))
                 .respond_with(
                     ResponseTemplate::new(404)
                         .set_body_json(json!({"error": {"code": "not_found"}})),
@@ -8419,7 +8871,9 @@ mod route_tests {
                 .mount(&server)
                 .await;
             Mock::given(method("DELETE"))
-                .and(path(format!("/v1/capabilities/datasets/city-incident-internal/records/{id}")))
+                .and(path(format!(
+                    "/v1/capabilities/datasets/city-incident-internal/records/{id}"
+                )))
                 .respond_with(
                     ResponseTemplate::new(404)
                         .set_body_json(json!({"error": {"code": "not_found"}})),
@@ -8429,7 +8883,9 @@ mod route_tests {
         }
         // dup-1 closes; dup-2 hits a Tier-2 failure.
         Mock::given(method("PATCH"))
-            .and(path("/v1/capabilities/datasets/city-incidents/records/dup-1"))
+            .and(path(
+                "/v1/capabilities/datasets/city-incidents/records/dup-1",
+            ))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "id": "dup-1", "version": 2,
                 "createdAt": "2026-11-01T00:00:00.000Z",
@@ -8444,13 +8900,17 @@ mod route_tests {
             .mount(&server)
             .await;
         Mock::given(method("PATCH"))
-            .and(path("/v1/capabilities/datasets/city-incidents/records/dup-2"))
+            .and(path(
+                "/v1/capabilities/datasets/city-incidents/records/dup-2",
+            ))
             .respond_with(ResponseTemplate::new(500))
             .expect(1)
             .mount(&server)
             .await;
         Mock::given(method("PATCH"))
-            .and(path("/v1/capabilities/datasets/city-incidents/records/inc-1"))
+            .and(path(
+                "/v1/capabilities/datasets/city-incidents/records/inc-1",
+            ))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "id": "inc-1", "version": 2,
                 "createdAt": "2026-11-01T00:00:00.000Z",
@@ -8905,6 +9365,755 @@ mod route_tests {
         .await;
         assert_eq!(status, StatusCode::CREATED, "{body}");
         assert_eq!(body["public_visible"], false);
+    }
+
+    #[tokio::test]
+    async fn duplicate_incident_create_never_mutates_the_existing_sidecar() {
+        let server = MockServer::start().await;
+        mount_dataset(
+            &server,
+            "city-incidents",
+            "SynapseCity infrastructure incidents",
+            "CityIncident",
+            "Public projection of generalized infrastructure incidents",
+            true,
+        )
+        .await;
+        mount_dataset(
+            &server,
+            "city-incident-internal",
+            "SynapseCity incident internal records",
+            "CityIncidentInternal",
+            "Private reporter identity and internal incident notes",
+            false,
+        )
+        .await;
+        Mock::given(method("POST"))
+            .and(path(
+                "/v1/capabilities/datasets/city-incident-internal/records",
+            ))
+            .respond_with(ResponseTemplate::new(409).set_body_json(json!({
+                "error": { "code": "record_exists" }
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        for mutation in ["PATCH", "DELETE"] {
+            Mock::given(method(mutation))
+                .and(path("/v1/capabilities/datasets/city-incident-internal/records/internal-inc-existing"))
+                .respond_with(ResponseTemplate::new(200))
+                .expect(0)
+                .mount(&server)
+                .await;
+        }
+        Mock::given(method("DELETE"))
+            .and(path(
+                "/v1/capabilities/datasets/city-incident-internal/records",
+            ))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(0)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/v1/capabilities/datasets/city-incidents/records"))
+            .respond_with(ResponseTemplate::new(201))
+            .expect(0)
+            .mount(&server)
+            .await;
+        let config = Config::for_test(&server.uri());
+        let token = admin_token(&config);
+        let app = app(AppState::new(
+            config,
+            Client::new(&server.uri(), Credentials::none()).unwrap(),
+        ));
+        let (status, _, body) = call(
+            app,
+            Method::POST,
+            "/v1/incidents",
+            Some(&token),
+            Some(json!({
+                "incidentId": "inc-existing",
+                "title": "Duplicate",
+                "category": "damage",
+                "contact_info": { "name": "Replacement", "phone_number": "0900" }
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CONFLICT, "{body}");
+        server.verify().await;
+    }
+
+    #[tokio::test]
+    async fn technician_self_approval_is_forbidden_and_production_requires_hitl() {
+        let config = Config::for_test("http://127.0.0.1:1");
+        let technician = role_token(&config, auth::ROLE_TECHNICIAN, "tech");
+        let (status, _, body) = call(
+            app(AppState::new(
+                config.clone(),
+                Client::new("http://127.0.0.1:1", Credentials::none()).unwrap(),
+            )),
+            Method::POST,
+            "/v1/maintenance/m1/approve",
+            Some(&technician),
+            Some(json!({})),
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+        assert_eq!(body["error"], "maintenance:approve_required");
+
+        let server = MockServer::start().await;
+        mount_dataset(
+            &server,
+            "city-maintenance",
+            "SynapseCity maintenance work orders",
+            "MaintenanceWorkOrder",
+            "Infrastructure maintenance lifecycle records",
+            false,
+        )
+        .await;
+        Mock::given(method("GET"))
+            .and(path("/v1/capabilities/datasets/city-maintenance/records/m1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": "m1", "version": 1,
+                "data": { "id": "m1", "title": "Repair", "status": "scheduled", "assigned_to": "manager" }
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("PATCH"))
+            .and(path(
+                "/v1/capabilities/datasets/city-maintenance/records/m1",
+            ))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(0)
+            .mount(&server)
+            .await;
+        let mut production = Config::for_test(&server.uri());
+        production.is_production = true;
+        production.hitl_required = false;
+        let manager = role_token(&production, auth::ROLE_MANAGER, "manager");
+        let (status, _, body) = call(
+            app(AppState::new(
+                production,
+                Client::new(&server.uri(), Credentials::none()).unwrap(),
+            )),
+            Method::POST,
+            "/v1/maintenance/m1/approve",
+            Some(&manager),
+            Some(json!({})),
+        )
+        .await;
+        assert_eq!(status, StatusCode::PRECONDITION_REQUIRED, "{body}");
+        assert_eq!(body["code"], "approval_required");
+        server.verify().await;
+    }
+
+    #[tokio::test]
+    async fn raw_uploads_enforce_files_write_and_keep_technician_manager_access() {
+        let volunteer = role_token(
+            &Config::for_test("http://127.0.0.1:1"),
+            auth::ROLE_VOLUNTEER,
+            "volunteer",
+        );
+        let citizen = role_token(
+            &Config::for_test("http://127.0.0.1:1"),
+            auth::ROLE_CITIZEN,
+            "citizen",
+        );
+        for token in [volunteer, citizen] {
+            let (status, _, body) = call(
+                app(state("http://127.0.0.1:1")),
+                Method::POST,
+                "/v1/files/upload",
+                Some(&token),
+                Some(json!({})),
+            )
+            .await;
+            assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+            assert_eq!(body["error"], "files:write_required");
+        }
+
+        let server = MockServer::start().await;
+        mount_dataset(
+            &server,
+            "city-files",
+            "SynapseCity file metadata",
+            "CityFile",
+            "Metadata for binary files stored through the Tier-2 files capability",
+            false,
+        )
+        .await;
+        Mock::given(method("POST"))
+            .and(path("/v1/capabilities/files"))
+            .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+                "id": "file-1", "contentType": "image/png", "size": 3
+            })))
+            .expect(2)
+            .mount(&server)
+            .await;
+        Mock::given(method("PUT"))
+            .and(path("/v1/capabilities/files/file-1/content"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": "file-1", "contentType": "image/png", "size": 3
+            })))
+            .expect(2)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/v1/capabilities/datasets/city-files/records"))
+            .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+                "id": "file-1", "version": 1, "data": { "id": "file-1", "public": false }
+            })))
+            .expect(2)
+            .mount(&server)
+            .await;
+        let config = Config::for_test(&server.uri());
+        let app = app(AppState::new(
+            config.clone(),
+            Client::new(&server.uri(), Credentials::none()).unwrap(),
+        ));
+        for role in [auth::ROLE_TECHNICIAN, auth::ROLE_MANAGER] {
+            let token = role_token(&config, role, role);
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method(Method::POST)
+                        .uri("/v1/files/upload")
+                        .header("authorization", format!("Bearer {token}"))
+                        .header("content-type", "image/png")
+                        .header("x-file-name", "evidence.png")
+                        .body(Body::from(vec![1u8, 2, 3]))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::CREATED, "{role}");
+        }
+        server.verify().await;
+    }
+
+    #[tokio::test]
+    async fn idempotency_is_scoped_and_rejects_body_mismatch() {
+        let state = state("http://127.0.0.1:1");
+        let admin = auth::principal_from_input(
+            &state.config,
+            "admin",
+            Some("admin@example.com"),
+            Some("Admin"),
+            None,
+            auth::ROLE_ADMIN,
+        );
+        let mut headers = HeaderMap::new();
+        headers.insert("idempotency-key", HeaderValue::from_static("shared-key"));
+        let uri = Uri::from_static("/v1/maintenance");
+        let query = HashMap::new();
+        let body = json!({ "title": "Repair" }).as_object().unwrap().clone();
+        let ctx = idempotency_ctx(&state, &headers, &uri, &query, &body, Some(&admin));
+        let mut first = idempotency_begin(&ctx).await.unwrap().unwrap();
+        assert!(first.replay.is_none());
+        first.remember(&json!({ "id": "private-work-order" }));
+        drop(first);
+
+        let same = idempotency_ctx(&state, &headers, &uri, &query, &body, Some(&admin));
+        let mut replay = idempotency_begin(&same).await.unwrap().unwrap();
+        assert_eq!(replay.replay.take().unwrap().status(), StatusCode::CREATED);
+        drop(replay);
+
+        let anonymous = idempotency_ctx(&state, &headers, &uri, &query, &body, None);
+        let other_user = idempotency_begin(&anonymous).await.unwrap().unwrap();
+        assert!(other_user.replay.is_none());
+
+        let other_route_uri = Uri::from_static("/v1/public/incidents");
+        let other_route = idempotency_ctx(
+            &state,
+            &headers,
+            &other_route_uri,
+            &query,
+            &body,
+            Some(&admin),
+        );
+        let cross_route = idempotency_begin(&other_route).await.unwrap().unwrap();
+        assert!(cross_route.replay.is_none());
+
+        let changed_body = json!({ "title": "Different" }).as_object().unwrap().clone();
+        let mismatch = idempotency_ctx(&state, &headers, &uri, &query, &changed_body, Some(&admin));
+        let error = idempotency_begin(&mismatch).await.err().unwrap();
+        assert_eq!(error.status, StatusCode::CONFLICT);
+        assert_eq!(error.code, "idempotency_body_mismatch");
+    }
+
+    #[tokio::test]
+    async fn public_photo_draft_is_private_and_cannot_be_attached_to_another_draft() {
+        let server = MockServer::start().await;
+        mount_dataset(
+            &server,
+            "city-files",
+            "SynapseCity file metadata",
+            "CityFile",
+            "Metadata for binary files stored through the Tier-2 files capability",
+            false,
+        )
+        .await;
+        Mock::given(method("GET"))
+            .and(path("/v1/capabilities/datasets/city-files/records"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "items": [], "total": 0, "limit": 500, "offset": 0
+            })))
+            .expect(2)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/v1/capabilities/datasets/city-files/records/query"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "items": [], "total": 0, "limit": 11, "offset": 0
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/v1/capabilities/files"))
+            .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+                "id": "photo-0001", "contentType": "image/png", "size": 3
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("PUT"))
+            .and(path("/v1/capabilities/files/photo-0001/content"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": "photo-0001", "contentType": "image/png", "size": 3
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/v1/capabilities/datasets/city-files/records"))
+            .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+                "id": "photo-0001", "version": 1,
+                "data": { "id": "photo-0001", "contentType": "image/png", "public": false }
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/v1/capabilities/datasets/city-incidents/records"))
+            .respond_with(ResponseTemplate::new(201))
+            .expect(0)
+            .mount(&server)
+            .await;
+        let config = Config::for_test(&server.uri());
+        let app = app(AppState::new(
+            config.clone(),
+            Client::new(&server.uri(), Credentials::none()).unwrap(),
+        ));
+        let report = json!({
+            "title": "Broken pump",
+            "description": "Water on the street",
+            "category": "malfunction",
+            "severity": "high",
+            "location": { "address": "Main street" }
+        });
+        let (status, _, first) = call(
+            app.clone(),
+            Method::POST,
+            "/v1/public/incidents/drafts",
+            None,
+            Some(report.clone()),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED, "{first}");
+        let (status, _, second) = call(
+            app.clone(),
+            Method::POST,
+            "/v1/public/incidents/drafts",
+            None,
+            Some(report.clone()),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED, "{second}");
+        let first_draft = first["draft_id"].as_str().unwrap();
+        Mock::given(method("GET"))
+            .and(path(
+                "/v1/capabilities/datasets/city-files/records/photo-0001",
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": "photo-0001", "version": 1,
+                "data": {
+                    "id": "photo-0001", "contentType": "image/png", "public": false,
+                    "owner": "anonymous", "draft_id": first_draft
+                }
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let upload = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/v1/public/files")
+                    .header("content-type", "image/png")
+                    .header("x-file-name", "photo.png")
+                    .header("x-report-draft-id", first_draft)
+                    .header(
+                        "x-report-upload-token",
+                        first["upload_token"].as_str().unwrap(),
+                    )
+                    .body(Body::from(vec![1u8, 2, 3]))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(upload.status(), StatusCode::CREATED);
+
+        let requests = server.received_requests().await.unwrap();
+        let metadata = requests
+            .iter()
+            .find(|request| {
+                request.method.as_str() == "POST"
+                    && request.url.path() == "/v1/capabilities/datasets/city-files/records"
+            })
+            .unwrap();
+        let stored: Value = serde_json::from_slice(&metadata.body).unwrap();
+        assert_eq!(stored["data"]["public"], false);
+        assert_eq!(stored["data"]["draft_id"], first_draft);
+
+        let (status, _, body) = call(
+            app,
+            Method::POST,
+            "/v1/public/incidents",
+            None,
+            Some(json!({
+                "title": "Broken pump",
+                "description": "Water on the street",
+                "category": "malfunction",
+                "severity": "high",
+                "location": { "address": "Main street" },
+                "photos": ["photo-0001"],
+                "draft_id": second["draft_id"],
+                "draft_token": second["upload_token"]
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+        assert_eq!(body["code"], "photo_not_uploaded_for_report");
+        server.verify().await;
+    }
+
+    #[tokio::test]
+    async fn expired_private_draft_uploads_are_deleted() {
+        let server = MockServer::start().await;
+        mount_dataset(
+            &server,
+            "city-files",
+            "SynapseCity file metadata",
+            "CityFile",
+            "Metadata for binary files stored through the Tier-2 files capability",
+            false,
+        )
+        .await;
+        Mock::given(method("GET"))
+            .and(path("/v1/capabilities/datasets/city-files/records"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "items": [{
+                    "id": "orphan-1", "version": 1,
+                    "data": {
+                        "id": "orphan-1", "draft_id": "draft-old", "public": false,
+                        "created_at": "2020-01-01T00:00:00.000Z"
+                    }
+                }],
+                "total": 1, "limit": 500, "offset": 0
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("DELETE"))
+            .and(path("/v1/capabilities/files/orphan-1"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("DELETE"))
+            .and(path(
+                "/v1/capabilities/datasets/city-files/records/orphan-1",
+            ))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let (status, _, body) = call(
+            app(state(&server.uri())),
+            Method::POST,
+            "/v1/public/incidents/drafts",
+            None,
+            Some(json!({
+                "title": "Broken pump",
+                "description": "Water on the street",
+                "category": "malfunction",
+                "location": { "address": "Main street" }
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED, "{body}");
+        server.verify().await;
+    }
+
+    #[tokio::test]
+    async fn successful_report_creation_binds_private_draft_photos() {
+        let server = MockServer::start().await;
+        for (id, name, entity_type, description, public) in [
+            (
+                "city-files",
+                "SynapseCity file metadata",
+                "CityFile",
+                "Metadata for binary files stored through the Tier-2 files capability",
+                false,
+            ),
+            (
+                "city-incidents",
+                "SynapseCity infrastructure incidents",
+                "CityIncident",
+                "Public projection of generalized infrastructure incidents",
+                true,
+            ),
+            (
+                "city-incident-internal",
+                "SynapseCity incident internal records",
+                "CityIncidentInternal",
+                "Private reporter identity and internal incident notes",
+                false,
+            ),
+            (
+                "city-users",
+                "SynapseCity users",
+                "CityUser",
+                "Domain operator profiles",
+                false,
+            ),
+        ] {
+            mount_dataset(&server, id, name, entity_type, description, public).await;
+        }
+        Mock::given(method("GET"))
+            .and(path(
+                "/v1/capabilities/datasets/city-files/records/photo-0001",
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": "photo-0001", "version": 1,
+                "data": {
+                    "id": "photo-0001", "contentType": "image/png", "public": false,
+                    "owner": "anonymous", "draft_id": "draft-1"
+                }
+            })))
+            .expect(3)
+            .mount(&server)
+            .await;
+        Mock::given(method("PATCH"))
+            .and(path(
+                "/v1/capabilities/datasets/city-files/records/photo-0001",
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": "photo-0001", "version": 2,
+                "data": { "id": "photo-0001", "public": true, "report_id": "incident-created" }
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path_regex(
+                "^/v1/capabilities/datasets/city-incident-internal/records/internal-[^/]+$",
+            ))
+            .respond_with(
+                ResponseTemplate::new(404)
+                    .set_body_json(json!({ "error": { "code": "not_found" } })),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path(
+                "/v1/capabilities/datasets/city-incident-internal/records",
+            ))
+            .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+                "id": "internal-created", "version": 1, "data": { "id": "internal-created" }
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/v1/capabilities/datasets/city-incidents/records"))
+            .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+                "id": "incident-created", "version": 1,
+                "data": { "id": "incident-created", "title": "Broken pump" }
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/v1/capabilities/datasets/city-users/records"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "items": [], "total": 0, "limit": 500, "offset": 0
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let config = Config::for_test(&server.uri());
+        let report = json!({
+            "title": "Broken pump",
+            "description": "Water on the street",
+            "category": "malfunction",
+            "severity": "high",
+            "location": { "address": "Main street" }
+        });
+        let report_hash = public_report_hash(report.as_object().unwrap());
+        let (token, _) = auth::issue_report_upload_token(&config, "draft-1", &report_hash);
+        let app = app(AppState::new(
+            config,
+            Client::new(&server.uri(), Credentials::none()).unwrap(),
+        ));
+        let (status, _, body) = call(
+            app,
+            Method::POST,
+            "/v1/public/incidents",
+            None,
+            Some(json!({
+                "title": "Broken pump",
+                "description": "Water on the street",
+                "category": "malfunction",
+                "severity": "high",
+                "location": { "address": "Main street" },
+                "photos": ["photo-0001"],
+                "draft_id": "draft-1",
+                "draft_token": token
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED, "{body}");
+        let requests = server.received_requests().await.unwrap();
+        let binding = requests
+            .iter()
+            .find(|request| {
+                request.method.as_str() == "PATCH"
+                    && request.url.path()
+                        == "/v1/capabilities/datasets/city-files/records/photo-0001"
+            })
+            .unwrap();
+        let stored: Value = serde_json::from_slice(&binding.body).unwrap();
+        assert_eq!(stored["data"]["public"], true);
+        assert_eq!(stored["data"]["report_id"], body["id"]);
+        server.verify().await;
+    }
+
+    #[tokio::test]
+    async fn public_draft_upload_quota_is_enforced_before_storage() {
+        let server = MockServer::start().await;
+        mount_dataset(
+            &server,
+            "city-files",
+            "SynapseCity file metadata",
+            "CityFile",
+            "Metadata for binary files stored through the Tier-2 files capability",
+            false,
+        )
+        .await;
+        Mock::given(method("POST"))
+            .and(path("/v1/capabilities/datasets/city-files/records/query"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "items": (0..MAX_PUBLIC_INCIDENT_PHOTOS).map(|index| json!({ "id": format!("f{index}"), "data": {} })).collect::<Vec<_>>(),
+                "total": MAX_PUBLIC_INCIDENT_PHOTOS,
+                "limit": MAX_PUBLIC_INCIDENT_PHOTOS as i64 + 1,
+                "offset": 0
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/v1/capabilities/files"))
+            .respond_with(ResponseTemplate::new(201))
+            .expect(0)
+            .mount(&server)
+            .await;
+        let config = Config::for_test(&server.uri());
+        let report = json!({
+            "title": "Broken pump",
+            "description": "Water on the street",
+            "category": "malfunction",
+            "location": { "address": "Main street" }
+        });
+        let report_hash = public_report_hash(report.as_object().unwrap());
+        let (token, _) = auth::issue_report_upload_token(&config, "draft-1", &report_hash);
+        let app = app(AppState::new(
+            config,
+            Client::new(&server.uri(), Credentials::none()).unwrap(),
+        ));
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/v1/public/files")
+                    .header("content-type", "image/png")
+                    .header("x-file-name", "photo.png")
+                    .header("x-report-draft-id", "draft-1")
+                    .header("x-report-upload-token", token)
+                    .body(Body::from(vec![1u8, 2, 3]))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
+        let bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let body: Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(body["code"], "too_many_photos");
+        server.verify().await;
+    }
+
+    #[tokio::test]
+    async fn public_incident_rejects_unknown_enums_and_invalid_locations() {
+        let app = app(state("http://127.0.0.1:1"));
+        for body in [
+            json!({ "title": "x", "description": "y", "category": "utility", "location": { "address": "Main" } }),
+            json!({ "title": "x", "description": "y", "severity": "urgent", "location": { "address": "Main" } }),
+            json!({ "title": "x", "description": "y", "location": { "address": "Main", "geometry": { "type": "Point", "coordinates": [181, 21] } } }),
+            json!({ "title": "x", "description": "y", "location": null }),
+        ] {
+            let (status, _, error) = call(
+                app.clone(),
+                Method::POST,
+                "/v1/public/incidents",
+                None,
+                Some(body),
+            )
+            .await;
+            assert_eq!(status, StatusCode::BAD_REQUEST, "{error}");
+        }
+    }
+
+    #[tokio::test]
+    async fn rust_json_writes_reject_inline_binary_before_tier2() {
+        let config = Config::for_test("http://127.0.0.1:1");
+        let token = admin_token(&config);
+        let app = app(AppState::new(
+            config,
+            Client::new("http://127.0.0.1:1", Credentials::none()).unwrap(),
+        ));
+        for body in [
+            json!({ "properties": { "note": "data:text/plain;base64,aGVsbG8=" } }),
+            json!({ "properties": { "file_content": "aGVsbG8=" } }),
+        ] {
+            let (status, _, error) = call(
+                app.clone(),
+                Method::PATCH,
+                "/v1/assets/a1",
+                Some(&token),
+                Some(body),
+            )
+            .await;
+            assert_eq!(status, StatusCode::UNSUPPORTED_MEDIA_TYPE, "{error}");
+            assert!(matches!(
+                error["code"].as_str(),
+                Some("data_url_not_supported" | "inline_binary_not_accepted")
+            ));
+        }
     }
 }
 

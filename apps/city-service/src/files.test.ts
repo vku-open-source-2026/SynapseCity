@@ -190,6 +190,11 @@ test('a data URL cannot bypass validation through a PATCH payload', async () => 
   }, adminToken));
   assert.equal(asset.status, 415);
 
+  const nested = await request('/v1/assets/asset-1', json('PATCH', {
+    properties: { note: 'data:text/plain;base64,aGVsbG8=' },
+  }, adminToken));
+  assert.equal(nested.status, 415);
+
   for (const [datasetId, rows] of tier2.records.entries()) {
     for (const [recordId, record] of rows.entries()) {
       assert.equal(JSON.stringify(record).includes('data:'), false, `${datasetId}/${recordId} must not contain a data URL`);
@@ -267,7 +272,7 @@ test('anonymous report photos upload publicly and download without a session', a
   assert.equal((tier2.records.get('city-files')?.get(fileId) as Record<string, unknown>).public, true);
 
   const incident = await request('/v1/public/incidents', json('POST', {
-    title: 'Pothole', description: 'Deep pothole', category: 'damage', photos: [fileId],
+    title: 'Pothole', description: 'Deep pothole', category: 'damage', location: { address: 'Main Street' }, photos: [fileId],
   }));
   assert.equal(incident.status, 201);
   assert.match(String(incident.body.photos[0]), /^https:\/\/city\.test\/v1\/public\/files\/.+\/content$/);

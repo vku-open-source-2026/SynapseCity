@@ -244,6 +244,7 @@ GET  /v1/public/assets/:code/qr-code
 GET  /v1/public/assets/:code/maintenance-summary
 GET  /v1/public/incidents
 GET  /v1/public/incidents/:incidentId
+POST /v1/public/incidents/drafts
 POST /v1/public/incidents
 POST /v1/public/incidents/:incidentId/photos
 POST /v1/public/files
@@ -251,9 +252,17 @@ GET  /v1/public/files/:id/content
 ```
 
 These routes are anonymous and expose only published/`public_visible` records.
-`POST /v1/public/incidents` returns a one-time `edit_token` to the creator; photo
-appends require it plus a Turnstile token, accept only public file ids uploaded
-for that report, and cap the total at 10 photos. External URLs are rejected.
+Pre-report photos use a two-phase flow: `POST /v1/public/incidents/drafts`
+validates the complete report and returns a 30-minute draft upload capability;
+`POST /v1/public/files` requires that capability (or a report edit capability),
+keeps draft files private, caps each draft/report at 10 photos, and expired
+unbound draft uploads are swept on later draft creation. The final report must
+present the same body-bound draft capability, which atomically binds each photo
+to the new report before it becomes public. Category, severity and Point
+location/address input are validated server-side. `POST /v1/public/incidents`
+returns a one-time `edit_token` to the creator; photo appends require it plus a
+Turnstile token, accept only public file ids uploaded for that report, and cap
+the total at 10 photos. External URLs and unbound public uploads are rejected.
 The response is a stable City JSON object, **not** NGSI-LD: assets return
 `{ id, asset_code, name, feature_type, feature_code, category, status,
 location: { address, coordinates?, geometry? }, qr_code, public_url }`.
@@ -321,7 +330,10 @@ operator action requires a valid session and then returns `404`.
 | `geo:read` / `ai:use` | ✓ / ✓ | ✓ / ✓ | ✓ / – | ✓ / – | – / – |
 
 `/v1/users/me` requires a session but no additional permission. A technician
-only sees work orders assigned to their own principal. Anonymous surfaces are
+only sees work orders assigned to their own principal. Maintenance
+`approve`/`reject` actions require `maintenance:approve`; technicians cannot
+approve their own work, and production approval always requires an approved
+HITL decision even when `CITY_HITL_REQUIRED` is false. Anonymous surfaces are
 `/health`, `/ready`, `/metrics` (optional token), `/v1/city`, `/v1/auth/*`
 (which returns `410`), `/v1/public/*`, `/v1/map/*` and the anonymous assistant
 routes `/v1/ai/status` + `/v1/ai/chat` (public map widget; shared `public-ai`
@@ -392,8 +404,12 @@ peer, never a shared bucket).
 Retried creates for operator incidents, maintenance, budget transactions,
 IoT batch ingest and public reports may send `Idempotency-Key` (or
 `X-Idempotency-Key`); the service replays the stored `201` body for 24h
-instead of duplicating the record. Tier-2 has no native upsert, so this is a
-process-local safety net; the follow-up is a Tier-2 idempotent create/upsert.
+instead of duplicating the record. Entries are scoped by authenticated subject
+(or anonymous client address), method, path and request-body hash; reuse with a
+different body in the same scope returns `409 idempotency_body_mismatch`, and a
+per-scope singleflight lock prevents concurrent duplicate creates. Tier-2 has
+no native upsert, so this is a process-local safety net; the follow-up is a
+Tier-2 idempotent create/upsert.
 When `TURNSTILE_SECRET_KEY` is configured, the Turnstile token
 sent in `CF-Turnstile-Response` is verified server-side; `REQUIRE_TURNSTILE=true`
 fails closed when the secret is missing. `/health` and `/ready` report

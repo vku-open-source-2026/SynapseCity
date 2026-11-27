@@ -91,9 +91,19 @@ test('real Tier-1 engine reads, merges and conditionally patches transitions', {
     for (const entry of transitions) {
         const result = runHarness(entry.file, entry.dataset, manifest.persistence.credentialRef, 'good');
         assert.equal(result.status, 'success', `${entry.workflow}: ${result.error}`);
-        assert.equal(result.calls.length, 2, `${entry.workflow} must GET then PATCH`);
-        const [read, patch] = result.calls;
+        const sidecarAware = entry.operation === 'incidents.assign' || entry.operation === 'incidents.resolve';
+        assert.equal(result.calls.length, sidecarAware ? 4 : 2, `${entry.workflow} must read, plan and write`);
+        const read = result.calls[0];
         assert.equal(read.method, 'GET');
+        const patch = result.calls[sidecarAware ? 2 : 1];
+        if (sidecarAware) {
+            const sidecarQuery = result.calls[1];
+            const sidecarCreate = result.calls[3];
+            assert.equal(sidecarQuery.method, 'POST');
+            assert.ok(sidecarQuery.url.endsWith('/city-incident-internal/records/query'));
+            assert.equal(sidecarCreate.method, 'POST');
+            assert.ok(sidecarCreate.url.endsWith('/city-incident-internal/records'));
+        }
         assert.equal(patch.method, 'PATCH');
         assert.equal(patch.headers['x-api-key'], 'test-api-key-secret');
         const body = JSON.parse(patch.body);
@@ -116,7 +126,8 @@ test('real Tier-1 engine rejects terminal records and CAS conflicts', { skip: av
         const conflict = runHarness(entry.file, entry.dataset, manifest.persistence.credentialRef, 'conflict');
         assert.equal(conflict.status, 'error', `${entry.workflow} ignored a version conflict`);
         assert.match(String(conflict.error || ''), /409/);
-        assert.equal(conflict.calls.length, 2);
+        const sidecarAware = entry.operation === 'incidents.assign' || entry.operation === 'incidents.resolve';
+        assert.equal(conflict.calls.length, sidecarAware ? 3 : 2);
     }
 });
 
@@ -139,8 +150,10 @@ test('real Tier-1 engine executes the single-record domain transitions with CAS'
         const result = runHarness(entry.file, entry.dataset, manifest.persistence.credentialRef, 'good');
         assert.equal(result.ok, true, JSON.stringify(result));
         assert.equal(result.status, 'success', `${entry.workflow}: ${result.error}`);
-        assert.equal(result.calls.length, 2, `${entry.workflow} must GET then PATCH`);
-        const [read, patch] = result.calls;
+        const sidecarAware = entry.workflow === 'city-incident-comment' || entry.workflow === 'city-incident-upvote';
+        assert.equal(result.calls.length, sidecarAware ? 4 : 2, `${entry.workflow} must read, plan and write`);
+        const read = result.calls[0];
+        const patch = result.calls[sidecarAware ? 2 : 1];
         assert.equal(read.method, 'GET');
         assert.equal(patch.method, 'PATCH');
         assert.equal(patch.headers['x-api-key'], 'test-api-key-secret');
@@ -152,17 +165,21 @@ test('real Tier-1 engine executes the single-record domain transitions with CAS'
         assert.equal(result.validationOutput.audit.submittedBy, 'member-test');
 
         if (entry.workflow === 'city-incident-comment') {
-            assert.equal(body.data.comments.length, 1);
-            assert.equal(body.data.comments[0].comment, 'Crew dispatched to the site');
-            assert.equal(body.data.comments[0].is_internal, true);
-            assert.equal(body.data.comments[0].user_id, 'member-test');
+            assert.equal(body.data.comments.length, 0);
+            const sidecarBody = JSON.parse(result.calls[3].body);
+            assert.equal(sidecarBody.data.internal_comments.length, 1);
+            assert.equal(sidecarBody.data.internal_comments[0].comment, 'Crew dispatched to the site');
+            assert.equal(sidecarBody.data.internal_comments[0].is_internal, true);
+            assert.equal(sidecarBody.data.internal_comments[0].user_id, 'member-test');
         }
         if (entry.workflow === 'city-incident-visibility') {
             assert.equal(body.data.public_visible, false, 'internal visibility must clear public_visible');
         }
         if (entry.workflow === 'city-incident-upvote') {
             assert.equal(body.data.upvotes, 1);
-            assert.deepEqual(body.data.upvoters, ['member-test']);
+            assert.equal(body.data.upvoters, undefined);
+            const sidecarBody = JSON.parse(result.calls[3].body);
+            assert.deepEqual(sidecarBody.data.upvoters, ['member-test']);
         }
         if (entry.workflow === 'city-maintenance-schedule') {
             assert.equal(body.data.preventive_schedule.cycle_days, 30);
@@ -179,7 +196,7 @@ test('real Tier-1 engine executes the single-record domain transitions with CAS'
         const conflict = runHarness(entry.file, entry.dataset, manifest.persistence.credentialRef, 'conflict');
         assert.equal(conflict.status, 'error', `${entry.workflow} ignored a version conflict`);
         assert.match(String(conflict.error || ''), /409/);
-        assert.equal(conflict.calls.length, 2);
+        assert.equal(conflict.calls.length, sidecarAware ? 3 : 2);
     }
 });
 

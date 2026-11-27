@@ -4,7 +4,7 @@
 
 use std::sync::Mutex;
 
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::HeaderMap;
 use base64::Engine;
 use chrono::Utc;
 use hmac::{Hmac, Mac};
@@ -12,10 +12,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use sha2::Sha256;
 use subtle::ConstantTimeEq;
+#[cfg(test)]
 use uuid::Uuid;
 
 use crate::config::Config;
-use crate::error::ApiError;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -424,6 +424,71 @@ pub fn verify_report_edit_token(config: &Config, token: &str, incident_id: &str)
     claims.typ == "incident_edit"
         && claims.incident_id == incident_id
         && claims.exp > Utc::now().timestamp()
+}
+
+/// Pre-report photo uploads are private and bound to a short-lived draft
+/// capability. The draft id alone is not authorization.
+pub const REPORT_UPLOAD_TTL_SECONDS: i64 = 30 * 60;
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ReportUploadClaims {
+    draft_id: String,
+    report_hash: String,
+    exp: i64,
+    typ: String,
+}
+
+pub fn issue_report_upload_token(
+    config: &Config,
+    draft_id: &str,
+    report_hash: &str,
+) -> (String, i64) {
+    let exp = Utc::now().timestamp() + REPORT_UPLOAD_TTL_SECONDS;
+    let payload = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
+        serde_json::to_vec(&ReportUploadClaims {
+            draft_id: draft_id.to_string(),
+            report_hash: report_hash.to_string(),
+            exp,
+            typ: "incident_upload".into(),
+        })
+        .unwrap_or_default(),
+    );
+    let signature = signature(&config.auth_secret, &payload);
+    (format!("{payload}.{signature}"), exp)
+}
+
+fn verified_report_upload_hash(config: &Config, token: &str, draft_id: &str) -> Option<String> {
+    let (payload, provided) = token.split_once('.')?;
+    let expected = signature(&config.auth_secret, payload);
+    if provided.as_bytes().ct_eq(expected.as_bytes()).unwrap_u8() != 1 {
+        return None;
+    }
+    let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(payload)
+        .ok()?;
+    let claims = serde_json::from_slice::<ReportUploadClaims>(&bytes).ok()?;
+    if claims.typ != "incident_upload"
+        || claims.draft_id != draft_id
+        || claims.exp <= Utc::now().timestamp()
+    {
+        return None;
+    }
+    Some(claims.report_hash)
+}
+
+pub fn verify_report_upload_token(config: &Config, token: &str, draft_id: &str) -> bool {
+    verified_report_upload_hash(config, token, draft_id).is_some()
+}
+
+pub fn verify_report_upload_token_for_report(
+    config: &Config,
+    token: &str,
+    draft_id: &str,
+    report_hash: &str,
+) -> bool {
+    verified_report_upload_hash(config, token, draft_id)
+        .map(|hash| hash == report_hash)
+        .unwrap_or(false)
 }
 
 pub fn bearer_token(headers: &HeaderMap) -> Option<String> {

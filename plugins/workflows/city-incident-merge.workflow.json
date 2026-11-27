@@ -103,7 +103,7 @@
         300
       ],
       "parameters": {
-        "code": "const response = $input || {};\nconst state = response.input;\nif (response.statusCode !== 200 || !response.body || !Array.isArray(response.body.items)) throw new Error('duplicate_query_failed');\nconst found = new Map(response.body.items.map((item) => [String(item.id), item]));\nconst slots = [];\nconst missing = [];\nfor (const duplicateId of state.duplicateIds) {\n  const item = found.get(String(duplicateId));\n  if (!item || typeof item.data !== 'object' || !item.data || !Number.isInteger(item.version)) {\n    missing.push({ id: duplicateId, error: 'not_found' });\n    continue;\n  }\n  slots.push({\n    exists: true,\n    url: 'https://synapsedx.sbs/v1/capabilities/datasets/city-incidents/records/' + encodeURIComponent(String(duplicateId)),\n    body: {\n      data: {\n        ...item.data,\n        status: 'closed',\n        resolution_type: 'duplicate',\n        merged_into: state.primary.id,\n        resolution_notes: state.mergeNotes,\n        closed_at: $now,\n      },\n      ifVersion: item.version,\n      publish: false,\n    },\n  });\n}\nwhile (slots.length < 5) slots.push({ exists: false });\nreturn {\n  action: state.action,\n  primary: state.primary,\n  duplicateIds: state.duplicateIds,\n  mergeNotes: state.mergeNotes,\n  missing,\n  slots,\n  query: { where: { or: state.duplicateIds.map((duplicate) => ({ id: duplicate })) }, limit: 100 },\n};"
+        "code": "const response = $input || {};\nconst state = response.input;\nif (response.statusCode !== 200 || !response.body || !Array.isArray(response.body.items)) throw new Error('duplicate_query_failed');\nconst INTERNAL_FIELDS = [\"reported_by\",\"contact_info\",\"reporter_name\",\"reporter_phone\",\"reporter_email\",\"reporter_id_card\",\"internal_notes\",\"internal_attachments\",\"assigned_to\",\"assigned_at\",\"resolution_notes\",\"merged_reporter_ids\",\"maintenance_record_id\",\"cost_status\",\"cost_approved_at\",\"cost_approval_id\",\"cost_approved_by\",\"cost_approval_roles\",\"reporter_type\",\"internal_comments\",\"upvoters\",\"merge_notes\"];\nconst found = new Map(response.body.items.map((item) => [String(item.id), item]));\nconst slots = [];\nconst missing = [];\nfor (const duplicateId of state.duplicateIds) {\n  const item = found.get(String(duplicateId));\n  if (!item || typeof item.data !== 'object' || !item.data || !Number.isInteger(item.version)) {\n    missing.push({ id: duplicateId, error: 'not_found' });\n    continue;\n  }\n  const next = { ...item.data };\n  for (const field of INTERNAL_FIELDS) delete next[field];\n  next.comments = (Array.isArray(item.data.comments) ? item.data.comments : [])\n    .filter((entry) => entry && entry.is_internal !== true)\n    .map((entry) => {\n      const clean = {};\n      for (const key of ['id', 'comment', 'posted_at', 'created_at']) if (entry[key] !== undefined) clean[key] = entry[key];\n      clean.is_internal = false;\n      if (entry.public_author === true && entry.user_name) clean.user_name = entry.user_name;\n      return clean;\n    });\n  Object.assign(next, {\n    status: 'closed',\n    resolution_type: 'duplicate',\n    merged_into: state.primary.id,\n    closed_at: $now,\n  });\n  slots.push({\n    exists: true,\n    url: 'https://synapsedx.sbs/v1/capabilities/datasets/city-incidents/records/' + encodeURIComponent(String(duplicateId)),\n    body: { data: next, ifVersion: item.version, publish: false },\n  });\n}\nwhile (slots.length < 5) slots.push({ exists: false });\nreturn {\n  action: state.action,\n  primary: state.primary,\n  duplicateIds: state.duplicateIds,\n  mergeNotes: state.mergeNotes,\n  missing,\n  slots,\n  query: { where: { or: state.duplicateIds.map((duplicate) => ({ id: duplicate })) }, limit: 100 },\n  sidecarQuery: { where: { or: [{ id: 'internal-' + state.primary.id }, { id: state.primary.id }] }, limit: 2 },\n};"
       }
     },
     {
@@ -405,6 +405,47 @@
       }
     },
     {
+      "id": "collect-closed-duplicates",
+      "name": "Collect closed duplicate ids",
+      "type": "code",
+      "typeVersion": 2,
+      "position": [
+        4820,
+        300
+      ],
+      "parameters": {
+        "code": "const response = $input || {};\nconst state = response.input || {};\nif (response.statusCode !== 200 || !response.body || !Array.isArray(response.body.items)) throw new Error('duplicate_requery_failed');\nconst closedIds = [];\nfor (const item of response.body.items) {\n  const data = item && typeof item.data === 'object' && item.data ? item.data : null;\n  if (data && String(data.status) === 'closed' && String(data.merged_into) === String(state.primary.id)) {\n    closedIds.push(String(item.id));\n  }\n}\nreturn { ...state, closedIds };"
+      }
+    },
+    {
+      "id": "http-query-primary-sidecar",
+      "name": "Query primary private sidecar",
+      "type": "httpRequest",
+      "typeVersion": 4,
+      "position": [
+        5040,
+        300
+      ],
+      "parameters": {
+        "url": "https://synapsedx.sbs/v1/capabilities/datasets/city-incident-internal/records/query",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        "auth": {
+          "credentialRef": "synapsedx-organization",
+          "header": "X-API-Key",
+          "allowedOrigins": [
+            "https://synapsedx.sbs"
+          ]
+        },
+        "timeoutMs": 15000,
+        "body": "={{ .sidecarQuery }}",
+        "includeInput": true
+      }
+    },
+    {
       "id": "merge-primary",
       "name": "Merge primary annotation",
       "type": "code",
@@ -414,20 +455,33 @@
         300
       ],
       "parameters": {
-        "code": "const response = $input || {};\nconst state = response.input;\nif (response.statusCode !== 200 || !response.body || !Array.isArray(response.body.items)) throw new Error('duplicate_requery_failed');\nconst primaryId = state.primary.id;\nconst closedIds = [];\nfor (const item of response.body.items) {\n  const data = item && typeof item.data === 'object' && item.data ? item.data : null;\n  if (!data) continue;\n  if (String(data.status) === 'closed' && String(data.merged_into) === String(primaryId)) {\n    closedIds.push(String(item.id));\n  }\n}\nconst existing = Array.isArray(state.primary.data.merged_reporter_ids)\n  ? state.primary.data.merged_reporter_ids.map((entry) => String(entry || '')).filter((entry) => entry)\n  : [];\nconst merged = [...new Set([...existing, ...closedIds])].sort();\nconst next = { ...state.primary.data, merged_reporter_ids: merged };\nreturn {\n  body: { data: next, ifVersion: state.primary.version, publish: false },\n  url: 'https://synapsedx.sbs/v1/capabilities/datasets/city-incidents/records/' + state.primary.encodedId,\n  closedIds,\n  missing: state.missing,\n  duplicateIds: state.duplicateIds,\n  audit: state.action.audit,\n};"
+        "code": "const response = $input || {};\nconst state = response.input;\nif (response.statusCode !== 200 || !response.body || !Array.isArray(response.body.items)) throw new Error('sidecar_query_failed');\nconst primaryId = state.primary.id;\nconst internalId = 'internal-' + primaryId;\nconst item = response.body.items.find((entry) => String(entry.id) === internalId)\n  || response.body.items.find((entry) => String(entry.id) === primaryId)\n  || null;\nconst exists = Boolean(item && Number.isInteger(item.version));\nconst current = exists ? item.data : {};\nconst sidecarId = exists ? String(item.id) : internalId;\nconst closedIds = state.closedIds || [];\nconst existing = [\n  ...(Array.isArray(current.merged_reporter_ids) ? current.merged_reporter_ids : []),\n  ...(Array.isArray(state.primary.data.merged_reporter_ids) ? state.primary.data.merged_reporter_ids : []),\n].map((entry) => String(entry || '')).filter(Boolean);\nconst merged = [...new Set([...existing, ...closedIds])].sort();\nconst data = {\n  ...current,\n  id: sidecarId,\n  incident_id: primaryId,\n  merged_reporter_ids: merged,\n  merge_notes: state.mergeNotes,\n  updated_at: $now,\n};\nconst body = exists ? { data, ifVersion: item.version, publish: false } : { data, publish: false };\nreturn {\n  primary: state.primary,\n  duplicateIds: state.duplicateIds,\n  mergeNotes: state.mergeNotes,\n  missing: state.missing,\n  closedIds,\n  merged_reporter_ids: merged,\n  audit: state.action.audit,\n  sidecar: {\n    exists,\n    url: 'https://synapsedx.sbs/v1/capabilities/datasets/city-incident-internal/records/' + encodeURIComponent(sidecarId),\n    body,\n  },\n};"
       }
     },
     {
-      "id": "http-patch-primary",
-      "name": "Patch primary incident",
-      "type": "httpRequest",
-      "typeVersion": 4,
+      "id": "if-primary-sidecar",
+      "name": "Primary private sidecar exists?",
+      "type": "if",
+      "typeVersion": 1,
       "position": [
         5260,
         300
       ],
       "parameters": {
-        "url": "={{ $json.url }}",
+        "condition": "={{ $json.sidecar.exists === true }}"
+      }
+    },
+    {
+      "id": "http-patch-primary-sidecar",
+      "name": "Patch primary private sidecar",
+      "type": "httpRequest",
+      "typeVersion": 4,
+      "position": [
+        5480,
+        180
+      ],
+      "parameters": {
+        "url": "={{ $json.sidecar.url }}",
         "method": "PATCH",
         "headers": {
           "Content-Type": "application/json",
@@ -440,9 +494,37 @@
             "https://synapsedx.sbs"
           ]
         },
-        "body": "={{ $json.body }}",
-        "includeInput": true,
-        "timeoutMs": 15000
+        "timeoutMs": 15000,
+        "body": "={{ $json.sidecar.body }}",
+        "includeInput": true
+      }
+    },
+    {
+      "id": "http-create-primary-sidecar",
+      "name": "Create primary private sidecar",
+      "type": "httpRequest",
+      "typeVersion": 4,
+      "position": [
+        5480,
+        420
+      ],
+      "parameters": {
+        "url": "https://synapsedx.sbs/v1/capabilities/datasets/city-incident-internal/records",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        "auth": {
+          "credentialRef": "synapsedx-organization",
+          "header": "X-API-Key",
+          "allowedOrigins": [
+            "https://synapsedx.sbs"
+          ]
+        },
+        "timeoutMs": 15000,
+        "body": "={{ $json.sidecar.body }}",
+        "includeInput": true
       }
     },
     {
@@ -451,11 +533,11 @@
       "type": "code",
       "typeVersion": 2,
       "position": [
-        5480,
+        5700,
         300
       ],
       "parameters": {
-        "code": "const response = $input || {};\nconst state = response.input;\nif (response.statusCode !== 200 && response.statusCode !== 201) throw new Error('primary_write_failed');\nconst closed = state.closedIds;\nconst failed = state.duplicateIds\n  .filter((duplicate) => !closed.includes(duplicate))\n  .map((duplicate) => {\n    const known = (state.missing || []).find((entry) => entry.id === duplicate);\n    return { id: duplicate, error: known ? known.error : 'close_failed' };\n  });\nreturn {\n  operation: 'incidents.merge',\n  incident_id: state.audit.recordId,\n  closed,\n  failed,\n  merged_reporter_ids: state.body.data.merged_reporter_ids,\n};"
+        "code": "const response = $input || {};\nconst state = response.input || {};\nif (![200, 201].includes(response.statusCode)) throw new Error('primary_sidecar_write_failed');\nconst closed = state.closedIds || [];\nconst failed = (state.duplicateIds || [])\n  .filter((duplicate) => !closed.includes(duplicate))\n  .map((duplicate) => {\n    const known = (state.missing || []).find((entry) => entry.id === duplicate);\n    return { id: duplicate, error: known ? known.error : 'close_failed' };\n  });\nreturn {\n  operation: 'incidents.merge',\n  incident_id: state.audit.recordId,\n  closed,\n  failed,\n  merged_reporter_ids: state.merged_reporter_ids,\n};"
       }
     }
   ],
@@ -730,7 +812,7 @@
       "main": [
         [
           {
-            "node": "Merge primary annotation",
+            "node": "Collect closed duplicate ids",
             "type": "main",
             "index": 0
           }
@@ -741,14 +823,65 @@
       "main": [
         [
           {
-            "node": "Patch primary incident",
+            "node": "Primary private sidecar exists?",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Patch primary incident": {
+    "Collect closed duplicate ids": {
+      "main": [
+        [
+          {
+            "node": "Query primary private sidecar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query primary private sidecar": {
+      "main": [
+        [
+          {
+            "node": "Merge primary annotation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Primary private sidecar exists?": {
+      "main": [
+        [
+          {
+            "node": "Patch primary private sidecar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create primary private sidecar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Patch primary private sidecar": {
+      "main": [
+        [
+          {
+            "node": "Summarize merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create primary private sidecar": {
       "main": [
         [
           {

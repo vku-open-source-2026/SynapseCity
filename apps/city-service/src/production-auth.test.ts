@@ -102,7 +102,7 @@ test('public reporting stays anonymous and available', async () => {
   const response = await request('/v1/public/incidents', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ title: 'Production citizen report', description: 'Street light out', category: 'malfunction' }),
+    body: JSON.stringify({ title: 'Production citizen report', description: 'Street light out', category: 'malfunction', location: { address: 'Main street' } }),
   });
   assert.equal(response.status, 201);
   assert.equal(response.body.contact_info, undefined);
