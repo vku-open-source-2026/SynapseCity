@@ -21,6 +21,8 @@
     "notices:check": "node scripts/check-notice-artifacts.mjs apps/console/dist apps/contribution-console/dist",
     "audit:production": "node scripts/audit-production.mjs",
     "sbom:generate": "node scripts/generate-sboms.mjs",
+    "migrate:incident-private-data": "cargo run --manifest-path apps/city-service/Cargo.toml --bin migrate-incident-private-data --",
+    "test:incident-private-data-migration": "cargo test --manifest-path apps/city-service/Cargo.toml --bin migrate-incident-private-data",
     "demo:seed": "node scripts/demo-seed.mjs",
     "demo:reset": "node scripts/demo-reset.mjs",
     "plugins:check": "node scripts/plugin-bundle.mjs check",

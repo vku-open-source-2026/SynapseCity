@@ -233,6 +233,11 @@ repository. Records imported before the removal live on in the `city-*`
 Tier-2 datasets; new demo data comes from `npm run demo:seed`, which writes
 through the public City API only.
 
+Historical private incident fields require the separate, dry-run-by-default
+[incident private-data migration](docs/INCIDENT_PRIVATE_DATA_MIGRATION.md).
+It backs up affected records before an explicit `--apply` and moves private
+values into `city-incident-internal` using CAS.
+
 ## API
 
 ### Public open API (documented at `/docs`)

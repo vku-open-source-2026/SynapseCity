@@ -3,6 +3,10 @@
 This index lists SynapseCity documentation available in English and Vietnamese.
 Danh mục này liệt kê tài liệu SynapseCity có sẵn bằng tiếng Anh và tiếng Việt.
 
+## Incident operations
+
+- **English:** [Legacy incident private-data migration runbook](INCIDENT_PRIVATE_DATA_MIGRATION.md)
+
 ## Contribution portal API / API Cổng Đóng góp
 
 - **English:** [Contribution Portal API reference](CONTRIBUTION_API.md)
