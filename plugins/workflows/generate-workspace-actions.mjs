@@ -274,6 +274,7 @@ if (action === 'create') {
     if (!record.incident_number) record.incident_number = 'INC-' + $now.replace(/[^0-9]/g, '').slice(0, 17);
     record.incident_code = record.incident_number;
     record.public_visible = true;
+    record.reporter_type = 'citizen';
   }
   if (resource === 'assets' && record.public_visible === undefined) record.public_visible = true;
   return { mode: 'create', resource, url: base, body: { data: record, publish: schema.publish === true }, audit, operation: resource + '.create' };
@@ -354,7 +355,11 @@ if (!Number.isInteger(current.version)) throw new Error('record_version_unavaila
 if (action.resource === 'incidents') {
   const internalFields = ${JSON.stringify(INCIDENT_INTERNAL_FIELDS)};
   for (const field of internalFields) {
-    if (data[field] !== undefined) throw new Error('incident_private_fields_require_sidecar_workflow:' + field);
+    if (field === 'reporter_type') {
+      if (data[field] !== undefined && data[field] !== 'citizen') throw new Error('incident_private_fields_require_sidecar_workflow:' + field);
+    } else if (data[field] !== undefined) {
+      throw new Error('incident_private_fields_require_sidecar_workflow:' + field);
+    }
   }
   if (Array.isArray(data.comments) && data.comments.some((entry) => entry && entry.is_internal === true)) {
     throw new Error('incident_private_comments_require_sidecar_workflow');
@@ -364,6 +369,7 @@ const schema = ${JSON.stringify(Object.fromEntries(Object.entries(SCHEMAS).map((
 const terminal = schema[action.resource] ? schema[action.resource].terminal : [];
 if (terminal.includes(String(data.status))) throw new Error('record_terminal');
 const next = { ...data, ...action.patch, updated_at: $now };
+if (action.resource === 'incidents') next.reporter_type = 'citizen';
 return {
   body: {
     data: next,

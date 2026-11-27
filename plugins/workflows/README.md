@@ -28,8 +28,10 @@ every operation is migrated.
   only publisher and allocates the incident number/redacted projection.
   `maintenance → city-maintenance`, publish `false`. A submitted
   datasource/dataset/id is never accepted.
-- The public incident-create and generic incident schemas do not contain
-  internal fields (`assigned_to`, `reporter_type`, `resolution_notes`).
+- The public incident-create and generic incident schemas do not accept
+  internal fields (`assigned_to`, private `reporter_type`, `resolution_notes`).
+  Public incident writes normalize `reporter_type` to the stable value
+  `citizen`; the original value is kept only in the private sidecar.
   Comment/assign/resolve/close/reject/acknowledge/verify/visibility/upvote
   transitions query the private
   `city-incident-internal` sidecar, strip every internal field and internal

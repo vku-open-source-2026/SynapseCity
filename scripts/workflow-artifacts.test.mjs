@@ -206,7 +206,7 @@ test('incident workflows route private fields to the sidecar and redact actual p
                 data: {
                     id: 'inc-1', title: 'Broken pump', status: 'reported', assigned_to: 'old-operator',
                     reported_by: 'reporter-private', contact_info: { phone_number: '0900' },
-                    reporter_type: 'citizen', resolution_notes: 'old private note', upvoters: ['old-user'],
+                    reporter_type: 'technician', resolution_notes: 'old private note', upvoters: ['old-user'],
                     comments: [
                         { id: 'public-1', comment: 'Public update', is_internal: false, user_id: 'private-user' },
                         { id: 'internal-1', comment: 'Old private comment', is_internal: true, user_id: 'private-user' },
@@ -221,13 +221,18 @@ test('incident workflows route private fields to the sidecar and redact actual p
         assert.ok(publicPatch.parameters.url.includes('city-incidents/records/'), `${name}: public destination`);
         assert.ok(prepared.sidecar.url.includes('city-incident-internal/records/'), `${name}: sidecar destination`);
         for (const field of internal) {
-            assert.equal(prepared.body.data[field], undefined, `${name}: public write contains ${field}`);
+            if (field === 'reporter_type') {
+                assert.equal(prepared.body.data[field], 'citizen', `${name}: public reporter_type must be sanitized`);
+            } else {
+                assert.equal(prepared.body.data[field], undefined, `${name}: public write contains ${field}`);
+            }
         }
         assert.equal(prepared.body.publish, false, `${name}: public write must stay unpublished`);
         assert.equal(prepared.sidecar.body.publish, false, `${name}: sidecar write must stay private`);
         assert.equal(prepared.body.data.comments.some((entry) => entry.is_internal === true), false);
         assert.equal(prepared.body.data.comments.some((entry) => entry.user_id !== undefined), false);
         assert.equal(prepared.sidecar.body.data.contact_info.phone_number, '0900');
+        assert.equal(prepared.sidecar.body.data.reporter_type, 'technician');
         assert.ok(prepared.sidecar.body.data.internal_comments.some((entry) => entry.id === 'internal-1'));
         if (name === 'city-incident-comment') {
             assert.equal(prepared.body.data.comments.length, 1);
@@ -266,7 +271,13 @@ test('incident workflows route private fields to the sidecar and redact actual p
         statusCode: 200, input: primaryPlan,
         body: { items: [{ id: 'dup-1', version: 4, data: { id: 'dup-1', status: 'reported', assigned_to: 'private-tech', resolution_notes: 'old private', comments: [] } }] },
     });
-    for (const field of internal) assert.equal(duplicatePlan.slots[0].body.data[field], undefined, `merge public write contains ${field}`);
+    for (const field of internal) {
+        if (field === 'reporter_type') {
+            assert.equal(duplicatePlan.slots[0].body.data[field], 'citizen', `merge public write must sanitize ${field}`);
+        } else {
+            assert.equal(duplicatePlan.slots[0].body.data[field], undefined, `merge public write contains ${field}`);
+        }
+    }
     assert.equal(duplicatePlan.slots[0].body.data.resolution_notes, undefined);
     const collected = runCode(merge.nodes.find((node) => node.id === 'collect-closed-duplicates').parameters.code, {
         statusCode: 200, input: duplicatePlan,
@@ -289,7 +300,13 @@ test('incident workflows route private fields to the sidecar and redact actual p
         action: 'create', submittedBy: 'member-test',
         fields: { title: 'Public incident', category: 'damage', severity: 'low' },
     });
-    for (const field of internal) assert.equal(genericCreate.body.data[field], undefined);
+    for (const field of internal) {
+        if (field === 'reporter_type') {
+            assert.equal(genericCreate.body.data[field], 'citizen');
+        } else {
+            assert.equal(genericCreate.body.data[field], undefined);
+        }
+    }
     const genericUpdate = runCode(genericValidate.parameters.code, {
         pluginId: 'plugin-test', widgetId: 'widget-test', product: 'city', resource: 'incidents',
         action: 'update', submittedBy: 'member-test',

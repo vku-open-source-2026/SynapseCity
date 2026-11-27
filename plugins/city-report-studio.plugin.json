@@ -109,7 +109,7 @@
         "resource": "reports",
         "workflowRef": {
           "name": "city-workspace-actions",
-          "checksum": "ce611aedb58d452c05abf7c5d50957f45c9826444ad052b7b07fa97d3eba6d9b"
+          "checksum": "2d73a517dc02269dcedc781a6c400d81b942314f9a172829af86467c9e129fa0"
         },
         "onSubmit": "act-report-delete-submit"
       },
@@ -462,5 +462,5 @@
     "path": "plugins/city-report-studio.plugin.json",
     "revision": "2026-11-15.business"
   },
-  "checksum": "sha256:118606b8ac6ecac56d318fdb51ce92aff770402180f8bd0ed9984228fd37bbc3"
+  "checksum": "sha256:83e313619dfd711d819bc340bb721288838314b8f3b5077bfef2bd7c4a0c0f2b"
 }

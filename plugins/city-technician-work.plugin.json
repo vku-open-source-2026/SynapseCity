@@ -222,7 +222,7 @@
         "resource": "maintenance",
         "workflowRef": {
           "name": "city-workspace-actions",
-          "checksum": "ce611aedb58d452c05abf7c5d50957f45c9826444ad052b7b07fa97d3eba6d9b"
+          "checksum": "2d73a517dc02269dcedc781a6c400d81b942314f9a172829af86467c9e129fa0"
         },
         "onSubmit": "act-maintenance-note-submit"
       },
@@ -249,7 +249,7 @@
         "resource": "incidents",
         "workflowRef": {
           "name": "city-workspace-actions",
-          "checksum": "ce611aedb58d452c05abf7c5d50957f45c9826444ad052b7b07fa97d3eba6d9b"
+          "checksum": "2d73a517dc02269dcedc781a6c400d81b942314f9a172829af86467c9e129fa0"
         },
         "onSubmit": "act-incident-note-submit"
       },
@@ -745,5 +745,5 @@
     "path": "plugins/city-technician-work.plugin.json",
     "revision": "2026-11-15.business"
   },
-  "checksum": "sha256:9e4a1a60e4fa7ac16638919ffd905e29ac279a4bf59c851e28f21a207f81ec9e"
+  "checksum": "sha256:852d62d15732b7cc03db4e942cf9db76c5b2371e3a0b268ef12ac2b934591bb9"
 }

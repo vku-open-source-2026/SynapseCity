@@ -327,10 +327,17 @@ fn redacted_comments(comments: &[Value]) -> Vec<Value> {
 }
 
 fn is_affected(data: &Map<String, Value>) -> bool {
-    if INTERNAL_FIELDS
-        .iter()
-        .any(|field| data.contains_key(*field))
-    {
+    if INTERNAL_FIELDS.iter().any(|field| {
+        if *field == "reporter_type" {
+            match data.get(*field) {
+                None => false,
+                Some(Value::String(value)) => value != "citizen",
+                Some(_) => true,
+            }
+        } else {
+            data.contains_key(*field)
+        }
+    }) {
         return true;
     }
     match data.get("comments").and_then(Value::as_array) {
@@ -351,6 +358,10 @@ fn public_record(data: &Map<String, Value>) -> Map<String, Value> {
     for field in INTERNAL_FIELDS {
         next.remove(field);
     }
+    // Tier-2/projection may retain this field on PATCH. Overwrite it with the
+    // stable public value instead of merely omitting it, while the original
+    // reporter_type is preserved in the private sidecar.
+    next.insert("reporter_type".into(), Value::String("citizen".into()));
     let comments = data
         .get("comments")
         .and_then(Value::as_array)
@@ -1418,6 +1429,7 @@ mod tests {
                 "status": "open",
                 "custom_public_field": {"keep": true},
                 "reported_by": "private-reporter",
+                "reporter_type": "technician",
                 "reporter_phone": "private-phone",
                 "assigned_to": "private-assignee",
                 "internal_comments": [{"id": "top-level", "comment": "private-top-level"}],
@@ -1659,10 +1671,14 @@ mod tests {
         let public = state.incidents.get("inc-1").expect("public record");
         let public_data = public.data.as_object().expect("public object");
         for field in INTERNAL_FIELDS {
-            assert!(
-                !public_data.contains_key(field),
-                "private field {field} remains"
-            );
+            if field == "reporter_type" {
+                assert_eq!(public_data[field], "citizen");
+            } else {
+                assert!(
+                    !public_data.contains_key(field),
+                    "private field {field} remains"
+                );
+            }
         }
         assert_eq!(public_data["title"], "Public title");
         assert_eq!(public_data["custom_public_field"], json!({"keep": true}));
@@ -1678,6 +1694,7 @@ mod tests {
         let sidecar_data = sidecar.data.as_object().expect("sidecar object");
         assert_eq!(sidecar.version, 8);
         assert_eq!(sidecar_data["reporter_phone"], "private-phone");
+        assert_eq!(sidecar_data["reporter_type"], "technician");
         assert_eq!(sidecar_data["assigned_to"], "private-assignee");
         assert_eq!(
             sidecar_data["unrelated_sidecar_data"],

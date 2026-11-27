@@ -226,7 +226,7 @@
         "resource": "incidents",
         "workflowRef": {
           "name": "city-incident-assign",
-          "checksum": "dd0ee86e2023651314cdcac8341b12bc1656c4f2af77f7b409f7d94133d156d9"
+          "checksum": "2c078da34d5216de272a3b587aed929daf82a696f55074b1381f1b19ab3ec62a"
         },
         "onSubmit": "act-incident-assign-submit"
       },
@@ -252,7 +252,7 @@
         "resource": "incidents",
         "workflowRef": {
           "name": "city-incident-acknowledge",
-          "checksum": "158370c25a91b01a36551f51e43e8295ac6db1219b2884a57ad621dbe1ee409f"
+          "checksum": "2afb7135bb3eeb6a49a7d72478669222932259c8d8a93d0092866e3e9ff0d4dc"
         },
         "onSubmit": "act-incident-acknowledge-submit"
       },
@@ -283,7 +283,7 @@
         "resource": "incidents",
         "workflowRef": {
           "name": "city-incident-resolve",
-          "checksum": "23b7c82be605337d6aea3fb5baa4fb236d75d25bd815ec089162b465c7fc4101"
+          "checksum": "8724bdfaba3f12a786c3951f1390606ac87c431223dbf9c131d819c18eed8cce"
         },
         "onSubmit": "act-incident-resolve-submit"
       },
@@ -309,7 +309,7 @@
         "resource": "incidents",
         "workflowRef": {
           "name": "city-incident-verify",
-          "checksum": "0bb794e6fd6c82fcefc0a42af262776545b471d67f376bf713de5d73897a8dc9"
+          "checksum": "3d310f96babf58a64f5a96bd108e6a6c110c0d0f3f56d270d36c518fc0a385d9"
         },
         "onSubmit": "act-incident-verify-submit"
       },
@@ -335,7 +335,7 @@
         "resource": "incidents",
         "workflowRef": {
           "name": "city-incident-reject",
-          "checksum": "eb278a8cb44fad01e57378a444b8e45cef591d9acb0160a1fcbf89d6b729989e"
+          "checksum": "2452cd9da65c84c4f1f739b7e3325017997a5057a3f899216fe6eeeb70d39617"
         },
         "onSubmit": "act-incident-reject-submit"
       },
@@ -361,7 +361,7 @@
         "resource": "incidents",
         "workflowRef": {
           "name": "city-incident-close",
-          "checksum": "900e45f452477309ec62de095668dbbb31bfbf1f910238115b0b2fa0e240bc31"
+          "checksum": "1acdbfd649a131641a79a31d8d1216a6c03969b033d86d55a3491cc28f5fb78f"
         },
         "onSubmit": "act-incident-close-submit"
       },
@@ -393,7 +393,7 @@
         "resource": "incidents",
         "workflowRef": {
           "name": "city-incident-comment",
-          "checksum": "34409ffdaebcd2a473c1fdf637a3087e79048b3f64ab3c02d33a061c873fd28e"
+          "checksum": "4b94a6f92a6710147ff42cd2de6178dedeef9a9a2bc861f950a8b6e0bcd387de"
         },
         "onSubmit": "act-incident-comment-submit"
       },
@@ -424,7 +424,7 @@
         "resource": "incidents",
         "workflowRef": {
           "name": "city-incident-visibility",
-          "checksum": "dba87a95ed60a056aa365e0d34209b8f779d62b7d2d287f9d4c9b080bd634f82"
+          "checksum": "e3b6131b7cec903dac7c73621c13e0de70486a18904dcb057a382e6a794a172d"
         },
         "onSubmit": "act-incident-visibility-submit"
       },
@@ -445,7 +445,7 @@
         "resource": "incidents",
         "workflowRef": {
           "name": "city-incident-upvote",
-          "checksum": "21659bdaf112360e9f172f24094d2f78558e1e94925d711634252b1f57b6fb23"
+          "checksum": "a04dcec1d57d756f98604c66e3a2ea0e6df82f7b97871d9ed2a2885f757b373e"
         },
         "onSubmit": "act-incident-upvote-submit"
       },
@@ -477,7 +477,7 @@
         "resource": "incidents",
         "workflowRef": {
           "name": "city-incident-merge",
-          "checksum": "2654d7133e9cdf4286f33da6758aa3505c4ed157468bba6ec61958df620a83ae"
+          "checksum": "6cf9fecc1a96513ddda879c799ac49aad2a8c83b3e0ebefc9d6573794967f420"
         },
         "onSubmit": "act-incident-merge-submit"
       },
@@ -1282,5 +1282,5 @@
     "path": "plugins/city-incident-desk.plugin.json",
     "revision": "2026-11-15.business"
   },
-  "checksum": "sha256:f7671f1b1693b9e2ad9d0b1308fb08873f61d0ad49c1046605e90e2519934d5c"
+  "checksum": "sha256:d3df1c6344156d546b46a8354358a97ecdf91c624febd9f97c06e5cf01bcac4c"
 }

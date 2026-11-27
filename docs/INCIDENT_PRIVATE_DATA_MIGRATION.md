@@ -110,6 +110,10 @@ maintenance_record_id, cost_status, cost_approved_at, cost_approval_id,
 cost_approved_by, cost_approval_roles, internal_comments, upvoters, merge_notes
 ```
 
+The original `reporter_type` is preserved in the private sidecar. Public records
+are normalized to `reporter_type: "citizen"` so a Tier-2 merge/projection cannot
+retain sensitive role values such as `technician`, `system`, or `admin`.
+
 Both a legacy top-level `internal_comments` array and entries in `comments`
 with `is_internal:true` are moved. Public comments retain only `id`, `comment`,
 `posted_at`, `created_at`, and `is_internal:false`; `user_name` is retained only
