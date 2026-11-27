@@ -35,14 +35,19 @@ class CityWidgetWorker(
         val isFallback = previous?.locationIsFallback ?: true
 
         return try {
-            val body = fetchAssets()
-            val rows = JSONArray(body)
+            val assets = WidgetAssetPaginator.fetchAll { offset ->
+                val (pageBody, totalCount) = fetchAssetPage(offset)
+                val rows = JSONArray(pageBody)
+                WidgetAssetPage(
+                    items = (0 until rows.length()).map(rows::getJSONObject),
+                    totalCount = totalCount,
+                )
+            }
             val nearby = ArrayList<WidgetAsset>()
             var nearest: WidgetAsset? = null
             var nearestDistance = Double.MAX_VALUE
 
-            for (index in 0 until rows.length()) {
-                val item = rows.optJSONObject(index) ?: continue
+            for (item in assets) {
                 val coordinates = coordinatesOf(item) ?: continue
                 val distance = distanceMeters(latitude, longitude, coordinates.first, coordinates.second)
                 if (distance > NEARBY_RADIUS_M) continue
@@ -87,8 +92,8 @@ class CityWidgetWorker(
         }
     }
 
-    private fun fetchAssets(): String {
-        val connection = URL(ASSETS_URL).openConnection() as HttpURLConnection
+    private fun fetchAssetPage(offset: Int): Pair<String, Long?> {
+        val connection = URL("$ASSETS_URL&offset=$offset").openConnection() as HttpURLConnection
         return try {
             connection.requestMethod = "GET"
             connection.connectTimeout = 15_000
@@ -98,7 +103,11 @@ class CityWidgetWorker(
             connection.setRequestProperty("User-Agent", "SynapseCityWidget/0.1 (Android)")
             val code = connection.responseCode
             if (code !in 200..299) error("HTTP $code")
-            connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val body = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val totalCount = connection.getHeaderField("x-total-count")
+                ?.toLongOrNull()
+                ?.takeIf { it >= 0 }
+            body to totalCount
         } finally {
             connection.disconnect()
         }

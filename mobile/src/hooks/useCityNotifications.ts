@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import type { PublicIncident } from '../api/types';
 import { distanceMeters } from '../lib/geo';
+import { shouldNotifyIncident } from '../lib/notifications';
 import { loadSeenIncident, saveSeenIncident, type AppSettings } from '../lib/storage';
 import type { AppLocation } from './useLocation';
 
@@ -72,11 +73,7 @@ export function useCityNotifications(
           coords,
         )
       : null;
-    const important =
-      newest.severity === 'high' ||
-      newest.severity === 'critical' ||
-      (distance !== null && distance <= 2_000);
-    if (!important) return;
+    if (!shouldNotifyIncident(newest.severity, settings.severityThreshold, distance)) return;
 
     Notifications.scheduleNotificationAsync({
       content: {
@@ -90,5 +87,5 @@ export function useCityNotifications(
       },
       trigger: null,
     }).catch(() => undefined);
-  }, [incidents, location.latitude, location.longitude, settings.notificationsEnabled]);
+  }, [incidents, location.latitude, location.longitude, settings.notificationsEnabled, settings.severityThreshold]);
 }
